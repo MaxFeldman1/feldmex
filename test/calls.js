@@ -3,8 +3,12 @@ var dappToken = artifacts.require("./DappToken.sol");
 var calls = artifacts.require("./calls.sol");
 var collateral = artifacts.require("./collateral.sol");
 
+var strike = 100;
+var finalSpot = 198;
+var amount = 10;
+
 contract('calls', function(accounts){
-	it ('can mint contracts', function(){
+	it ('mints, exercizes call options', function(){
 		return 	oracle.deployed().then((i) => {
 			oracleInstance = i;
 			return dappToken.deployed();
@@ -31,29 +35,32 @@ contract('calls', function(accounts){
 			height = res.toNumber();
 			debtor = accounts[1];
 			holder = accounts[2];
-			maturity = height + 10;
-			strike = 100;
-			amount = 10;
+			maturity = height+2;
 			return callsInstance.mint(debtor, holder, maturity, strike, amount, {from: defaultAccount});
 		}).then(() => {
-			return callsInstance.myContracts({from: debtor});
+			return callsInstance.holdings(debtor, maturity, strike);
 		}).then((res) => {
-			assert.equal(res.length, 1, "length of the debtors contract array is correct");
-			contractAddress = res[0];
-			return callsInstance.allCalls(contractAddress);
+			assert.equal(res.toNumber(), -amount, "debtor holds negative amount of contracts");
+			return callsInstance.holdings(holder, maturity, strike);
 		}).then((res) => {
-			assert.equal(res.debtor, debtor, "debtor is named in the contract");
-			assert.equal(res.holder, holder, "holder is named in the contract");
-			assert.equal(res.maturity.toNumber(), maturity, "maturity is correct in the contract");
-			assert.equal(res.strike.toNumber(), strike*satUnits, "strike is correct in the contract");
-			assert.equal(res.amount.toNumber(), amount, "amount is correct in the contract");
-			return callsInstance.myContracts({from: holder});
+			assert.equal(res.toNumber(), amount, "holder holds positive amount of contracts");
+		}).then(() => {
+			return oracleInstance.set(finalSpot);
+		}).then(() => {
+			return callsInstance.claim(maturity, strike, {from: debtor});
+		}).then(async (res) => {
+			return callsInstance.claim(maturity, strike, {from: holder});
+		}).then(() => {
+			return callsInstance.holdings(debtor, maturity, strike);
 		}).then((res) => {
-			assert.equal(res, contractAddress, "the same contract is logged for the debtor and the holder");
+			assert.equal(res.toNumber(), 0, "debtor's contracts have been exerciced");
+			return callsInstance.holdings(holder, maturity, strike);
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "holder's contracts have been exerciced");
 		});
 	});
 
-	it ('can exercice and reclaim contracts', function(){
+	it('distributes funds correctly', function(){
 		return 	oracle.deployed().then((i) => {
 			oracleInstance = i;
 			return dappToken.deployed();
@@ -68,43 +75,46 @@ contract('calls', function(accounts){
 			return web3.eth.getAccounts();
 		}).then((accts) => {
 			accounts = accts;
-			defaultAccount = accounts[0];
-			reciverAccount = accounts[1];
 			debtor = accounts[1];
 			holder = accounts[2];
+			payout = Math.floor(amount*satUnits*(finalSpot-strike)/finalSpot);
 			return tokenInstance.satUnits();
 		}).then((res) => {
 			satUnits = res.toNumber();
-			return oracleInstance.height();
+			return callsInstance.collateral(debtor);
 		}).then((res) => {
-			height = res.toNumber() + 1;
-			maturity = height + 10;
-			strike = 100;
-			amount = 10;
-			return callsInstance.mint(debtor, holder, maturity, strike, amount, {from: defaultAccount});
-		}).then(() => {
-			finalSpot = 2*strike;
-			height++;
-			return oracleInstance.set(finalSpot);
-		}).then(() => {
-			return callsInstance.myContracts({from: defaultAccount});
-		}).then(async (res) => {
-			//med mine blekkspruter, hun kaller meg tone
-			for (var i = 0; i < res.length; i++){
-				await callsInstance.allCalls(res[i]).then((res1) => {
-					if (res1.maturity > height+2)
-						return callsInstance.reclaim(res[i], {from: res1.debtor});
-					else if (res1.strike < finalSpot)
-						return callsInstance.exercice(res[i], {from: res1.holder});
-				});
-				height++;
-			}
-		}).then(() => {
-			return callsInstance.myContracts({from: defaultAccount});
+			assert.equal(res.toNumber(), satUnits*amount - (payout+1), "debtor repaid correct amount");
+			return callsInstance.collateral(holder);
 		}).then((res) => {
-			assert.equal(res.length, 0, "all contracts have been executed or reclaimed");
+			assert.equal(res.toNumber(), payout, "holder compensated sufficiently")
+			return;
 		});
-
 	});
 
+	it('withdraws funds', function(){
+		return 	oracle.deployed().then((i) => {
+			oracleInstance = i;
+			return dappToken.deployed();
+		}).then((i) => {
+			tokenInstance = i;
+			return calls.deployed();
+		}).then((i) => {
+			callsInstance = i;
+			return collateral.deployed();
+		}).then((i) => {
+			collateralInstance = i;
+			return web3.eth.getAccounts();
+		}).then((accts) => {
+			accounts = accts;
+			debtor = accounts[1];
+			holder = accounts[2];
+			return callsInstance.withdrawFunds({from: debtor});
+		}).then(() => {
+			return callsInstance.withdrawFunds({from: holder});
+		}).then(() => {
+			return callsInstance.contractBalance();
+		}).then((res) => {
+			assert.equal(res.toNumber() <= 2, true, "non excessive amount of funds left");
+		});
+	});
 });
