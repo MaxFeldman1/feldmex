@@ -10,7 +10,7 @@ module.exports = function(deployer) {
   }).then(() => {
   	return deployer.deploy(stablecoin, 0);
   }).then(() => {
-  	return deployer.deploy(calls, oracle.address, DappToken.address);
+  	return deployer.deploy(calls, oracle.address, DappToken.address, stablecoin.address);
   }).then(() => {
   	return deployer.deploy(collateral, DappToken.address, calls.address);
   });

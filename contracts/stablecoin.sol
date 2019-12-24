@@ -1,7 +1,7 @@
 pragma solidity ^0.5.12;
 
 contract stablecoin {
-    uint256 public satUnits = 1000000;
+    uint256 public scUnits = 1000000;
     uint256 public totalSupply;
 
     event Transfer(
@@ -22,13 +22,13 @@ contract stablecoin {
     constructor (uint256 _initialSupply) public {
         if (_initialSupply == 0)
             _initialSupply = 21000000;
-        balanceOf[msg.sender] = _initialSupply * satUnits;
+        balanceOf[msg.sender] = _initialSupply * scUnits;
         totalSupply = _initialSupply;
     }
 
     function transfer(address _to, uint256 _value, bool _fullUnit) public returns (bool success) {
         if (_fullUnit)
-            _value*=satUnits;
+            _value*=scUnits;
         require(balanceOf[msg.sender] >= _value);
 
         balanceOf[msg.sender] -= _value;
@@ -41,7 +41,7 @@ contract stablecoin {
 
     function approve(address _spender, uint256 _value, bool _fullUnit) public returns (bool success) {
         if (_fullUnit)
-            _value*=satUnits;
+            _value*=scUnits;
         allowance[msg.sender][_spender] = _value;
 
         emit Approval(msg.sender, _spender, _value);
@@ -51,7 +51,7 @@ contract stablecoin {
 
     function transferFrom(address _from, address _to, uint256 _value, bool _fullUnit) public returns (bool success) {
         if (_fullUnit)
-            _value*=satUnits;
+            _value*=scUnits;
         require(_value <= balanceOf[_from]);
         require(_value <= allowance[_from][msg.sender]);
 
@@ -66,10 +66,10 @@ contract stablecoin {
     }
     
     function addrBalance(address _addr, bool _fullUnit) public view returns (uint) {
-        return (balanceOf[_addr])/((_fullUnit)? satUnits: 1);
+        return (balanceOf[_addr])/((_fullUnit)? scUnits: 1);
     }
     
     function addrAllowance(address _holder, address _spender, bool _fullUnit) public view returns (uint) {
-        return (allowance[_holder][_spender])/((_fullUnit)? satUnits : 1);
+        return (allowance[_holder][_spender])/((_fullUnit)? scUnits : 1);
     }
 }
