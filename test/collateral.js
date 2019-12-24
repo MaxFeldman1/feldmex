@@ -95,7 +95,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.linkedNodes(res);
 		}).then((res) => {
 			assert.notEqual(res.hash, defaultBytes32, "the buy order has been recognized");
-			return collateralInstance.cancelBuy(res.name, {from: defaultAccount});
+			return collateralInstance.cancelOrder(res.name, {from: defaultAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
@@ -192,7 +192,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.linkedNodes(res);
 		}).then((res) => {
 			assert.notEqual(res.hash, defaultBytes32, "the buy order has been recognized");
-			return collateralInstance.cancelSell(res.name, {from: defaultAccount});
+			return collateralInstance.cancelOrder(res.name, {from: defaultAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {

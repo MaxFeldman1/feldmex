@@ -168,9 +168,10 @@ contract collateral{
         }
     }
     
-    function cancelBuy(bytes32 _name) public {
+    function cancelOrder(bytes32 _name) public {
         linkedNode memory node = linkedNodes[_name];
-        require(msg.sender == offers[node.hash].offerer && offers[node.hash].buy);
+        require(msg.sender == offers[node.hash].offerer);
+        uint index = (offers[node.hash].buy ? 0 : 1);
         claimed[msg.sender] += offers[node.hash].price * offers[node.hash].amount;
         //if this node is somewhere in the middle of the list
         if (node.next != 0 && node.previous != 0){
@@ -180,7 +181,7 @@ contract collateral{
         }
         //this is the only offer for the maturity and strike
         else if (node.next == 0 && node.previous == 0){
-            delete listHeads[offers[node.hash].maturity][offers[node.hash].strike][0];
+            delete listHeads[offers[node.hash].maturity][offers[node.hash].strike][index];
             testing = 2;
         }
         //last node
@@ -191,7 +192,7 @@ contract collateral{
         //head node
         else{
             linkedNodes[node.next].previous = 0;
-            listHeads[offers[node.hash].maturity][offers[node.hash].strike][0] = node.next;
+            listHeads[offers[node.hash].maturity][offers[node.hash].strike][index] = node.next;
             testing = 4;
         }
         delete linkedNodes[_name];
@@ -311,32 +312,6 @@ contract collateral{
             emit offerPosted(hash);
             return;
         }
-    }
-
-    function cancelSell(bytes32 _name) public {
-        linkedNode memory node = linkedNodes[_name];
-        require(msg.sender == offers[node.hash].offerer && !offers[node.hash].buy);
-        claimed[msg.sender] += satUnits * offers[node.hash].amount;
-        //if this node is somewhere in the middle of the list
-        if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
-        }
-        //this is the only offer for the maturity and strike
-        else if (node.next == 0 && node.previous == 0){
-            delete listHeads[offers[node.hash].maturity][offers[node.hash].strike][1];
-        }
-        //last node
-        else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
-        }
-        //head node
-        else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offers[node.hash].maturity][offers[node.hash].strike][1] = node.next;
-        }
-        delete linkedNodes[_name];
-        delete offers[node.hash];  
     }
 
     function takeSellOffer(address payable _buyer, bytes32 _name) internal {
