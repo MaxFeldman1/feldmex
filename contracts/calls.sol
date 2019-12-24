@@ -1,22 +1,12 @@
 pragma solidity ^0.5.12;
 import "./oracle.sol";
 import "./DappToken.sol";
+import "./stablecoin.sol";
 
 contract calls {
     address oracleAddress;
     address dappAddress;
     uint satUnits;
-    
-    /*struct call{
-        address payable debtor;
-        address payable holder;
-        //block by which option may be exercised
-        uint maturity;
-        //strike is denominated in satoshis
-        uint strike;
-        uint timestamp;
-        uint amount;
-    }*/
     
     constructor (address _oracleAddress, address _dappAddress) public {
         oracleAddress = _oracleAddress;
@@ -25,25 +15,28 @@ contract calls {
         satUnits = dt.satUnits();
     }
     
-    //address => maturity => strike => amount
-    mapping(address => mapping(uint => mapping(uint => int))) public holdings;
+    //address => maturity => strike => amount of calls
+    mapping(address => mapping(uint => mapping(uint => int))) public callAmounts;
     
+    //address => maturity => strike => amount of puts
+    //mapping(address => mapping(uint => mapping(uint => int))) public puts;
+
     //collateral is denominated in satUnits
     mapping(address => uint) public collateral;
 
-    function mint(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount) public returns(bool success){
+    function mintCall(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount) public returns(bool success){
         require(_debtor != _holder);
         DappToken dt = DappToken(dappAddress);
         require(dt.transferFrom(msg.sender, address(this), satUnits*_amount, false));
-        holdings[_debtor][_maturity][_strike] -= int(_amount);
-        holdings[_holder][_maturity][_strike] += int(_amount);
+        callAmounts[_debtor][_maturity][_strike] -= int(_amount);
+        callAmounts[_holder][_maturity][_strike] += int(_amount);
         return true;
     }
-    
+
     function claim(uint _maturity, uint _strike) public returns(bool success){
-        int amount = holdings[msg.sender][_maturity][_strike];
+        int amount = callAmounts[msg.sender][_maturity][_strike];
         require(_maturity < block.number && amount != 0);
-        holdings[msg.sender][_maturity][_strike] = 0;
+        callAmounts[msg.sender][_maturity][_strike] = 0;
         oracle orc = oracle(oracleAddress);
         uint spot = orc.getUint(_maturity);
         uint payout = 0;

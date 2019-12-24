@@ -1,14 +1,12 @@
 pragma solidity ^0.5.12;
 import "./DappToken.sol";
 import "./calls.sol";
+import "./stablecoin.sol";
 
 /*
     To-Do
     .) add a fouth parameter uint _limitPrice to marketSell and marketBuy to ensure price of contracts
 */
-
-
-
 
 contract collateral{
     //total amount of locked collateral for each address
@@ -231,7 +229,7 @@ contract collateral{
         //dt.approve(callsAddress, satUnits, false);
         //give the seller the amount paid
         dt.transfer(_seller, offer.price, false);
-        assert(callContract.mint(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
+        assert(callContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
         
         //clean storage
         delete linkedNodes[_name];
@@ -247,7 +245,7 @@ contract collateral{
         while (_amount > 0 && node.name != 0){
             calls callContract = calls(callsAddress);
             if (offer.amount > _amount){
-                require(callContract.mint(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
+                require(callContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
                 claimed[msg.sender] -= satUnits * _amount;
                 offers[node.hash].amount -= _amount;
                 assert(dt.transfer(msg.sender, offer.price * _amount, false));
@@ -369,7 +367,7 @@ contract collateral{
         calls callContract = calls(callsAddress);
         //give the seller the amount paid
         dt.transfer(offer.offerer, offer.price, false);
-        assert(callContract.mint(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
+        assert(callContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
         
         //clean storage
         delete linkedNodes[_name];
@@ -386,7 +384,7 @@ contract collateral{
             if (offer.amount > _amount){
                 require(claimed[msg.sender] >= offer.price * _amount);
                 claimed[msg.sender] -= offer.price * _amount;
-                assert(callContract.mint(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
+                assert(callContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
                 offers[node.hash].amount -= _amount;
                 break;
             }
