@@ -12,6 +12,6 @@ module.exports = function(deployer) {
   }).then(() => {
   	return deployer.deploy(calls, oracle.address, DappToken.address, stablecoin.address);
   }).then(() => {
-  	return deployer.deploy(collateral, DappToken.address, calls.address);
+  	return deployer.deploy(collateral, DappToken.address, stablecoin.address, calls.address);
   });
 };

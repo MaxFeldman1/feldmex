@@ -5,6 +5,20 @@ var collateral = artifacts.require("./collateral.sol");
 
 const defaultBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
+var maturity = 100;
+var price = 177777;
+var amount = 10;
+var strike = 100;
+var amount = 10;
+var transferAmount = 1000;
+var satUnits;
+var scUnits;
+var oracleInstance;
+var tokenInstance;
+var callsInstance;
+var stablecoinInstance;
+var defaultAccount;
+
 contract('collateral', function(accounts) {
 	it('can post and take buy orders', function(){
 		return 	oracle.deployed().then((i) => {
@@ -26,34 +40,30 @@ contract('collateral', function(accounts) {
 			return tokenInstance.satUnits();
 		}).then((res) => {
 			satUnits = res.toNumber();
-			transferAmount = 1000;
-			return tokenInstance.transfer(reciverAccount, transferAmount, true, {from: defaultAccount});
+			return tokenInstance.transfer(reciverAccount, 2*transferAmount, true, {from: defaultAccount});
 		}).then(() => {
-			return tokenInstance.approve(collateral.address, transferAmount, true, {from: defaultAccount});
+			return tokenInstance.approve(collateral.address, 2*transferAmount, true, {from: defaultAccount});
 		}).then(() => {
-			return tokenInstance.approve(collateral.address, transferAmount, true, {from: reciverAccount});
+			return tokenInstance.approve(collateral.address, 2*transferAmount, true, {from: reciverAccount});
 		}).then(() => {
-			return collateralInstance.postCollateral(transferAmount, true, {from: defaultAccount});
+			return collateralInstance.postCollateral(2*transferAmount, true, {from: defaultAccount});
 		}).then(() => {
-			return collateralInstance.postCollateral(transferAmount, true, {from: reciverAccount});
+			return collateralInstance.postCollateral(2*transferAmount, true, {from: reciverAccount});
 		}).then(() => {
-			return collateralInstance.claimed(defaultAccount);
+			return collateralInstance.claimedToken(defaultAccount);
 		}).then((res) => {
-			assert.equal(res.toNumber(), satUnits*transferAmount, "correct amount of collateral claimed for " + defaultAccount);
-			return collateralInstance.claimed(reciverAccount);
+			assert.equal(res.toNumber(), 2*satUnits*transferAmount, "correct amount of collateral claimed for " + defaultAccount);
+			return collateralInstance.claimedToken(reciverAccount);
 		}).then((res) => {
-			assert.equal(res.toNumber(), satUnits*transferAmount, "correct amount of collateral claimed for " + reciverAccount);
-			maturity = 100;
-			strike = 100;
-			price = 177777;
-			amount = 10;
-			return collateralInstance.postBuy(maturity, strike, price, amount, {from: defaultAccount});
+			assert.equal(res.toNumber(), 2*satUnits*transferAmount, "correct amount of collateral claimed for " + reciverAccount);
+			return collateralInstance.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+			//return collateralInstance.postBuy(maturity, strike, price, amount, {from: defaultAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
 			//return ret;
 			return collateralInstance.linkedNodes(res);
-		}).catch((res) => {console.log("OOF!"); assert.equal(false, true, "error thorwn this is the catch block!");}).then((res) => {
+		}).catch((err) => {console.log(err); assert.equal(false, true, "error thorwn this is the catch block!");}).then((res) => {
 			assert.notEqual(res.hash, defaultBytes32, "likedNodes[name] is not null");
 			return collateralInstance.offers(res.hash);
 		}).then((res) => {
@@ -62,7 +72,7 @@ contract('collateral', function(accounts) {
 			assert.equal(res.strike, strike, "the strike of the option contract is correct");
 			assert.equal(res.price, price, "the price of the option contract is correct");
 			assert.equal(res.amount, amount, "the amount of the option contract is correct");
-			return collateralInstance.postBuy(maturity, strike, price-10000, amount, {from: defaultAccount});
+			return collateralInstance.postOrder(maturity, strike, price-10000, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			firstSellAmount = 5;
 			return collateralInstance.marketSell(maturity, strike, firstSellAmount, {from: reciverAccount});
@@ -88,7 +98,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
 			assert.equal(res, defaultBytes32, "after orderbook has been emptied there are no orders");
-			return collateralInstance.postBuy(maturity, strike, price, amount, {from: defaultAccount});
+			return collateralInstance.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
@@ -105,52 +115,17 @@ contract('collateral', function(accounts) {
 
 
 	it('can post and take sell orders', function(){
-		return 	oracle.deployed().then((i) => {
-			oracleInstance = i;
-			return dappToken.deployed();
-		}).then((i) => {
-			tokenInstance = i;
-			return calls.deployed();
-		}).then((i) => {
-			callsInstance = i;
-			return collateral.deployed();
-		}).then((i) => {
-			collateralInstance = i;
-			return web3.eth.getAccounts();
-		}).then((accts) => {
-			accounts = accts;
-			defaultAccount = accounts[0];
-			reciverAccount = accounts[1];
-			return tokenInstance.satUnits();
-		}).then((res) => {
-			satUnits = res.toNumber();
-			transferAmount = 1000;
-			return tokenInstance.transfer(reciverAccount, transferAmount, true, {from: defaultAccount});
-		}).then(() => {
-			return tokenInstance.approve(collateral.address, transferAmount, true, {from: defaultAccount});
-		}).then(() => {
-			return tokenInstance.approve(collateral.address, transferAmount, true, {from: reciverAccount});
-		}).then(() => {
-			return collateralInstance.postCollateral(transferAmount, true, {from: defaultAccount});
-		}).then(() => {
-			return collateralInstance.postCollateral(transferAmount, true, {from: reciverAccount});
-		}).then(() => {
-			return collateralInstance.claimed(defaultAccount);
-		}).then((res) => {
+		return collateralInstance.claimedToken(defaultAccount).then((res) => {
 			assert.equal(res.toNumber() >= satUnits*transferAmount, true, "correct amount of collateral claimed for " + defaultAccount);
-			return collateralInstance.claimed(reciverAccount);
+			return collateralInstance.claimedToken(reciverAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber() >= satUnits*transferAmount, true, "correct amount of collateral claimed for " + reciverAccount);
-			maturity = 100;
-			strike = 100;
-			price = 177777;
-			amount = 10;
-			return collateralInstance.postSell(maturity, strike, price, amount, {from: defaultAccount});
+			return collateralInstance.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});			
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
 			return collateralInstance.linkedNodes(res);
-		}).catch((res) => {console.log("OOF!"); assert.equal(false, true, "error thorwn this is the catch block!");}).then((res) => {
+		}).catch((err) => {console.log(err); assert.equal(false, true, "error thorwn this is the catch block!");}).then((res) => {
 			assert.notEqual(res.hash, defaultBytes32, "likedNodes[name] is not null");
 			return collateralInstance.offers(res.hash);
 		}).then((res) => {
@@ -159,7 +134,7 @@ contract('collateral', function(accounts) {
 			assert.equal(res.strike, strike, "the strike of the option contract is correct");
 			assert.equal(res.price, price, "the price of the option contract is correct");
 			assert.equal(res.amount, amount, "the amount of the option contract is correct");
-			return collateralInstance.postSell(maturity, strike, price-10000, amount, {from: defaultAccount});
+			return collateralInstance.postOrder(maturity, strike, price-10000, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			firstSellAmount = 5;
 			return collateralInstance.marketBuy(maturity, strike, firstSellAmount, {from: reciverAccount});
@@ -185,7 +160,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
 			assert.equal(res, defaultBytes32, "after orderbook has been emptied there are no orders");
-			return collateralInstance.postSell(maturity, strike, price, amount, {from: defaultAccount});
+			return collateralInstance.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
