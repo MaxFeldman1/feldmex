@@ -113,7 +113,7 @@ contract('collateral', function(accounts) {
 		});
 	});
 
-
+	//amount
 	it('can post and take sell orders', function(){
 		return collateralInstance.claimedToken(defaultAccount).then((res) => {
 			assert.equal(res.toNumber() >= satUnits*transferAmount, true, "correct amount of collateral claimed for " + defaultAccount);
@@ -136,8 +136,8 @@ contract('collateral', function(accounts) {
 			assert.equal(res.amount, amount, "the amount of the option contract is correct");
 			return collateralInstance.postOrder(maturity, strike, price-10000, amount, false, true, {from: defaultAccount});
 		}).then(() => {
-			firstSellAmount = 5;
-			return collateralInstance.marketBuy(maturity, strike, firstSellAmount, {from: reciverAccount});
+			firstBuyAmount = 5;
+			return collateralInstance.marketBuy(maturity, strike, firstBuyAmount, {from: reciverAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
@@ -145,8 +145,8 @@ contract('collateral', function(accounts) {
 		}).then((res) => {
 			return collateralInstance.offers(res.hash);
 		}).then((res) => {
-			assert.equal(res.amount, firstSellAmount, "the amount of the contract has decreaced the correct amount");
-			return collateralInstance.marketBuy(maturity, strike, amount-firstSellAmount+1, {from: reciverAccount});
+			assert.equal(res.amount, firstBuyAmount, "the amount of the contract has decreaced the correct amount");
+			return collateralInstance.marketBuy(maturity, strike, amount-firstBuyAmount+1, {from: reciverAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
@@ -154,9 +154,9 @@ contract('collateral', function(accounts) {
 		}).then((res) => {
 			return collateralInstance.offers(res.hash);
 		}).then((res) => {
-			assert.equal(res.amount, amount-1, "amount of second order after marketSell is correct");
-			return collateralInstance.marketBuy(maturity, strike, amount-1, {from:reciverAccount});
-		}).then(() => {
+			assert.equal(res.amount, amount-1, "amount of second order after marketBuy is correct");
+			return collateralInstance.marketBuy(maturity, strike, amount-1, {from: reciverAccount});
+		}).then((res) => {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
 			assert.equal(res, defaultBytes32, "after orderbook has been emptied there are no orders");

@@ -170,12 +170,19 @@ contract collateral{
     }
     
     function takeBuyOffer(address payable _seller, bytes32 _name) internal {
-        DappToken dt = DappToken(dappAddress);
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
-        testing = offer.maturity;
-        require(claimedToken[_seller] >= satUnits * offer.amount && _seller != offer.offerer && offer.buy);
-        claimedToken[_seller] -= satUnits * offer.amount;
+        require(offer.buy && _seller != offer.offerer);
+        uint8 index = (offer.call? 0 : 2);
+        //make sure the seller has sufficient collateral posted
+        if (offer.call){
+            require(claimedToken[_seller] >= satUnits * offer.amount);
+            claimedToken[_seller] -= satUnits * offer.amount;
+        }
+        else{
+            require(claimedStable[_seller] >= scUnits * offer.amount);
+            claimedStable[_seller] -= scUnits * offer.amount;
+        }
 
         if (node.next != 0 && node.previous != 0){
             linkedNodes[node.next].previous = node.previous;
@@ -183,7 +190,7 @@ contract collateral{
         }
         //this is the only offer for the maturity and strike
         else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.strike][0];
+            delete listHeads[offer.maturity][offer.strike][index];
         }
         //last node
         else if (node.next == 0){
@@ -192,16 +199,21 @@ contract collateral{
         //head node
         else{
             linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.strike][0] = node.next;
+            listHeads[offer.maturity][offer.strike][index] = node.next;
         }
         
         //now we make the trade happen
         calls callContract = calls(callsAddress);
         //dt.approve(callsAddress, satUnits, false);
         //give the seller the amount paid
-        dt.transfer(_seller, offer.price, false);
-        assert(callContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
-        
+        if (offer.call){
+            claimedToken[_seller] += offer.price * offer.amount;
+            assert(callContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
+        }
+        else{
+            claimedStable[_seller] += offer.price * offer.amount;
+            assert(callContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
+        }
         //clean storage
         delete linkedNodes[_name];
         delete offers[node.hash];
@@ -231,18 +243,27 @@ contract collateral{
     }
 
     function takeSellOffer(address payable _buyer, bytes32 _name) internal {
-        DappToken dt = DappToken(dappAddress);
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
-        require(claimedToken[_buyer] >= offer.price * offer.amount && _buyer != offer.offerer && !offer.buy);
-        claimedToken[_buyer] -= offer.price * offer.amount;
+        require(!offer.buy && _buyer != offer.offerer);
+        uint8 index = (offer.call? 1 : 3);
+        //make sure the seller has sufficient collateral posted
+        if (offer.call){
+            require(claimedToken[_buyer] >= offer.price * offer.amount);
+            claimedToken[_buyer] -= offer.price * offer.amount;
+        }
+        else{
+            require(claimedStable[_buyer] >= offer.price * offer.amount);
+            claimedStable[_buyer] -= offer.price * offer.amount;
+        }
+
         if (node.next != 0 && node.previous != 0){
             linkedNodes[node.next].previous = node.previous;
             linkedNodes[node.previous].next = node.next;
         }
         //this is the only offer for the maturity and strike
         else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.strike][1];
+            delete listHeads[offer.maturity][offer.strike][index];
         }
         //last node
         else if (node.next == 0){
@@ -251,20 +272,24 @@ contract collateral{
         //head node
         else{
             linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.strike][1] = node.next;
+            listHeads[offer.maturity][offer.strike][index] = node.next;
         }
         
         //now we make the trade happen
         calls callContract = calls(callsAddress);
         //give the seller the amount paid
-        dt.transfer(offer.offerer, offer.price, false);
-        assert(callContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
-        
+        if (offer.call){
+            claimedToken[offer.offerer] += offer.price * offer.amount;
+            assert(callContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
+        }
+        else{
+            claimedStable[offer.offerer] += offer.price * offer.amount;
+            assert(callContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
+        }
         //clean storage
         delete linkedNodes[_name];
         delete offers[node.hash];
     }
-
     function marketBuy(uint _maturity, uint _strike, uint _amount) public {
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][1]];
         Offer memory offer = offers[node.hash];
@@ -362,4 +387,8 @@ contract collateral{
             return;
         }
     }
+
+    /*function marketOrder(uint _maturity, uint _strike, uint _amount, uint _priceLimit, bool _buy, bool _call) {
+
+    }*/
 }
