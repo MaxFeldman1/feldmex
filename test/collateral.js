@@ -75,7 +75,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.postOrder(maturity, strike, price-10000, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			firstSellAmount = 5;
-			return collateralInstance.marketSell(maturity, strike, firstSellAmount, {from: reciverAccount});
+			return collateralInstance.marketSell(maturity, strike, firstSellAmount, true, {from: reciverAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
@@ -84,7 +84,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, firstSellAmount, "the amount of the contract has decreaced the correct amount");
-			return collateralInstance.marketSell(maturity, strike, amount-firstSellAmount+1, {from: reciverAccount});
+			return collateralInstance.marketSell(maturity, strike, amount-firstSellAmount+1, true, {from: reciverAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
@@ -93,7 +93,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, amount-1, "amount of second order after marketSell is correct");
-			return collateralInstance.marketSell(maturity, strike, amount-1, {from:reciverAccount});
+			return collateralInstance.marketSell(maturity, strike, amount-1, true, {from:reciverAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
@@ -137,7 +137,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.postOrder(maturity, strike, price-10000, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			firstBuyAmount = 5;
-			return collateralInstance.marketBuy(maturity, strike, firstBuyAmount, {from: reciverAccount});
+			return collateralInstance.marketBuy(maturity, strike, firstBuyAmount, true, {from: reciverAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
@@ -146,7 +146,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, firstBuyAmount, "the amount of the contract has decreaced the correct amount");
-			return collateralInstance.marketBuy(maturity, strike, amount-firstBuyAmount+1, {from: reciverAccount});
+			return collateralInstance.marketBuy(maturity, strike, amount-firstBuyAmount+1, true, {from: reciverAccount});
 		}).then(() => {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
@@ -155,7 +155,7 @@ contract('collateral', function(accounts) {
 			return collateralInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, amount-1, "amount of second order after marketBuy is correct");
-			return collateralInstance.marketBuy(maturity, strike, amount-1, {from: reciverAccount});
+			return collateralInstance.marketBuy(maturity, strike, amount-1, true, {from: reciverAccount});
 		}).then((res) => {
 			return collateralInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
