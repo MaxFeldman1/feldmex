@@ -77,13 +77,20 @@ contract collateral{
         dt.approve(callsAddress, 2**255, false);
         stablecoin sc = stablecoin(stablecoinAddress);
         scUnits = sc.scUnits();
+        sc.approve(callsAddress, 2**255, false);
     }
     
-    function postCollateral(uint _amount, bool _fullUnit) public returns(bool success){
+    function postCollateral(uint _amount, bool _fullUnit, uint _amountStable, bool _fullUnitStable) public returns(bool success){
         DappToken dt = DappToken(dappAddress);
-        if (dt.transferFrom(msg.sender, address(this), _amount, _fullUnit)){
-            claimedToken[msg.sender]+=_amount*(_fullUnit ? satUnits : 1);
-            return true;
+        if (_amount != 0){
+            if (dt.transferFrom(msg.sender, address(this), _amount, _fullUnit)){
+                claimedToken[msg.sender]+=_amount * (_fullUnit ? satUnits : 1);
+                if (_amountStable == 0) return true;
+            }
+        }
+        stablecoin sc = stablecoin(stablecoinAddress);
+        if (sc.transferFrom(msg.sender, address(this), _amount, _fullUnit)){
+            claimedStable[msg.sender]+=_amountStable *(_fullUnitStable ? scUnits : 1);
         }
         return false;
     }
@@ -154,7 +161,7 @@ contract collateral{
         offers[hash] = offer;
         //set current node to the head node
         linkedNode memory currentNode = linkedNodes[listHeads[_maturity][_strike][index]];
-        if (offers[currentNode.hash].price <= _price){
+        if ((_buy && offers[currentNode.hash].price <= _price) || (!_buy && (offers[currentNode.hash].price >= _price || offers[currentNode.hash].price == 0))){
             linkedNodes[name] = linkedNode(hash, name, currentNode.name, 0);
             if (offers[currentNode.hash].price != 0){
                 linkedNodes[listHeads[_maturity][_strike][index]].previous = name;
@@ -213,23 +220,19 @@ contract collateral{
         if (node.next != 0 && node.previous != 0){
             linkedNodes[node.next].previous = node.previous;
             linkedNodes[node.previous].next = node.next;
-            testing = 1;
         }
         //this is the only offer for the maturity and strike
         else if (node.next == 0 && node.previous == 0){
             delete listHeads[offers[node.hash].maturity][offers[node.hash].strike][index];
-            testing = 2;
         }
         //last node
         else if (node.next == 0){
             linkedNodes[node.previous].next = 0;
-            testing = 3;
         }
         //head node
         else{
             linkedNodes[node.next].previous = 0;
             listHeads[offers[node.hash].maturity][offers[node.hash].strike][index] = node.next;
-            testing = 4;
         }
         delete linkedNodes[_name];
         delete offers[node.hash];
@@ -243,7 +246,7 @@ contract collateral{
             claimedStable[msg.sender] += scUnits * offer.amount;
     }
     
-    function takeBuyOffer(address payable _seller, bytes32 _name) internal {
+    function takeBuyOffer(address payable _seller, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
         require(offer.buy && _seller != offer.offerer);
@@ -291,9 +294,10 @@ contract collateral{
         //clean storage
         delete linkedNodes[_name];
         delete offers[node.hash];
+        return true;
     }
 
-    function takeSellOffer(address payable _buyer, bytes32 _name) internal {
+    function takeSellOffer(address payable _buyer, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
         require(!offer.buy && _buyer != offer.offerer);
@@ -340,13 +344,16 @@ contract collateral{
         //clean storage
         delete linkedNodes[_name];
         delete offers[node.hash];
+        return true;
     }
 
     function marketSell(uint _maturity, uint _strike, uint _amount, bool _call) public {
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
-        require(claimedToken[msg.sender] >= satUnits * _amount && listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
+        require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
+        if (_call) require(claimedToken[msg.sender] >= satUnits * _amount);
+        else require(claimedStable[msg.sender] >= scUnits * _amount * _strike);
         //in each iteration we mint one contract
         while (_amount > 0 && node.name != 0){
             if (offer.amount > _amount){
@@ -357,7 +364,7 @@ contract collateral{
                     claimedToken[msg.sender] += offer.price * _amount;
                 }
                 else {
-                    claimedStable[msg.sender] -= scUnits * _amount;
+                    claimedStable[msg.sender] -= scUnits * _amount * _strike;
                     assert(callContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
                     claimedStable[msg.sender] += offer.price * _amount;
                 }
@@ -365,7 +372,7 @@ contract collateral{
                 break;
             }
             _amount-=offer.amount;
-            takeBuyOffer(msg.sender, node.name);
+            if (!takeBuyOffer(msg.sender, node.name)) break;
             //find the next offer
             node = linkedNodes[listHeads[_maturity][_strike][index]];
             offer = offers[node.hash];
@@ -376,7 +383,7 @@ contract collateral{
         uint8 index = (_call ? 1 : 3);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
-        require(claimedToken[msg.sender] >= satUnits * _amount && listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
+        require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
         while (_amount > 0 && node.name != 0 && claimedToken[msg.sender] >= offer.price){
             if (offer.amount > _amount){
                 calls callContract = calls(callsAddress);
@@ -394,7 +401,7 @@ contract collateral{
                 break;
             }
             _amount-=offer.amount;
-            takeSellOffer(msg.sender, node.name);
+            if (!takeSellOffer(msg.sender, node.name)) break;
             //find the next offer
             node = linkedNodes[listHeads[_maturity][_strike][index]];
             offer = offers[node.hash];
