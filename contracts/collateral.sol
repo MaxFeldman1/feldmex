@@ -149,8 +149,8 @@ contract collateral{
             index = 2;
         }
         else {
-            require(claimedStable[msg.sender] >= scUnits*_amount);
-            claimedStable[msg.sender] -= scUnits * _amount;
+            require(claimedStable[msg.sender] >= scUnits*_amount*_strike);
+            claimedStable[msg.sender] -= scUnits * _amount * _strike;
             index = 3;
         }
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
@@ -243,7 +243,7 @@ contract collateral{
         else if (index == 2)
             claimedStable[msg.sender] += offer.price * offer.amount;
         else
-            claimedStable[msg.sender] += scUnits * offer.amount;
+            claimedStable[msg.sender] += scUnits * offer.strike * offer.amount;
     }
     
     function takeBuyOffer(address payable _seller, bytes32 _name) internal returns(bool success){
@@ -257,8 +257,8 @@ contract collateral{
             claimedToken[_seller] -= satUnits * offer.amount;
         }
         else{
-            require(claimedStable[_seller] >= scUnits * offer.amount);
-            claimedStable[_seller] -= scUnits * offer.amount;
+            require(claimedStable[_seller] >= scUnits * offer.amount * offer.strike);
+            claimedStable[_seller] -= scUnits * offer.amount * offer.strike;
         }
 
         if (node.next != 0 && node.previous != 0){
@@ -362,6 +362,7 @@ contract collateral{
                     claimedToken[msg.sender] -= satUnits * _amount;
                     assert(callContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
                     claimedToken[msg.sender] += offer.price * _amount;
+
                 }
                 else {
                     claimedStable[msg.sender] -= scUnits * _amount * _strike;
@@ -390,11 +391,13 @@ contract collateral{
                 if (_call){
                     require(claimedToken[msg.sender] >= offer.price * _amount);
                     claimedToken[msg.sender] -= offer.price * _amount;
+                    claimedToken[offer.offerer] += offer.price * _amount;
                     assert(callContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
                 }
                 else {
                     require(claimedStable[msg.sender] >= offer.price * _amount);
                     claimedStable[msg.sender] -= offer.price * _amount;
+                    claimedStable[offer.offerer] += offer.price * _amount;
                     assert(callContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
                 }
                 offers[node.hash].amount -= _amount;
