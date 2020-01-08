@@ -89,7 +89,7 @@ contract collateral{
             }
         }
         stablecoin sc = stablecoin(stablecoinAddress);
-        if (sc.transferFrom(msg.sender, address(this), _amount, _fullUnit)){
+        if (sc.transferFrom(msg.sender, address(this), _amountStable, _fullUnit)){
             claimedStable[msg.sender]+=_amountStable *(_fullUnitStable ? scUnits : 1);
         }
         return false;
