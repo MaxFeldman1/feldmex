@@ -30,14 +30,7 @@ module.exports = function(callback){
 		return collateral.deployed();
 	}).then((i) => {
 		collateralInstance = i;
-		return web3.eth.getAccounts();
-	}).then((accts) => {
-		accounts = accts;
-		defaultAccount = accounts[0];
-		reciverAccount = accounts[1];
-		return tokenInstance.satUnits();
-	}).then((res) => {
-		satUnits = res.toNumber();
+	}).then(() => {
 	    return askQuestion("Contract Identifier (Bytes32 name)?\n");
 	}).then((res) => {
 		name = res;
@@ -50,9 +43,7 @@ module.exports = function(callback){
 		offer = res;
 		offerer = res.offerer;
 		console.log("Canceling "+(offer.buy? "Buy" : "Sell" ));
-		if (offer.buy)
-			return collateralInstance.cancelBuy(name, {from: offerer});
-		return collateralInstance.cancelSell(name, {from: offerer});
+		return collateralInstance.cancelOrder(name, {from: offer.offerer});
 	}).then(() => console.log("Success")).catch(() => {
 		console.log("ERROR!");
 		if (node.name == 0)

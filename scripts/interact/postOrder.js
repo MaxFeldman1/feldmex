@@ -42,29 +42,26 @@ module.exports = function(callback){
 		oracleInstance.set(originalSpot);
 	    return askQuestion("What Maturity?\n");
 	}).then((res) => {
-		maturity = res;
+		maturity = parseInt(res);
 		return askQuestion("What Stike?\n");
 	}).then((res) => {
-		strike = res;
-		return askQuestion("How many contracts\n");
+		strike = parseInt(res);
+		return askQuestion("What price per contract?\n");
 	}).then((res) => {
-		amount = res;
-		console.log("Approving collateral contract");
-		return tokenInstance.approve(collateral.address, amount, true, {from: reciverAccount});
-	}).then(() => {
-		console.log("Claiming collateral");
-		return collateralInstance.postCollateral(amount, true, {from: reciverAccount});
-	}).then(() => {
-		return collateralInstance.claimed(reciverAccount);
+		price = parseInt(res);
+		return askQuestion("How many contracts?\n");
 	}).then((res) => {
-		console.log("Executing Market Sell");
-		return collateralInstance.marketSell(maturity, strike, amount, {from: reciverAccount});
-	}).catch((res) => {console.log("OOF")}).then(() => {
-		return collateralInstance.testing();
-	}).then((res) => console.log("Testing: "+res.toNumber())).then((res) => {
-		console.log("Withdrawing excess collateral");
-		return collateralInstance.withdrawMaxCollateral({from: reciverAccount});
-	});
-
+		amount = parseInt(res);
+		transferAmount = satUnits * amount;
+		return askQuestion("Buy or Sell?\n");
+	}).then((res) => {
+		buy = res.charAt(0) == 'b' || res.charAt(0) == 'B';
+		return askQuestion("Call or Put?\n");
+	}).then((res) => {
+		call = res.charAt(0) == 'c' || res.charAt(0) == 'C';
+		//console.log("maturity "+maturity+"\tstrike " +strike+"\tprice "+price+"\tamount "+amount+"\tbuy "+buy+"\tcall "+call);
+		console.log("Posting Order");
+		return collateralInstance.postOrder(maturity, strike, price, amount, buy, call, {from: defaultAccount});
+	}).then(() => console.log("Order Posted"));
 
 }
