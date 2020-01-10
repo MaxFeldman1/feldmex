@@ -39,8 +39,6 @@ module.exports = function(callback){
 		return tokenInstance.satUnits();
 	}).then((res) => {
 		satUnits = res.toNumber();
-		originalSpot = 100;
-		oracleInstance.set(originalSpot);
 	    return askQuestion("What Maturity?\n");
 	}).then((res) => {
 		maturity = res;
@@ -49,21 +47,27 @@ module.exports = function(callback){
 		strike = res;
 		return collateralInstance.listHeads(maturity, strike, 0);
 	}).then((res) => {
-		buy = res;
+		callBuy = res;
 		return collateralInstance.listHeads(maturity, strike, 1);
 	}).then((res) => {
-		sell = res;
+		callSell = res;
+		return collateralInstance.listHeads(maturity, strike, 2);
+	}).then((res) => {
+		putBuy = res;
+		return collateralInstance.listHeads(maturity, strike, 3);
+	}).then((res) => {
+		putSell = res;
 	}).then(async () => {
 		var node;
-		console.log("\nBUYS\n");
+		console.log("\nCALL BUYS\n");
 		do {	
-			await collateralInstance.linkedNodes(buy).then((res) => {
+			await collateralInstance.linkedNodes(callBuy).then((res) => {
 				node = res;
-				buy = node.next;
+				callBuy = node.next;
 				return collateralInstance.offers(node.hash);
 			}).then((res) => {
 				if (res.price.toNumber() == 0) return;
-				console.log("BUY OFFER:");
+				console.log("OFFER:");
 				console.log("Name: "+node.name);
 				console.log("Offerer: "+res.offerer);
 				console.log("Maturity: "+res.maturity.toNumber());
@@ -71,21 +75,20 @@ module.exports = function(callback){
 				console.log("Price: "+res.price.toNumber());
 				console.log("Amount: "+res.amount.toNumber());
 				console.log("Next: "+node.next);
-				console.log("Buy: "+res.buy);
 				return;
 			})
-		} while (buy != defaultHash);
+		} while (callBuy != defaultHash);
 	}).then(async () => {
 		var node;
-		console.log("\nSELLS\n");
+		console.log("\nCALL SELLS\n");
 		do {	
-			await collateralInstance.linkedNodes(sell).then((res) => {
+			await collateralInstance.linkedNodes(callSell).then((res) => {
 				node = res;
-				sell = node.next;
+				callSell = node.next;
 				return collateralInstance.offers(node.hash);
 			}).then((res) => {
 				if (res.price.toNumber() == 0) return;
-				console.log("SELL OFFER:");
+				console.log("OFFER:");
 				console.log("Name: "+node.name);
 				console.log("Offerer: "+res.offerer);
 				console.log("Maturity: "+res.maturity.toNumber());
@@ -93,12 +96,51 @@ module.exports = function(callback){
 				console.log("Price: "+res.price.toNumber());
 				console.log("Amount: "+res.amount.toNumber());
 				console.log("Next: "+node.next);
-				console.log("Buy: "+res.buy);
 				return;
 			})
-		} while (sell != defaultHash);
-	}).then(async (res) => {
-		return;
+		} while (callSell != defaultHash);
+	}).then(async () => {
+		var node;
+		console.log("\nPUT BUYS\n");
+		do {	
+			await collateralInstance.linkedNodes(putBuy).then((res) => {
+				node = res;
+				putBuy = node.next;
+				return collateralInstance.offers(node.hash);
+			}).then((res) => {
+				if (res.price.toNumber() == 0) return;
+				console.log("OFFER:");
+				console.log("Name: "+node.name);
+				console.log("Offerer: "+res.offerer);
+				console.log("Maturity: "+res.maturity.toNumber());
+				console.log("Strike: "+res.strike.toNumber());
+				console.log("Price: "+res.price.toNumber());
+				console.log("Amount: "+res.amount.toNumber());
+				console.log("Next: "+node.next);
+				return;
+			})
+		} while (putBuy != defaultHash)
+	}).then(async () => {
+		var node;
+		console.log("\nCALL SELLS\n");
+		do {	
+			await collateralInstance.linkedNodes(putSsell).then((res) => {
+				node = res;
+				callSell = node.next;
+				return collateralInstance.offers(node.hash);
+			}).then((res) => {
+				if (res.price.toNumber() == 0) return;
+				console.log("OFFER:");
+				console.log("Name: "+node.name);
+				console.log("Offerer: "+res.offerer);
+				console.log("Maturity: "+res.maturity.toNumber());
+				console.log("Strike: "+res.strike.toNumber());
+				console.log("Price: "+res.price.toNumber());
+				console.log("Amount: "+res.amount.toNumber());
+				console.log("Next: "+node.next);
+				return;
+			})
+		} while (callSell != defaultHash);
 	});
 
 

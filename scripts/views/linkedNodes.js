@@ -30,16 +30,6 @@ module.exports = function(callback){
 		return collateral.deployed();
 	}).then((i) => {
 		collateralInstance = i;
-		return web3.eth.getAccounts();
-	}).then((accts) => {
-		accounts = accts;
-		defaultAccount = accounts[0];
-		reciverAccount = accounts[1];
-		return tokenInstance.satUnits();
-	}).then((res) => {
-		satUnits = res.toNumber();
-		originalSpot = 100;
-		oracleInstance.set(originalSpot);
 	    return askQuestion("What is the node identifier?\n");
 	}).then(async (res) => {
 		hash = res;

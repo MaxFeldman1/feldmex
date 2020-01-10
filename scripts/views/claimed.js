@@ -18,6 +18,7 @@ module.exports = function(callback){
 	dappToken = artifacts.require("./DappToken.sol");
 	calls = artifacts.require("./calls.sol");
 	collateral = artifacts.require("./collateral.sol");
+	stablecoin = artifacts.require("./stablecoin.sol");
 
 	oracle.deployed().then((i) => {
 		oracleInstance = i;
@@ -30,6 +31,9 @@ module.exports = function(callback){
 		return collateral.deployed();
 	}).then((i) => {
 		collateralInstance = i;
+		return stablecoin.deployed();
+	}).then((i) => {
+		stablecoinInstance = i;
 		return web3.eth.getAccounts();
 	}).then((accts) => {
 		accounts = accts;
@@ -38,20 +42,29 @@ module.exports = function(callback){
 		return tokenInstance.satUnits();
 	}).then((res) => {
 		satUnits = res.toNumber();
-		originalSpot = 100;
-		oracleInstance.set(originalSpot);
+		return stablecoinInstance.scUnits();
+	}).then((res) => {
+		scUnits = res.toNumber();
 	}).then(async (res) => {
-		console.log("Claimed Collateral: ");
+		console.log("Account Collateral: ");
 		for (var i = 0; i < accounts.length; i++){
-			await collateralInstance.claimed(accounts[i]).then((res) => {
-				console.log(accounts[i]+' '+(res.toNumber()/satUnits));
+			console.log(accounts[i]);
+			await collateralInstance.claimedToken(accounts[i]).then((res) => {
+				console.log('Claimed Tokens: '+(res.toNumber()/satUnits));
 			});
+			await collateralInstance.claimedStable(accounts[i]).then((res) => {
+				console.log('Cliamed Stablecoins: '+(res.toNumber()/scUnits));
+			})
 		}		
 	}).then(async () => {
-		console.log("\nTotal Tokens: ");
+		console.log("\nAccount Balances:");
 		for (var i = 0; i < accounts.length; i++){
+			console.log(accounts[i]);
 			await tokenInstance.addrBalance(accounts[i], false).then((res) => {
-				console.log(accounts[i]+' '+(res.toNumber()/satUnits));
+				console.log('Token balance: '+(res.toNumber()/satUnits));
+			});
+			await stablecoinInstance.addrBalance(accounts[i], false).then((res) => {
+				console.log('Stablecoin balance: '+(res.toNumber()/scUnits));
 			});
 		}
 	});
