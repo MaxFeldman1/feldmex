@@ -2,7 +2,12 @@ module.exports = function(callback){
 	
 	const readline = require('readline');
 
+	var processedArgs = 4;
 	function askQuestion(query) {
+		if (processedArgs < process.argv.length){
+			processedArgs++;
+			return process.argv[processedArgs-1];
+		}
 	    const rl = readline.createInterface({
 	        input: process.stdin,
 	        output: process.stdout,

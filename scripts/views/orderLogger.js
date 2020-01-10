@@ -3,7 +3,12 @@ module.exports = function(callback){
 	const defaultHash = '0x0000000000000000000000000000000000000000000000000000000000000000';
 	const readline = require('readline');
 
+	var processedArgs = 4;
 	function askQuestion(query) {
+		if (processedArgs < process.argv.length){
+			processedArgs++;
+			return process.argv[processedArgs-1];
+		}
 	    const rl = readline.createInterface({
 	        input: process.stdin,
 	        output: process.stdout,
@@ -31,14 +36,6 @@ module.exports = function(callback){
 		return collateral.deployed();
 	}).then((i) => {
 		collateralInstance = i;
-		return web3.eth.getAccounts();
-	}).then((accts) => {
-		accounts = accts;
-		defaultAccount = accounts[0];
-		reciverAccount = accounts[1];
-		return tokenInstance.satUnits();
-	}).then((res) => {
-		satUnits = res.toNumber();
 	    return askQuestion("What Maturity?\n");
 	}).then((res) => {
 		maturity = res;
@@ -122,11 +119,11 @@ module.exports = function(callback){
 		} while (putBuy != defaultHash)
 	}).then(async () => {
 		var node;
-		console.log("\nCALL SELLS\n");
+		console.log("\nPUT SELLS\n");
 		do {	
-			await collateralInstance.linkedNodes(putSsell).then((res) => {
+			await collateralInstance.linkedNodes(putSell).then((res) => {
 				node = res;
-				callSell = node.next;
+				putSell = node.next;
 				return collateralInstance.offers(node.hash);
 			}).then((res) => {
 				if (res.price.toNumber() == 0) return;
@@ -140,7 +137,7 @@ module.exports = function(callback){
 				console.log("Next: "+node.next);
 				return;
 			})
-		} while (callSell != defaultHash);
+		} while (putSell != defaultHash);
 	});
 
 

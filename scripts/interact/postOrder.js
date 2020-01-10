@@ -2,7 +2,12 @@ module.exports = function(callback){
 	
 	const readline = require('readline');
 
+	var processedArgs = 4;
 	function askQuestion(query) {
+		if (processedArgs < process.argv.length){
+			processedArgs++;
+			return process.argv[processedArgs-1];
+		}
 	    const rl = readline.createInterface({
 	        input: process.stdin,
 	        output: process.stdout,
@@ -32,14 +37,7 @@ module.exports = function(callback){
 		collateralInstance = i;
 		return web3.eth.getAccounts();
 	}).then((accts) => {
-		accounts = accts;
-		defaultAccount = accounts[0];
-		reciverAccount = accounts[1];
-		return tokenInstance.satUnits();
-	}).then((res) => {
-		satUnits = res.toNumber();
-		originalSpot = 100;
-		oracleInstance.set(originalSpot);
+		defaultAccount = accts[0];
 	    return askQuestion("What Maturity?\n");
 	}).then((res) => {
 		maturity = parseInt(res);
@@ -52,7 +50,6 @@ module.exports = function(callback){
 		return askQuestion("How many contracts?\n");
 	}).then((res) => {
 		amount = parseInt(res);
-		transferAmount = satUnits * amount;
 		return askQuestion("Buy or Sell?\n");
 	}).then((res) => {
 		buy = res.charAt(0) == 'b' || res.charAt(0) == 'B';

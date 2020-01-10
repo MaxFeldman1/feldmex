@@ -4,7 +4,12 @@ module.exports = function(callback){
 	
 	const defaultBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
+	var processedArgs = 4;
 	function askQuestion(query) {
+		if (processedArgs < process.argv.length){
+			processedArgs++;
+			return process.argv[processedArgs-1];
+		}
 	    const rl = readline.createInterface({
 	        input: process.stdin,
 	        output: process.stdout,
