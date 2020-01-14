@@ -203,6 +203,104 @@ contract collateral{
         }
     }
 
+    //allows for users to post Orders with less transaction fees by giving another order as refrence to find their orders position from
+    function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
+        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike);
+        uint index;
+        if (_buy && _call){
+            require(claimedToken[msg.sender] >= _price*_amount);
+            require(offers[linkedNodes[_name].hash].buy && offers[linkedNodes[_name].hash].call);
+            claimedToken[msg.sender] -= _price * _amount;
+            index = 0;
+        }
+        else if (!_buy && _call){
+            require(claimedToken[msg.sender] >= satUnits*_amount);
+            require(!offers[linkedNodes[_name].hash].buy && offers[linkedNodes[_name].hash].call);
+            claimedToken[msg.sender] -= satUnits * _amount;
+            index = 1;
+        }
+        else if (_buy && !_call){
+            require(claimedStable[msg.sender] >= _price*_amount);
+            require(offers[linkedNodes[_name].hash].buy && !offers[linkedNodes[_name].hash].call);
+            claimedStable[msg.sender] -= _price * _amount;
+            index = 2;
+        }
+        else {
+            require(claimedStable[msg.sender] >= scUnits*_amount*_strike);
+            require(!offers[linkedNodes[_name].hash].buy && !offers[linkedNodes[_name].hash].call);
+            claimedStable[msg.sender] -= scUnits * _amount * _strike;
+            index = 3;
+        }
+
+        Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
+        //buyOffer identifier
+        bytes32 hash = orderHasher(offer);
+        //linkedNode identifier
+        bytes32 name = nodeHasher(hash);
+        //if we need to traverse down the list further away from the list head
+        linkedNode memory currentNode = linkedNodes[_name];
+        if ((_buy &&  offers[currentNode.hash].price >= _price) || (!_buy  && offers[currentNode.hash].price <= _price)){
+            linkedNode memory previousNode;
+            while (currentNode.name != 0){
+                previousNode = currentNode;
+                currentNode = linkedNodes[currentNode.next];
+                if ((_buy && offers[currentNode.hash].price < _price) || (!_buy && offers[currentNode.hash].price > _price)){
+                    break;
+                }
+            }
+            offers[hash] = offer;
+            //if this is the last node
+            if (currentNode.name == 0){
+                linkedNodes[name] = linkedNode(hash, name, 0, previousNode.name);
+                linkedNodes[currentNode.name].previous = name;
+                linkedNodes[previousNode.name].next = name;
+                emit offerPosted(hash);
+                return;
+            }
+            //it falls somewhere in the middle of the chain
+            else{
+                linkedNodes[name] = linkedNode(hash, name, currentNode.name, previousNode.name);
+                linkedNodes[currentNode.name].previous = name;
+                linkedNodes[previousNode.name].next = name;
+                emit offerPosted(hash);
+                return;
+            }
+
+        }
+        //here we traverse up towards the list head
+        else {
+            /*  curent node should == linkedNodes[currentNode.next]
+                do not be confused by the fact that is lags behind in the loop and == the value of currentNode in the previous iteration
+            */
+            linkedNode memory nextNode;
+            while (currentNode.name != 0){
+                nextNode = currentNode;
+                currentNode = linkedNodes[currentNode.previous];
+                if ((_buy && offers[currentNode.hash].price >= _price) || (!_buy && offers[currentNode.hash].price <= _price)){
+                    break;
+                }
+            }
+            offers[hash] = offer;
+            //if this is the list head
+            if (currentNode.name == 0){
+                //nextNode is the head befoe execution of this local scope
+                linkedNodes[name] = linkedNode(hash, name, nextNode.name, 0);
+                linkedNodes[nextNode.name].previous = name;
+                listHeads[_maturity][_strike][index] = name;
+                emit offerPosted(hash);
+                return; 
+            }
+            //falls somewhere in the middle of the list
+            else {
+                linkedNodes[name] = linkedNode(hash, name, nextNode.name, currentNode.name);
+                linkedNodes[nextNode.name].previous = name;
+                linkedNodes[currentNode.name].next = name;
+                emit offerPosted(hash);
+                return;
+            }
+        }
+    }
+
     function cancelOrder(bytes32 _name) public {
         linkedNode memory node = linkedNodes[_name];
         require(msg.sender == offers[node.hash].offerer);

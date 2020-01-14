@@ -302,7 +302,7 @@ contract('collateral', function(accounts) {
 			receiverAccountBalance = res.toNumber();
 			defaultAccountBalance -= strike*amount*scUnits;
 			return collateralInstance.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
-		}).then(() => {
+		}).then(() => {512-471-2900
 			defaultAccountBalance -= strike*amount*scUnits;
 			return collateralInstance.postOrder(maturity, strike, price-10000, amount, false, false, {from: defaultAccount});
 		}).then(() => {
@@ -361,6 +361,70 @@ contract('collateral', function(accounts) {
 			return collateralInstance.claimedStable(receiverAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber(), receiverAccountBalance, "receiverAccount has the correct balance");
+		});
+	});
+
+	it('inserts orders', function(){
+		altMaturity = maturity+5;
+		return collateralInstance.postOrder(altMaturity, strike, price, amount, true, true, {from: defaultAccount}).then(() => {
+			return collateralInstance.postOrder(altMaturity, strike, price+10000, amount, true, true, {from: defaultAccount});
+		}).then(() => {
+			return collateralInstance.listHeads(altMaturity, strike, 0);
+		}).then((res) => {
+			prevHead = res;
+			return collateralInstance.insertOrder(altMaturity, strike, price+20000, amount, true, true, prevHead, {from: defaultAccount});
+		}).then(() => {
+			return collateralInstance.listHeads(altMaturity, strike, 0);
+		}).then((res) => {
+			assert.notEqual(res, prevHead);
+			newHead = res;
+			return collateralInstance.linkedNodes(res);
+		}).then((res) => {
+			thirdAddNode = res.next;
+			assert.equal(thirdAddNode, prevHead, "The next node is the previous head node");
+			assert.equal(res.previous, defaultBytes32, "The head node has no previous node");
+			return collateralInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.maturity, altMaturity, "The head has the correct maturity");
+			assert.equal(res.price, price+20000, "The price is correct");
+			assert.equal(res.strike, strike, "the strike is correct");
+			return collateralInstance.linkedNodes(thirdAddNode);
+		}).then((res) => {
+			assert.equal(res.previous, newHead, "The previous of the previous head has been updated");
+			thirdAddNode = res.next;
+			return collateralInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price, price+10000, "The price of the second offer is correct");
+			return collateralInstance.linkedNodes(thirdAddNode);
+		}).then((res) => {
+			assert.equal(res.next, defaultBytes32, "The last node in the list has no next node");
+			assert.equal(res.previous, prevHead, "The previous of the last node is correct");
+			return collateralInstance.insertOrder(altMaturity, strike, price+5000, amount, true, true, thirdAddNode, {from: defaultAccount});
+		}).then(() => {
+			return collateralInstance.insertOrder(altMaturity, strike, price-5000, amount, true, true, thirdAddNode, {from: defaultAccount});
+		}).then(() => {
+			//now the second to last node in the list
+			return collateralInstance.linkedNodes(thirdAddNode);
+		}).then((res) => {
+			assert.notEqual(res.previous, prevHead, "The previous of the last node has updated");
+			assert.notEqual(res.next, defaultBytes32, "The next of the node has updated")
+			frem = res.next;
+			tilbake = res.previous;
+			return collateralInstance.linkedNodes(frem);
+		}).then((res) => {
+			assert.equal(res.next, defaultBytes32, "The next of the last node is null");
+			assert.equal(res.previous, thirdAddNode, "The previous of the last node is correct");
+			return collateralInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price, price-5000, "The price of the last node is correct");
+			return collateralInstance.linkedNodes(tilbake);
+		}).then((res) => {
+			assert.equal(res.next, thirdAddNode, "The next of the node is correct");
+			assert.equal(res.previous, prevHead, "The precious of the node is correct");
+			return collateralInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price.toNumber(), price+5000, "The price of the node is correct");
+			return;
 		});
 	});
 });
