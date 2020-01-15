@@ -28,9 +28,16 @@ contract calls {
 
     //denominated in satUnits
     mapping(address => uint) public claimedTokens;
-    //
+    //denominated in scUnits
     mapping(address => uint) public claimedStable;
 
+    //address => maturity => array of strikes
+    mapping(address => mapping(uint => uint[])) public strikes;
+    //address => maturity => amount of collateral not required //denominated in satUnits
+    mapping(address => mapping(uint => uint)) public satDeduction;
+    //address => maturity => amount of collateral not required //denominated in scUnits
+    mapping(address => mapping(uint => uint)) public scDeduction;
+    
     function mintCall(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount) public returns(bool success){
         require(_debtor != _holder);
         DappToken dt = DappToken(dappAddress);
@@ -112,4 +119,62 @@ contract calls {
         return orc.get();
     }
     
+    //---------functioins added in the mimimise branch-----------------------
+    function contains(address _addr, uint _maturity, uint _strike) public view returns(bool){
+        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
+            if (strikes[_addr][_maturity][i] == _strike) return false;
+        }
+        return true;
+    }
+
+    function satValueOf(address _addr, uint _maturity, uint _strike, uint _price)internal view returns(uint){
+        int amount = callAmounts[_addr][_maturity][_strike];
+        uint payout = 0;
+        if (amount != 0){
+            if (_price > _strike){
+                payout = (uint(amount > 0 ? amount : -amount) * satUnits * (_price - (_strike)))/_price;
+            }
+            if (amount > 0){
+                return payout;
+            }
+            else {
+                return uint(-amount)*satUnits - (payout + 1);
+            }
+        } 
+        return 0;
+    }
+
+    function scValueOf(address _addr, uint _maturity, uint _strike, uint _price)internal view returns(uint){
+        int amount = putAmounts[_addr][_maturity][_strike];
+        uint payout = 0;
+        if (amount != 0){
+            if (_price < _strike){
+                payout = (_strike - _price)*scUnits*uint(amount > 0 ? amount : -amount);
+            }
+            if (amount > 0){
+                return payout;
+            }
+            else {
+                return uint(-amount)*scUnits*_strike - payout;
+            }
+        }
+        return 0;
+    }
+
+    function totalSatValueOf(address _addr, uint _maturity, uint _price)internal view returns(uint){
+        uint value = 0;
+        for(uint i = 0; i < strikes[_addr][_maturity].length; i++){
+            value+=satValueOf(_addr, _maturity, strikes[_addr][_maturity][i], _price);
+        }
+        return value;
+    }
+
+    function totalScValueOf(address _addr, uint _maturity, uint _price)internal view returns(uint){
+        uint value = 0;
+        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
+            value+=scValueOf(_addr, _maturity, strikes[_addr][_maturity][i], _price);
+        }
+        return value;
+    }
+
 }
