@@ -9,7 +9,7 @@ contract calls {
     address stablecoinAddress;
     uint satUnits;
     uint scUnits;
-    
+    uint public testing;
     constructor (address _oracleAddress, address _dappAddress, address _stablecoinAddress) public {
         oracleAddress = _oracleAddress;
         dappAddress = _dappAddress;
@@ -44,6 +44,8 @@ contract calls {
         require(dt.transferFrom(msg.sender, address(this), satUnits*_amount, false));
         callAmounts[_debtor][_maturity][_strike] -= int(_amount);
         callAmounts[_holder][_maturity][_strike] += int(_amount);
+        if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
+        if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
         return true;
     }
 
@@ -53,45 +55,51 @@ contract calls {
         require(sc.transferFrom(msg.sender, address(this), scUnits*_amount*_strike, false));
         putAmounts[_debtor][_maturity][_strike] -= int(_amount);
         putAmounts[_holder][_maturity][_strike] += int(_amount);
+        if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
+        if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
         return true;
     }
 
-    function claim(uint _maturity, uint _strike) public returns(bool success){
+    /*function claim(uint _maturity, uint _strike) public returns(bool success){
         require(_maturity < block.number);
         //calls payout is denoinated in the underlying token
-        int amount = callAmounts[msg.sender][_maturity][_strike];
+        int callAmount = callAmounts[msg.sender][_maturity][_strike];
+        int putAmount = putAmounts[msg.sender][_maturity][_strike];
+        //set to zero to avoid multi send attack
         callAmounts[msg.sender][_maturity][_strike] = 0;
+        putAmounts[msg.sender][_maturity][_strike] = 0;
+        //interact with oracle
         oracle orc = oracle(oracleAddress);
         uint spot = orc.getUint(_maturity);
-        uint payout = 0;
-        if (amount != 0){
-            if (spot > _strike){
-                payout = (uint(amount > 0 ? amount : -amount) * satUnits * (spot - (_strike)))/spot;
-            }
-            if (amount > 0){
-                claimedTokens[msg.sender] += payout;
-            }
-            else {
-                claimedTokens[msg.sender] += uint(-amount)*satUnits - (payout + 1);
-            }
+        //now credit amount due
+        claimedTokens[msg.sender] += satValueOf(callAmount, _strike, spot);
+        claimedStable[msg.sender] += scValueOf(putAmount, _strike, spot);
+        return true;
+    }*/
+    
+    function claim(uint _maturity) public returns(bool success){
+        require(_maturity < block.number);
+        //get info from the oracle
+        oracle orc = oracle(oracleAddress);
+        uint spot = orc.getUint(_maturity);
+        uint callValue = 0;
+        uint putValue = 0;
+        //calls & puts
+        for (uint i = 0; i < strikes[msg.sender][_maturity].length; i++){
+            uint strike = strikes[msg.sender][_maturity][i];
+            int callAmount = callAmounts[msg.sender][_maturity][strike];
+            int putAmount = putAmounts[msg.sender][_maturity][strike];
+            callAmounts[msg.sender][_maturity][strike] = 0;
+            putAmounts[msg.sender][_maturity][strike] = 0;
+            callValue += satValueOf(callAmount, strike, spot);
+            putValue += scValueOf(putAmount, strike, spot);
         }
-        //puts payout is denominated in stablecoins
-        amount = putAmounts[msg.sender][_maturity][_strike];
-        payout = 0;
-        if (amount != 0){
-            if (spot < _strike){
-                payout = (_strike - spot)*scUnits*uint(amount > 0 ? amount : -amount);
-            }
-            if (amount > 0){
-                claimedStable[msg.sender] += payout;
-            }
-            else {
-                claimedStable[msg.sender] += uint(-amount)*scUnits*_strike - payout;
-            }
-        }
+        claimedTokens[msg.sender] += callValue;
+        claimedStable[msg.sender] += putValue;
+        delete strikes[msg.sender][_maturity];
         return true;
     }
-    
+
     function withdrawFunds() public returns(bool success){
         DappToken dt = DappToken(dappAddress);
         uint funds = claimedTokens[msg.sender];
@@ -120,51 +128,75 @@ contract calls {
     }
     
     //---------functioins added in the mimimise branch-----------------------
-    function contains(address _addr, uint _maturity, uint _strike) public view returns(bool){
+    function contains(address _addr, uint _maturity, uint _strike)internal view returns(bool){
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            if (strikes[_addr][_maturity][i] == _strike) return false;
+            if (strikes[_addr][_maturity][i] == _strike) return true;
         }
-        return true;
+        return false;
     }
 
-    function satValueOf(address _addr, uint _maturity, uint _strike, uint _price)internal view returns(uint){
-        int amount = callAmounts[_addr][_maturity][_strike];
+    function satValueOf(int _amount, uint _strike, uint _price)public view returns(uint){
         uint payout = 0;
-        if (amount != 0){
+        if (_amount != 0){
             if (_price > _strike){
-                payout = (uint(amount > 0 ? amount : -amount) * satUnits * (_price - (_strike)))/_price;
+                payout = (uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price - (_strike)))/_price;
             }
-            if (amount > 0){
+            if (_amount > 0){
                 return payout;
             }
             else {
-                return uint(-amount)*satUnits - (payout + 1);
+                return uint(-_amount)*satUnits - (payout + 1);
             }
         } 
         return 0;
     }
 
-    function scValueOf(address _addr, uint _maturity, uint _strike, uint _price)internal view returns(uint){
-        int amount = putAmounts[_addr][_maturity][_strike];
+    function scValueOf(int _amount, uint _strike, uint _price)public view returns(uint){
         uint payout = 0;
-        if (amount != 0){
+        if (_amount != 0){
             if (_price < _strike){
-                payout = (_strike - _price)*scUnits*uint(amount > 0 ? amount : -amount);
+                payout = (_strike - _price)*scUnits*uint(_amount > 0 ? _amount : -_amount);
             }
-            if (amount > 0){
+            if (_amount > 0){
                 return payout;
             }
             else {
-                return uint(-amount)*scUnits*_strike - payout;
+                return uint(-_amount)*scUnits*_strike - payout;
             }
         }
         return 0;
     }
+    /*
+    //this should only be called when we are distributing tokens because it sets all balances to 0
+    function totalSatValueOfModify(address _addr, uint _maturity, uint _price)internal returns(uint){
+        uint value = 0;
+        int amount;
+        for(uint i = 0; i < strikes[_addr][_maturity].length; i++){
+            uint strike = strikes[_addr][_maturity][i];
+            amount = callAmounts[_addr][_maturity][strike];
+            callAmounts[_addr][_maturity][strike] = 0;
+            value+=satValueOf(amount, strikes[_addr][_maturity][i], _price);
+        }
+        return value;
+    }
+
+    //this should only be called when we are distributing tokens because it sets all balances to 0
+    function totalScValueOfModify(address _addr, uint _maturity, uint _price)internal returns(uint){
+        uint value = 0;
+        int amount;
+        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
+            uint strike = strikes[_addr][_maturity][i];
+            amount = putAmounts[_addr][_maturity][strike];
+            putAmounts[_addr][_maturity][strike] = 0;
+            value+=scValueOf(amount, strikes[_addr][_maturity][i], _price);
+        }
+        return value;
+    }//*/
 
     function totalSatValueOf(address _addr, uint _maturity, uint _price)internal view returns(uint){
         uint value = 0;
         for(uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            value+=satValueOf(_addr, _maturity, strikes[_addr][_maturity][i], _price);
+            value+=satValueOf(callAmounts[_addr][_maturity][strikes[_addr][_maturity][i]], strikes[_addr][_maturity][i], _price);
         }
         return value;
     }
@@ -172,7 +204,7 @@ contract calls {
     function totalScValueOf(address _addr, uint _maturity, uint _price)internal view returns(uint){
         uint value = 0;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            value+=scValueOf(_addr, _maturity, strikes[_addr][_maturity][i], _price);
+            value+=scValueOf(putAmounts[_addr][_maturity][strikes[_addr][_maturity][i]], strikes[_addr][_maturity][i], _price);
         }
         return value;
     }

@@ -56,6 +56,9 @@ contract('calls', function(accounts){
 			maturity = height+2;
 			return callsInstance.mintCall(debtor, holder, maturity, strike, amount, {from: defaultAccount});
 		}).then(() => {
+			return callsInstance.strikes(debtor, maturity, 0);
+		}).then((res) => {
+			assert.equal(res.toNumber(), strike, "the correct strike is added");
 			return callsInstance.callAmounts(debtor, maturity, strike);
 		}).then((res) => {
 			assert.equal(res.toNumber(), -amount, "debtor holds negative amount of contracts");
@@ -65,9 +68,9 @@ contract('calls', function(accounts){
 		}).then(() => {
 			return oracleInstance.set(finalSpot);
 		}).then(() => {
-			return callsInstance.claim(maturity, strike, {from: debtor});
-		}).then(async (res) => {
-			return callsInstance.claim(maturity, strike, {from: holder});
+			return callsInstance.claim(maturity, {from: debtor});
+		}).then(() => {
+			return callsInstance.claim(maturity, {from: holder});
 		}).then(() => {
 			return callsInstance.callAmounts(debtor, maturity, strike);
 		}).then((res) => {
@@ -107,9 +110,9 @@ contract('calls', function(accounts){
 			difference = 30;
 			return oracleInstance.set(strike - difference);
 		}).then(() => {
-			return callsInstance.claim(maturity, strike, {from: debtor});
+			return callsInstance.claim(maturity, {from: debtor});
 		}).then(() => {
-			return callsInstance.claim(maturity, strike, {from: holder});
+			return callsInstance.claim(maturity, {from: holder});
 		}).then(() => {
 			return callsInstance.withdrawFunds({from: debtor});
 		}).then(() => {
