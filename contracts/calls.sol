@@ -59,23 +59,6 @@ contract calls {
         if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
         return true;
     }
-
-    /*function claim(uint _maturity, uint _strike) public returns(bool success){
-        require(_maturity < block.number);
-        //calls payout is denoinated in the underlying token
-        int callAmount = callAmounts[msg.sender][_maturity][_strike];
-        int putAmount = putAmounts[msg.sender][_maturity][_strike];
-        //set to zero to avoid multi send attack
-        callAmounts[msg.sender][_maturity][_strike] = 0;
-        putAmounts[msg.sender][_maturity][_strike] = 0;
-        //interact with oracle
-        oracle orc = oracle(oracleAddress);
-        uint spot = orc.getUint(_maturity);
-        //now credit amount due
-        claimedTokens[msg.sender] += satValueOf(callAmount, _strike, spot);
-        claimedStable[msg.sender] += scValueOf(putAmount, _strike, spot);
-        return true;
-    }*/
     
     function claim(uint _maturity) public returns(bool success){
         require(_maturity < block.number);
@@ -94,9 +77,15 @@ contract calls {
             callValue += satValueOf(callAmount, strike, spot);
             putValue += scValueOf(putAmount, strike, spot);
         }
-        claimedTokens[msg.sender] += callValue;
-        claimedStable[msg.sender] += putValue;
         delete strikes[msg.sender][_maturity];
+        if (callValue > satDeduction[msg.sender][_maturity]){
+            callValue -= satDeduction[msg.sender][_maturity];
+            claimedTokens[msg.sender] += callValue;
+        }
+        if (putValue > scDeduction[msg.sender][_maturity]){
+            putValue -= scDeduction[msg.sender][_maturity];
+            claimedStable[msg.sender] += putValue;
+        }
         return true;
     }
 
@@ -120,11 +109,6 @@ contract calls {
     function contractStableBalance() public view returns(uint){
         stablecoin sc = stablecoin(stablecoinAddress);
         return sc.addrBalance(address(this), false);
-    }
-
-    function oracleVal() public view returns(uint){
-        oracle orc = oracle(oracleAddress);
-        return orc.get();
     }
     
     //---------functioins added in the mimimise branch-----------------------
@@ -166,47 +150,65 @@ contract calls {
         }
         return 0;
     }
-    /*
-    //this should only be called when we are distributing tokens because it sets all balances to 0
-    function totalSatValueOfModify(address _addr, uint _maturity, uint _price)internal returns(uint){
-        uint value = 0;
-        int amount;
-        for(uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            uint strike = strikes[_addr][_maturity][i];
-            amount = callAmounts[_addr][_maturity][strike];
-            callAmounts[_addr][_maturity][strike] = 0;
-            value+=satValueOf(amount, strikes[_addr][_maturity][i], _price);
-        }
-        return value;
-    }
 
-    //this should only be called when we are distributing tokens because it sets all balances to 0
-    function totalScValueOfModify(address _addr, uint _maturity, uint _price)internal returns(uint){
-        uint value = 0;
-        int amount;
-        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            uint strike = strikes[_addr][_maturity][i];
-            amount = putAmounts[_addr][_maturity][strike];
-            putAmounts[_addr][_maturity][strike] = 0;
-            value+=scValueOf(amount, strikes[_addr][_maturity][i], _price);
-        }
-        return value;
-    }//*/
-
-    function totalSatValueOf(address _addr, uint _maturity, uint _price)internal view returns(uint){
-        uint value = 0;
+    //the last two paramaters allow for a check on the amount of collateral required if another position were to be taken on
+    function totalSatValueOf(address _addr, uint _maturity, uint _price, int _amount, uint _strike)internal view returns(uint){
+        uint value = satValueOf(_amount, _strike, _price);
         for(uint i = 0; i < strikes[_addr][_maturity].length; i++){
             value+=satValueOf(callAmounts[_addr][_maturity][strikes[_addr][_maturity][i]], strikes[_addr][_maturity][i], _price);
         }
         return value;
     }
 
-    function totalScValueOf(address _addr, uint _maturity, uint _price)internal view returns(uint){
-        uint value = 0;
+    //the last two paramaters allow for a check on the amount of collateral required if another position were to be taken on
+    function totalScValueOf(address _addr, uint _maturity, uint _price, int _amount, uint _strike)internal view returns(uint){
+        uint value = scValueOf(_amount, _strike, _price);
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             value+=scValueOf(putAmounts[_addr][_maturity][strikes[_addr][_maturity][i]], strikes[_addr][_maturity][i], _price);
         }
         return value;
     }
 
+    //note that usually one fullUnit of the spot underlying is required for collateral on each sold contract
+    //returns the minimum amount of collateral that must be locked at the maturity
+    //the last two paramaters allow for a check on the amount of collateral required if another position were to be taken on
+    function minSats(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint){
+        if(strikes[_addr][_maturity].length == 0) return 0;
+        uint strike = _strike;
+        //total number of bought calls minus total number of sold calls
+        int sum = _amount;
+        uint liabilities = (_amount < 0) ? uint(-_amount) : 0;
+        uint value = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
+        uint cValue = 0;
+        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
+            strike = strikes[_addr][_maturity][i];
+            sum += callAmounts[_addr][_maturity][strike];
+            liabilities += (callAmounts[_addr][_maturity][strike] < 0)? uint(-callAmounts[_addr][_maturity][strike]) : 0;
+            cValue = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
+            if (value > cValue) value = cValue;
+        }
+        //liabilities has been subtrcted from sum priviously so this is equal to # of bought contracts at infinite spot
+        uint valAtInf = uint(sum+int(liabilities))*satUnits; //assets
+        return (liabilities*satUnits) - (valAtInf < value ? valAtInf : value);
+    }
+
+    //the last two paramaters allow for a check on the amount of collateral required if another position were to be taken on
+    function minSc(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint){
+        if (strikes[_addr][_maturity].length == 0) return 0;
+        //account for spot price of 0
+        uint strike = 0;
+        uint value = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
+        int sum = _amount;
+        uint liabilities = (_amount < 0) ? uint(-_amount) : 0;
+        uint cValue = totalScValueOf(_addr, _maturity, _strike, _amount, _strike);
+        if (value > cValue) value = cValue;
+        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
+            strike = strikes[_addr][_maturity][i];
+            sum += putAmounts[_addr][_maturity][strike];
+            liabilities += (putAmounts[_addr][_maturity][strike] < 0)? uint(-putAmounts[_addr][_maturity][strike]) : 0;
+            cValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
+            if (value > cValue) value = cValue;
+        }
+        return (liabilities*scUnits) - value;
+    }
 }
