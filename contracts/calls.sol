@@ -101,6 +101,20 @@ contract calls {
         return true;
     }
 
+    function depositFunds(uint _sats, bool _fullToken, uint _sc, bool _fullSc) public returns(bool success){
+        if (_sats > 0){
+            DappToken dt = DappToken(dappAddress);
+            require(dt.transferFrom(msg.sender, address(this), _sats, _fullToken));
+            claimedTokens[msg.sender] += _sats;
+        }
+        if (_sc > 0){
+            stablecoin sc = stablecoin(stablecoinAddress);
+            require(sc.transferFrom(msg.sender, address(this), _sc, _fullSc));
+            claimedStable[msg.sender] += _sc;
+        }
+        return true;
+    }
+
     function contractTokenBalance() public view returns(uint){
         DappToken dt = DappToken(dappAddress);
         return dt.addrBalance(address(this), false);
@@ -111,7 +125,6 @@ contract calls {
         return sc.addrBalance(address(this), false);
     }
     
-    //---------functioins added in the mimimise branch-----------------------
     function contains(address _addr, uint _maturity, uint _strike)internal view returns(bool){
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             if (strikes[_addr][_maturity][i] == _strike) return true;
