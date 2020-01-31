@@ -92,6 +92,7 @@ contract('calls', function(accounts){
 		});
 	});
 
+	//note that this test will likely fail if the test above fails
 	it('withdraws funds', function(){
 		return callsInstance.withdrawFunds({from: debtor}).then(() => {
 			return callsInstance.withdrawFunds({from: holder});
@@ -116,6 +117,9 @@ contract('calls', function(accounts){
 		}).then(() => {
 			return callsInstance.withdrawFunds({from: debtor});
 		}).then(() => {
+			return callsInstance.claimedStable(holder);
+		}).then((res) => {
+			claimedSc = res.toNumber();
 			return callsInstance.withdrawFunds({from: holder});
 		}).then(() => {
 			return stablecoinInstance.addrBalance(debtor, false);
