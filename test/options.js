@@ -1,7 +1,6 @@
 var oracle = artifacts.require("./oracle.sol");
 var dappToken = artifacts.require("./DappToken.sol");
 var options = artifacts.require("./options.sol");
-var collateral = artifacts.require("./collateral.sol");
 var stablecoin = artifacts.require("./stablecoin.sol");
 
 var strike = 100;
@@ -27,9 +26,6 @@ contract('options', function(accounts){
 			return options.deployed();
 		}).then((i) => {
 			optionsInstance = i;
-			return collateral.deployed();
-		}).then((i) => {
-			collateralInstance = i;
 			return stablecoin.deployed();
 		}).then((i) => {
 			stablecoinInstance = i;

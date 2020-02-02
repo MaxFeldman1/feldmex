@@ -1,7 +1,7 @@
 const oracle = artifacts.require("oracle");
 const DappToken = artifacts.require("DappToken");
 const options = artifacts.require("options");
-const collateral = artifacts.require("collateral");
+const exchange = artifacts.require("exchange");
 const stablecoin = artifacts.require("stablecoin");
 
 module.exports = function(deployer) {
@@ -12,6 +12,6 @@ module.exports = function(deployer) {
   }).then(() => {
   	return deployer.deploy(options, oracle.address, DappToken.address, stablecoin.address);
   }).then(() => {
-  	return deployer.deploy(collateral, DappToken.address, stablecoin.address, options.address);
+  	return deployer.deploy(exchange, DappToken.address, stablecoin.address, options.address);
   });
 };

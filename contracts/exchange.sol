@@ -8,7 +8,7 @@ import "./stablecoin.sol";
     .) add a fouth parameter uint _limitPrice to marketSell and marketBuy to ensure price of contracts
 */
 
-contract collateral{
+contract exchange{
     //denominated in Underlying Token
     mapping(address => uint) public claimedToken;
     
