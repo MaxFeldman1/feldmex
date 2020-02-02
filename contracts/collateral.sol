@@ -1,6 +1,6 @@
 pragma solidity ^0.5.12;
 import "./DappToken.sol";
-import "./calls.sol";
+import "./options.sol";
 import "./stablecoin.sol";
 
 /*
@@ -58,7 +58,7 @@ contract collateral{
     //address of outside token contract
     address dappAddress;
     address stablecoinAddress;
-    address callsAddress;
+    address optionsAddress;
     //incrementing identifier for each order
     uint public totalOrders;
     //number of satoshis in one DappToken _fullUnit
@@ -67,17 +67,17 @@ contract collateral{
 
     uint public testing;
     
-    constructor (address _dappAddress, address _stablecoinAddress, address _callsAddress) public{
+    constructor (address _dappAddress, address _stablecoinAddress, address _optionsAddress) public{
         dappAddress = _dappAddress;
-        callsAddress = _callsAddress;
+        optionsAddress = _optionsAddress;
         stablecoinAddress = _stablecoinAddress;
         totalOrders = 1;
         DappToken dt = DappToken(dappAddress);
         satUnits = dt.satUnits();
-        dt.approve(callsAddress, 2**255, false);
+        dt.approve(optionsAddress, 2**255, false);
         stablecoin sc = stablecoin(stablecoinAddress);
         scUnits = sc.scUnits();
-        sc.approve(callsAddress, 2**255, false);
+        sc.approve(optionsAddress, 2**255, false);
     }
     
     function postCollateral(uint _amount, bool _fullUnit, uint _amountStable, bool _fullUnitStable) public returns(bool success){
@@ -378,16 +378,16 @@ contract collateral{
         }
         
         //now we make the trade happen
-        calls callContract = calls(callsAddress);
-        //dt.approve(callsAddress, satUnits, false);
+        options optionsContract = options(optionsAddress);
+        //dt.approve(optionsAddress, satUnits, false);
         //give the seller the amount paid
         if (offer.call){
             claimedToken[_seller] += offer.price * offer.amount;
-            assert(callContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
+            assert(optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
         }
         else{
             claimedStable[_seller] += offer.price * offer.amount;
-            assert(callContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
+            assert(optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
         }
         //clean storage
         delete linkedNodes[_name];
@@ -429,15 +429,15 @@ contract collateral{
         }
         
         //now we make the trade happen
-        calls callContract = calls(callsAddress);
+        options optionsContract = options(optionsAddress);
         //give the seller the amount paid
         if (offer.call){
             claimedToken[offer.offerer] += offer.price * offer.amount;
-            assert(callContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
+            assert(optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
         }
         else{
             claimedStable[offer.offerer] += offer.price * offer.amount;
-            assert(callContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
+            assert(optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
         }
         //clean storage
         delete linkedNodes[_name];
@@ -455,16 +455,16 @@ contract collateral{
         //in each iteration we mint one contract
         while (_amount > 0 && node.name != 0){
             if (offer.amount > _amount){
-                calls callContract = calls(callsAddress);
+                options optionsContract = options(optionsAddress);
                 if (_call){
                     claimedToken[msg.sender] -= satUnits * _amount;
-                    assert(callContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
+                    assert(optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
                     claimedToken[msg.sender] += offer.price * _amount;
 
                 }
                 else {
                     claimedStable[msg.sender] -= scUnits * _amount * _strike;
-                    assert(callContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
+                    assert(optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
                     claimedStable[msg.sender] += offer.price * _amount;
                 }
                 offers[node.hash].amount -= _amount;
@@ -485,18 +485,18 @@ contract collateral{
         require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
         while (_amount > 0 && node.name != 0 && claimedToken[msg.sender] >= offer.price){
             if (offer.amount > _amount){
-                calls callContract = calls(callsAddress);
+                options optionsContract = options(optionsAddress);
                 if (_call){
                     require(claimedToken[msg.sender] >= offer.price * _amount);
                     claimedToken[msg.sender] -= offer.price * _amount;
                     claimedToken[offer.offerer] += offer.price * _amount;
-                    assert(callContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
+                    assert(optionsContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
                 }
                 else {
                     require(claimedStable[msg.sender] >= offer.price * _amount);
                     claimedStable[msg.sender] -= offer.price * _amount;
                     claimedStable[offer.offerer] += offer.price * _amount;
-                    assert(callContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
+                    assert(optionsContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
                 }
                 offers[node.hash].amount -= _amount;
                 break;

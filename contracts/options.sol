@@ -3,7 +3,7 @@ import "./oracle.sol";
 import "./DappToken.sol";
 import "./stablecoin.sol";
 
-contract calls {
+contract options {
     address oracleAddress;
     address dappAddress;
     address stablecoinAddress;

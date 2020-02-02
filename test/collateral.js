@@ -1,6 +1,6 @@
 var oracle = artifacts.require("./oracle.sol");
 var dappToken = artifacts.require("./DappToken.sol");
-var calls = artifacts.require("./calls.sol");
+var options = artifacts.require("./options.sol");
 var collateral = artifacts.require("./collateral.sol");
 var stablecoin = artifacts.require("./stablecoin.sol");
 
@@ -16,7 +16,7 @@ var satUnits;
 var scUnits;
 var oracleInstance;
 var tokenInstance;
-var callsInstance;
+var optionsInstance;
 var stablecoinInstance;
 var defaultAccount;
 var receiverAccount;
@@ -30,9 +30,9 @@ contract('collateral', function(accounts) {
 			return dappToken.deployed();
 		}).then((i) => {
 			tokenInstance = i;
-			return calls.deployed();
+			return options.deployed();
 		}).then((i) => {
-			callsInstance = i;
+			optionsInstance = i;
 			return collateral.deployed();
 		}).then((i) => {
 			collateralInstance = i;

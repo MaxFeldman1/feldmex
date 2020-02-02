@@ -1,5 +1,4 @@
 var DappToken = artifacts.require("./DappToken.sol");
-var calls = artifacts.require("./calls.sol");
 
 contract('DappToken', function(accounts) {
 	var btcs = 21000000;

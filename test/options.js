@@ -1,6 +1,6 @@
 var oracle = artifacts.require("./oracle.sol");
 var dappToken = artifacts.require("./DappToken.sol");
-var calls = artifacts.require("./calls.sol");
+var options = artifacts.require("./options.sol");
 var collateral = artifacts.require("./collateral.sol");
 var stablecoin = artifacts.require("./stablecoin.sol");
 
@@ -11,22 +11,22 @@ var satUnits;
 var scUnits;
 var oracleInstance;
 var tokenInstance;
-var callsInstance;
+var optionsInstance;
 var stablecoinInstance;
 var defaultAccount;
 var debtor;
 var holder;
 
-contract('calls', function(accounts){
+contract('options', function(accounts){
 	it ('mints, exercizes call options', function(){
 		return 	oracle.deployed().then((i) => {
 			oracleInstance = i;
 			return dappToken.deployed();
 		}).then((i) => {
 			tokenInstance = i;
-			return calls.deployed();
+			return options.deployed();
 		}).then((i) => {
-			callsInstance = i;
+			optionsInstance = i;
 			return collateral.deployed();
 		}).then((i) => {
 			collateralInstance = i;
@@ -44,9 +44,9 @@ contract('calls', function(accounts){
 			return stablecoinInstance.scUnits();
 		}).then((res) => {
 			scUnits = res.toNumber()
-			return tokenInstance.approve(calls.address, 1000, true, {from: defaultAccount});
+			return tokenInstance.approve(options.address, 1000, true, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(calls.address, 1000, true, {from: defaultAccount});
+			return stablecoinInstance.approve(options.address, 1000, true, {from: defaultAccount});
 		}).then(() => {
 			return oracleInstance.height();
 		}).then((res) => {
@@ -54,38 +54,38 @@ contract('calls', function(accounts){
 			debtor = accounts[1];
 			holder = accounts[2];
 			maturity = height+2;
-			return callsInstance.mintCall(debtor, holder, maturity, strike, amount, {from: defaultAccount});
+			return optionsInstance.mintCall(debtor, holder, maturity, strike, amount, {from: defaultAccount});
 		}).then(() => {
-			return callsInstance.strikes(debtor, maturity, 0);
+			return optionsInstance.strikes(debtor, maturity, 0);
 		}).then((res) => {
 			assert.equal(res.toNumber(), strike, "the correct strike is added");
-			return callsInstance.callAmounts(debtor, maturity, strike);
+			return optionsInstance.callAmounts(debtor, maturity, strike);
 		}).then((res) => {
 			assert.equal(res.toNumber(), -amount, "debtor holds negative amount of contracts");
-			return callsInstance.callAmounts(holder, maturity, strike);
+			return optionsInstance.callAmounts(holder, maturity, strike);
 		}).then((res) => {
 			assert.equal(res.toNumber(), amount, "holder holds positive amount of contracts");
 		}).then(() => {
 			return oracleInstance.set(finalSpot);
 		}).then(() => {
-			return callsInstance.claim(maturity, {from: debtor});
+			return optionsInstance.claim(maturity, {from: debtor});
 		}).then(() => {
-			return callsInstance.claim(maturity, {from: holder});
+			return optionsInstance.claim(maturity, {from: holder});
 		}).then(() => {
-			return callsInstance.callAmounts(debtor, maturity, strike);
+			return optionsInstance.callAmounts(debtor, maturity, strike);
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "debtor's contracts have been exerciced");
-			return callsInstance.callAmounts(holder, maturity, strike);
+			return optionsInstance.callAmounts(holder, maturity, strike);
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "holder's contracts have been exerciced");
 		});
 	});
 
 	it('distributes funds correctly', function(){
-		return callsInstance.claimedTokens(debtor).then((res) => {
+		return optionsInstance.claimedTokens(debtor).then((res) => {
 			payout = Math.floor(amount*satUnits*(finalSpot-strike)/finalSpot);
 			assert.equal(res.toNumber(), satUnits*amount - (payout+1), "debtor repaid correct amount");
-			return callsInstance.claimedTokens(holder);
+			return optionsInstance.claimedTokens(holder);
 		}).then((res) => {
 			assert.equal(res.toNumber(), payout, "holder compensated sufficiently")
 			return;
@@ -94,10 +94,10 @@ contract('calls', function(accounts){
 
 	//note that this test will likely fail if the test above fails
 	it('withdraws funds', function(){
-		return callsInstance.withdrawFunds({from: debtor}).then(() => {
-			return callsInstance.withdrawFunds({from: holder});
+		return optionsInstance.withdrawFunds({from: debtor}).then(() => {
+			return optionsInstance.withdrawFunds({from: holder});
 		}).then(() => {
-			return callsInstance.contractTokenBalance();
+			return optionsInstance.contractTokenBalance();
 		}).then((res) => {
 			assert.equal(res.toNumber() <= 2, true, "non excessive amount of funds left");
 		});
@@ -106,21 +106,21 @@ contract('calls', function(accounts){
 	it('mints and exercizes put options', function() {
 		return oracleInstance.height().then((res) => {
 			maturity = res.toNumber() + 2;
-			return callsInstance.mintPut(debtor, holder, maturity, strike, amount, {from: defaultAccount});
+			return optionsInstance.mintPut(debtor, holder, maturity, strike, amount, {from: defaultAccount});
 		}).then(() => {
 			difference = 30;
 			return oracleInstance.set(strike - difference);
 		}).then(() => {
-			return callsInstance.claim(maturity, {from: debtor});
+			return optionsInstance.claim(maturity, {from: debtor});
 		}).then(() => {
-			return callsInstance.claim(maturity, {from: holder});
+			return optionsInstance.claim(maturity, {from: holder});
 		}).then(() => {
-			return callsInstance.withdrawFunds({from: debtor});
+			return optionsInstance.withdrawFunds({from: debtor});
 		}).then(() => {
-			return callsInstance.claimedStable(holder);
+			return optionsInstance.claimedStable(holder);
 		}).then((res) => {
 			claimedSc = res.toNumber();
-			return callsInstance.withdrawFunds({from: holder});
+			return optionsInstance.withdrawFunds({from: holder});
 		}).then(() => {
 			return stablecoinInstance.addrBalance(debtor, false);
 		}).then((res) => {
