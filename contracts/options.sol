@@ -31,6 +31,11 @@ contract options {
     //denominated in scUnits
     mapping(address => uint) public claimedStable;
 
+    //address => maturity => amount (denominated in satUnits)
+    mapping(address => mapping(uint => uint)) public satCollateral;
+    //address => maturity => amount (denominated in scUnits)
+    mapping(address => mapping(uint => uint)) public scCollateral;
+
     //address => maturity => array of strikes
     mapping(address => mapping(uint => uint[])) public strikes;
     //address => maturity => amount of collateral not required //denominated in satUnits
@@ -38,36 +43,37 @@ contract options {
     //address => maturity => amount of collateral not required //denominated in scUnits
     mapping(address => mapping(uint => uint)) public scDeduction;
     
-    function mintCall(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount) public returns(bool success){
+    function mintCall(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount) public returns(bool success, uint transferAmount){
         require(_debtor != _holder);
         DappToken dt = DappToken(dappAddress);
-        //require(dt.transferFrom(msg.sender, address(this), satUnits*_amount, false));/*
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
         uint debtorMinSats = minSats(_debtor, _maturity, -int(_amount), _strike);
         uint holderMinSats = minSats(_holder, _maturity, int(_amount), _strike);
+        //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
         uint debtorLiabilities = liabilities(_debtor, _maturity, true) + (_amount*satUnits);
         uint holderLiabilities = liabilities(_holder, _maturity, true);
-        //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
-        //previous debtor minSats == (liabilities-(_amount*satUnits)) - satDeduction
-        uint transferAmount = debtorMinSats - (debtorLiabilities-(_amount*satUnits) - satDeduction[_debtor][_maturity]);
+
+        transferAmount = debtorMinSats - satCollateral[_debtor][_maturity];
         require(dt.transferFrom(msg.sender, address(this), transferAmount, false));
-        //sat deduction for the holder increaces; difference of the new satDeduction[holder] - previous satDeduction[holder] is added to claimedTokens[holder]
-        claimedTokens[_holder] += (holderLiabilities-holderMinSats) - satDeduction[_holder][_maturity];
+        satCollateral[_debtor][_maturity] += transferAmount; // == debtorMinSats
+        claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
+        satCollateral[_holder][_maturity] = holderMinSats;
+
         satDeduction[_debtor][_maturity] = debtorLiabilities-debtorMinSats;
         satDeduction[_holder][_maturity] = holderLiabilities-holderMinSats;
-        //*/
+
         callAmounts[_debtor][_maturity][_strike] -= int(_amount);
         callAmounts[_holder][_maturity][_strike] += int(_amount);
         if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
         if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
-        return true;
+        testing = transferAmount;
+        return (true, transferAmount);
     }
 
-    function mintPut(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount) public returns(bool success){
+    function mintPut(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount) public returns(bool success, uint transferAmount){
         require(_debtor != _holder);
         stablecoin sc = stablecoin(stablecoinAddress);
-        //require(sc.transferFrom(msg.sender, address(this), scUnits*_amount*_strike, false));/*
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
         uint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
@@ -75,19 +81,21 @@ contract options {
         uint debtorLiabilities = liabilities(_debtor, _maturity, false) + (_amount*scUnits*_strike);
         uint holderLiabilities = liabilities(_holder, _maturity, false);
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
-        //previous debtor minSs == (liabilieies)
-        uint transferAmount = debtorMinSc - (debtorLiabilities-(_amount*scUnits*_strike) - scDeduction[_debtor][_maturity]);
+        transferAmount = debtorMinSc - scCollateral[_debtor][_maturity];
         require(sc.transferFrom(msg.sender,  address(this), transferAmount, false));
-        //sc deduction for the holder increaces; difference of the new scDeduction[holder] - previous scDeduction[holder] is added to claimedStable[holder]
-        claimedStable[_holder] += (holderLiabilities-holderMinSc) - scDeduction[_holder][_maturity];
+        scCollateral[_debtor][_maturity] += transferAmount; // == debtorMinSc
+        claimedStable[_holder] += scCollateral[_holder][_maturity] - holderMinSc;
+        scCollateral[_holder][_maturity] = holderMinSc;
+
         scDeduction[_debtor][_maturity] = debtorLiabilities-debtorMinSc;
         scDeduction[_holder][_maturity] = holderLiabilities-holderMinSc;
-        //*/
+
         putAmounts[_debtor][_maturity][_strike] -= int(_amount);
         putAmounts[_holder][_maturity][_strike] += int(_amount);
         if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
         if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
-        return true;
+        testing = transferAmount;
+        return (true, transferAmount);
     }
     
     function claim(uint _maturity) public returns(bool success){
@@ -218,12 +226,14 @@ contract options {
     function minSats(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint){
         uint strike = _strike;
         //total number of bought calls minus total number of sold calls
+        _amount += callAmounts[_addr][_maturity][_strike];
         int sum = _amount;
         uint liabilities = (_amount < 0) ? uint(-_amount) : 0;
         uint value = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
         uint cValue = 0;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             strike = strikes[_addr][_maturity][i];
+            if (strike == _strike) continue;
             sum += callAmounts[_addr][_maturity][strike];
             liabilities += (callAmounts[_addr][_maturity][strike] < 0)? uint(-callAmounts[_addr][_maturity][strike]) : 0;
             cValue = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
@@ -240,6 +250,7 @@ contract options {
     function minSc(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint){
         //account for spot price of 0
         uint strike = 0;
+        _amount += putAmounts[_addr][_maturity][_strike];
         uint value = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
         int sum = _amount;
         uint liabilities = _strike * ((_amount < 0) ? uint(-_amount) : 0);
@@ -247,6 +258,7 @@ contract options {
         if (value > cValue) value = cValue;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             strike = strikes[_addr][_maturity][i];
+            if (strike == _strike) continue;
             sum += putAmounts[_addr][_maturity][strike];
             liabilities += strike * ((putAmounts[_addr][_maturity][strike] < 0)? uint(-putAmounts[_addr][_maturity][strike]) : 0);
             cValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);

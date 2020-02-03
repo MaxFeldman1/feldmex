@@ -24,6 +24,9 @@ var receiverAccount;
 var defaultAccountBalance;
 var receiverAccountBalance;
 
+var defaultAccountPosition = 0;
+var receiverAccountPosition = 0;
+
 contract('exchange', function(accounts) {
 	it('can post and take buy orders of calls', function(){
 		return 	oracle.deployed().then((i) => {
@@ -94,6 +97,8 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.postOrder(maturity, strike, price-10000, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			firstSellAmount = 5;
+			receiverAccountPosition -= firstSellAmount;
+			defaultAccountPosition += firstSellAmount;
 			return exchangeInstance.marketSell(maturity, strike, firstSellAmount, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 0);
@@ -103,6 +108,8 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, firstSellAmount, "the amount of the contract has decreaced the correct amount");
+			receiverAccountPosition -= amount-firstSellAmount+1;
+			defaultAccountPosition += amount-firstSellAmount+1;
 			return exchangeInstance.marketSell(maturity, strike, amount-firstSellAmount+1, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 0);
@@ -112,6 +119,8 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, amount-1, "amount of second order after marketSell is correct");
+			receiverAccountPosition -= amount-1;
+			defaultAccountPosition += amount-1;
 			return exchangeInstance.marketSell(maturity, strike, 2*amount-1, true, {from:receiverAccount});
 		}).then(() => {
 			//we have not updated the receiverAccountBalance yet so we will aggregate the impact of all orders here
@@ -144,11 +153,8 @@ contract('exchange', function(accounts) {
 
 	it('can post and take sell orders of calls', function(){
 		return exchangeInstance.claimedToken(defaultAccount).then((res) => {
-			defaultAccountBalance = res.toNumber();
 			return exchangeInstance.claimedToken(receiverAccount);
 		}).then((res) => {
-			receiverAccountBalance = res.toNumber();
-			defaultAccountBalance -= satUnits*amount;
 			return exchangeInstance.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});			
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 1);
@@ -163,7 +169,6 @@ contract('exchange', function(accounts) {
 			assert.equal(res.strike.toNumber(), strike, "the strike of the option contract is correct");
 			assert.equal(res.price.toNumber(), price, "the price of the option contract is correct");
 			assert.equal(res.amount.toNumber(), amount, "the amount of the option contract is correct");
-			defaultAccountBalance -= satUnits*amount;
 			return exchangeInstance.postOrder(maturity, strike, price-10000, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			firstBuyAmount = 5;
@@ -185,7 +190,6 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, amount-1, "amount of second order after marketBuy is correct");
-			//make market order larges than the size of the sell book
 			return exchangeInstance.marketBuy(maturity, strike, 2*amount-1, true, {from: receiverAccount});
 		}).then((res) => {
 			return exchangeInstance.listHeads(maturity, strike, 1);
@@ -203,21 +207,28 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
 			assert.equal(res, defaultBytes32, "the order cancellation has been recognized");
-			//we will now aggregate the effects of all the buy orders on the account balances;
-			defaultAccountBalance += amount*(2*price-10000);
-			receiverAccountBalance -= amount*(2*price-10000);
 			return exchangeInstance.claimedToken(defaultAccount);
 		}).then((res) => {
-			assert.equal(res.toNumber(), defaultAccountBalance, "defaultAccount has the correct balance");
+			defaultTotal = res.toNumber();
+			return optionsInstance.claimedTokens(receiverAccount);
+		}).then((res) => {
+			optRecTotal = res.toNumber();
+			assert.equal(defaultTotal, 10*transferAmount*satUnits, "defaultAccount has correct balance");
 			return exchangeInstance.claimedToken(receiverAccount);
 		}).then((res) => {
-			assert.equal(res.toNumber(), receiverAccountBalance, "recieverAccount has the correct balance");
+			recTotal = res.toNumber();
+			return optionsInstance.claimedTokens(receiverAccount);
+		}).then((res) => {
+			recTotal += res.toNumber();			
+			assert.equal(recTotal, 10*transferAmount*satUnits, "recieverAccount has the correct balance");
 			return;
 		});
 	});
 
 	it('can post and take buy orders of puts', function(){
 		return exchangeInstance.claimedStable(defaultAccount).then((res) => {
+			receiverAccountPosition = 0;
+			defaultAccountPosition = 0;
 			defaultAccountBalance = res.toNumber();
 			return exchangeInstance.claimedStable(receiverAccount);
 		}).then((res) => {
@@ -265,6 +276,8 @@ contract('exchange', function(accounts) {
 			assert.equal(res != head, true, "the of the list updates when the order is removed");
 			head = res
 			firstSellAmount = amount-4;
+			receiverAccountPosition -= firstSellAmount;
+			defaultAccountPosition += firstSellAmount;
 			return exchangeInstance.marketSell(maturity, strike, firstSellAmount, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.linkedNodes(head);
@@ -272,6 +285,8 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, amount-firstSellAmount, "the amount left in the list head has decreaced the correct amount");
+			receiverAccountPosition -= amount+1;
+			defaultAccountPosition += amount+1;
 			return exchangeInstance.marketSell(maturity, strike, amount+1, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 2);
@@ -283,7 +298,6 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, amount-firstSellAmount-1, "the amount in the orders after three orders is still correct");
-			//aggregate impact of all market orders on the receiver account
 			receiverAccountBalance -= (amount+firstSellAmount+1)*strike*scUnits -(amount*(price+5000)+(1+firstSellAmount)*price);
 			return exchangeInstance.claimedStable(defaultAccount);
 		}).then((res) => {
@@ -291,6 +305,9 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.claimedStable(receiverAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber(), receiverAccountBalance, "receiver account balance is correct");
+			return optionsInstance.putAmounts(defaultAccount, maturity, strike);
+		}).then((res) => {
+			halfPutAmount = res.toNumber();
 			return;
 		});
 	});
@@ -303,7 +320,7 @@ contract('exchange', function(accounts) {
 			receiverAccountBalance = res.toNumber();
 			defaultAccountBalance -= strike*amount*scUnits;
 			return exchangeInstance.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
-		}).then(() => {512-471-2900
+		}).then(() => {
 			defaultAccountBalance -= strike*amount*scUnits;
 			return exchangeInstance.postOrder(maturity, strike, price-10000, amount, false, false, {from: defaultAccount});
 		}).then(() => {
@@ -338,11 +355,15 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.price, price-5000, "the new list head has the correct price");
 			firstBuyAmount = amount-4;
+			receiverAccountPosition += firstBuyAmount;
+			defaultAccountPosition -= firstBuyAmount;
 			return exchangeInstance.marketBuy(maturity, strike, firstBuyAmount, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.offers(current);
 		}).then((res)  => {
 			assert.equal(res.amount.toNumber(), amount-firstBuyAmount, "the amount has been decremented correctly");
+			receiverAccountPosition += amount+1;
+			defaultAccountPosition -= amount+1;
 			return exchangeInstance.marketBuy(maturity, strike, amount+1, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 3);
@@ -353,12 +374,21 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.price.toNumber(), price, "the price of the last node order is correct");
 			assert.equal(res.amount.toNumber(), amount-firstBuyAmount-1, "the amount has decremented correctly");
+			//return exchangeInstance.cancelOrder(head, {from: defaultAccount})
+			return optionsInstance.putAmounts(defaultAccount, maturity, strike);
+		}).then((res) => {
 			//aggregate impact of market orders on both accounts
 			defaultAccountBalance += amount*(price-5000) + (firstBuyAmount+1)*price;
 			receiverAccountBalance -= amount*(price-5000) + (firstBuyAmount+1)*price;
 			return exchangeInstance.claimedStable(defaultAccount);
 		}).then((res) => {
-			assert.equal(res.toNumber(), defaultAccountBalance, "defaultAccount has the correct balance");
+			defaultTotal = res.toNumber();
+			return optionsInstance.claimedStable(defaultAccount);
+		}).then((res) => {
+			defaultTotal += res.toNumber();
+			//add (halfPutAmount*strike*scUnits) to make up for the amount that was bought and then sold as we subtracted it out when puts were sold
+			defaultAccountBalance += (halfPutAmount*strike*scUnits);
+			assert.equal(defaultTotal, defaultAccountBalance, "defaultAccount has the correct balance");
 			return exchangeInstance.claimedStable(receiverAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber(), receiverAccountBalance, "receiverAccount has the correct balance");

@@ -127,4 +127,14 @@ contract('options', function(accounts){
 			return;
 		});
 	});
+
+	/*it('transfers the correct amount of funds', function(){
+		return optionsInstance.mintCall(debtor, holder, maturity, strike, amount, {from: defaultAccount}).then(() => {
+			return optionsInstance.mintCall(holder, debtor, maturity, strike-40, amount, {from: defaultAccount});
+		}).then(() => {
+			return optionsInstance.testing();
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "low level of collateral required")
+		});
+	});*/
 });
