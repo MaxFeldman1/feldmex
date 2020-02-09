@@ -99,10 +99,11 @@ contract options {
     }
     
     function claim(uint _maturity) public returns(bool success){
-        require(_maturity < block.number);
+        require(_maturity < block.timestamp);
         //get info from the oracle
         oracle orc = oracle(oracleAddress);
-        uint spot = orc.getUint(_maturity);
+        uint spot = orc.getAtTime(_maturity);
+        testing = spot;
         uint callValue = 0;
         uint putValue = 0;
         //calls & puts

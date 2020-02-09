@@ -44,12 +44,15 @@ contract('options', function(accounts){
 		}).then(() => {
 			return stablecoinInstance.approve(options.address, 1000, true, {from: defaultAccount});
 		}).then(() => {
-			return oracleInstance.height();
+			return oracleInstance.set(finalSpot);
+		}).then(() => {
+			return web3.eth.getBlock('latest');
 		}).then((res) => {
-			height = res.toNumber();
 			debtor = accounts[1];
 			holder = accounts[2];
-			maturity = height+2;
+			maturity = res.timestamp;
+			return new Promise(resolve => setTimeout(resolve, 2000));
+		}).then((res) => {
 			return optionsInstance.mintCall(debtor, holder, maturity, strike, amount, {from: defaultAccount});
 		}).then(() => {
 			return optionsInstance.strikes(debtor, maturity, 0);
@@ -61,8 +64,6 @@ contract('options', function(accounts){
 			return optionsInstance.callAmounts(holder, maturity, strike);
 		}).then((res) => {
 			assert.equal(res.toNumber(), amount, "holder holds positive amount of contracts");
-		}).then(() => {
-			return oracleInstance.set(finalSpot);
 		}).then(() => {
 			return optionsInstance.claim(maturity, {from: debtor});
 		}).then(() => {
@@ -100,12 +101,14 @@ contract('options', function(accounts){
 	});
 
 	it('mints and exercizes put options', function() {
-		return oracleInstance.height().then((res) => {
-			maturity = res.toNumber() + 2;
+		return web3.eth.getBlock('latest').then((res) => {
+			maturity = res.timestamp+1;
 			return optionsInstance.mintPut(debtor, holder, maturity, strike, amount, {from: defaultAccount});
 		}).then(() => {
 			difference = 30;
 			return oracleInstance.set(strike - difference);
+		}).then(() => {
+			return new Promise(resolve => setTimeout(resolve, 2000));
 		}).then(() => {
 			return optionsInstance.claim(maturity, {from: debtor});
 		}).then(() => {
@@ -127,14 +130,4 @@ contract('options', function(accounts){
 			return;
 		});
 	});
-
-	/*it('transfers the correct amount of funds', function(){
-		return optionsInstance.mintCall(debtor, holder, maturity, strike, amount, {from: defaultAccount}).then(() => {
-			return optionsInstance.mintCall(holder, debtor, maturity, strike-40, amount, {from: defaultAccount});
-		}).then(() => {
-			return optionsInstance.testing();
-		}).then((res) => {
-			assert.equal(res.toNumber(), 0, "low level of collateral required")
-		});
-	});*/
 });
