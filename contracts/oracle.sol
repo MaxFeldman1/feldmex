@@ -64,12 +64,21 @@ contract oracle{
     function getAtTime(uint _time) public view returns (uint){
         if (_time >= block.timestamp) return btceth;
         uint height = block.number;
-        for (uint i = height; i > startHeight;){
-            (uint t, uint h) = timestampBehindHeight(i);
-            if (t <= _time){
-                if (t == 0) return 0;
-                return tsToSpot[t];
-            } i = h-1;
+        if (tsToSpot[_time] != 0) return tsToSpot[_time];
+        (uint startTime, uint startHeightInner) = timestampAheadHeight(startHeight);
+        if (_time < startTime) return 0;
+        uint step = (height-startHeightInner)>>2;
+        for (uint i = startHeightInner+(step<<1); ; ){
+            (uint bTime, uint bHeight) = timestampBehindHeight(i);
+            if (bTime < _time){
+                (uint aTime, uint aHeight) = timestampAheadHeight(i+1);
+                if (aTime > _time || aTime == 0) return tsToSpot[bTime];
+                i = (i+step)>aHeight+1 ? i+step : aHeight+1;
+            }
+            else {
+                i = (i-step)<bHeight-1 ? i-step : bHeight-1;
+            }
+            step = (step>>1) > 0? step>>1: 1;
         }
     }
 

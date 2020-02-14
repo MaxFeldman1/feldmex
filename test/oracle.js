@@ -45,15 +45,15 @@ contract('oracle', function(accounts){
 			assert.equal(res[0].toNumber(), time, "returns the correct timestamp");
 			return orcInstance.getAtTime(time);
 		}).then(() => {
-			return new Promise(resolve => setTimeout(resolve, 1000));
+			return new Promise(resolve => setTimeout(resolve, 2000));
 		}).then((res) => {
 			return orcInstance.set(1);		
 		}).then(() => {
-			return new Promise(resolve => setTimeout(resolve, 1000));
+			return new Promise(resolve => setTimeout(resolve, 2000));
 		}).then(() => {
 			return orcInstance.set(5);
 		}).then(() => {
-			return new Promise(resolve => setTimeout(resolve, 1000));
+			return new Promise(resolve => setTimeout(resolve, 2000));
 		}).then(() => {
 			return orcInstance.set(6);
 		}).then(() => {
