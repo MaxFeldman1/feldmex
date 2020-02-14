@@ -22,10 +22,6 @@ contract oracle{
     function set(uint _btceth) public {
         btceth = _btceth;
         spots[block.number] = btceth;
-        //if (block.timestamp == mostRecent) {
-        //    timestamps[block.timestamp] = btceth;
-        //}
-        //for (uint i = mostRecent+1; i <= block.height;)
         timestamps[block.number] = block.timestamp;
         tsToSpot[block.timestamp] = btceth;
         mostRecent = startHeight;
@@ -68,9 +64,7 @@ contract oracle{
     function getAtTime(uint _time) public view returns (uint){
         if (_time >= block.timestamp) return btceth;
         uint height = block.number;
-        //*
         for (uint i = height; i > startHeight;){
-            //if (timestamps[i] == _time) return spots[i];
             (uint t, uint h) = timestampBehindHeight(i);
             if (t <= _time){
                 if (t == 0) return 0;
