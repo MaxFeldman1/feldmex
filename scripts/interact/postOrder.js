@@ -21,20 +21,16 @@ module.exports = function(callback){
 
 	oracle = artifacts.require("./oracle.sol");
 	dappToken = artifacts.require("./DappToken.sol");
-	calls = artifacts.require("./calls.sol");
-	collateral = artifacts.require("./collateral.sol");
+	exchange = artifacts.require("./exchange.sol");
 
 	oracle.deployed().then((i) => {
 		oracleInstance = i;
 		return dappToken.deployed();
 	}).then((i) => {
 		tokenInstance = i;
-		return calls.deployed();
+		return exchange.deployed();
 	}).then((i) => {
-		callsInstance = i;
-		return collateral.deployed();
-	}).then((i) => {
-		collateralInstance = i;
+		exchangeInstance = i;
 		return web3.eth.getAccounts();
 	}).then((accts) => {
 		defaultAccount = accts[0];
@@ -58,7 +54,7 @@ module.exports = function(callback){
 		call = res.charAt(0) == 'c' || res.charAt(0) == 'C';
 		//console.log("maturity "+maturity+"\tstrike " +strike+"\tprice "+price+"\tamount "+amount+"\tbuy "+buy+"\tcall "+call);
 		console.log("Posting Order");
-		return collateralInstance.postOrder(maturity, strike, price, amount, buy, call, {from: defaultAccount});
+		return exchangeInstance.postOrder(maturity, strike, price, amount, buy, call, {from: defaultAccount});
 	}).then(() => console.log("Order Posted"));
 
 }

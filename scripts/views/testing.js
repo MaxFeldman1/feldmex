@@ -1,33 +1,11 @@
 module.exports = function(callback){
 	
-	const readline = require('readline');
+	exchange = artifacts.require("./exchange.sol");
 
-	/*var processedArgs = 4;
-	function askQuestion(query) {
-		if (processedArgs < process.argv.length){
-			processedArgs++;
-			return process.argv[processedArgs-1];
-		}
-	    const rl = readline.createInterface({
-	        input: process.stdin,
-	        output: process.stdout,
-	    });
-
-	    return new Promise(resolve => rl.question(query, ans => {
-	        rl.close();
-	        resolve(ans);
-	    }))
-	}*/
-
-	oracle = artifacts.require("./oracle.sol");
-	dappToken = artifacts.require("./DappToken.sol");
-	calls = artifacts.require("./calls.sol");
-	collateral = artifacts.require("./collateral.sol");
-
-	collateral.deployed().then((i) => {
-		collateralInstance = i;
-		return collateralInstance.testing();
+	exchange.deployed().then((i) => {
+		exchangeInstance = i;
+		return exchangeInstance.testing();
 	}).then(async (res) => {
-		console.log("Testing value == "+res.toNumber());
+		console.log("Exchange Testing value == "+res.toNumber());
 	});
 }

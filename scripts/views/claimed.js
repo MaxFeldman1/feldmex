@@ -2,27 +2,9 @@ module.exports = function(callback){
 	
 	const readline = require('readline');
 
-	/*var processedArgs = 4;
-	function askQuestion(query) {
-		if (processedArgs < process.argv.length){
-			processedArgs++;
-			return process.argv[processedArgs-1];
-		}
-	    const rl = readline.createInterface({
-	        input: process.stdin,
-	        output: process.stdout,
-	    });
-
-	    return new Promise(resolve => rl.question(query, ans => {
-	        rl.close();
-	        resolve(ans);
-	    }))
-	}*/
-
 	oracle = artifacts.require("./oracle.sol");
 	dappToken = artifacts.require("./DappToken.sol");
-	calls = artifacts.require("./calls.sol");
-	collateral = artifacts.require("./collateral.sol");
+	exchange = artifacts.require("./exchange.sol");
 	stablecoin = artifacts.require("./stablecoin.sol");
 
 	oracle.deployed().then((i) => {
@@ -30,12 +12,9 @@ module.exports = function(callback){
 		return dappToken.deployed();
 	}).then((i) => {
 		tokenInstance = i;
-		return calls.deployed();
+		return exchange.deployed();
 	}).then((i) => {
-		callsInstance = i;
-		return collateral.deployed();
-	}).then((i) => {
-		collateralInstance = i;
+		exchangeInstance = i;
 		return stablecoin.deployed();
 	}).then((i) => {
 		stablecoinInstance = i;
@@ -54,10 +33,10 @@ module.exports = function(callback){
 		console.log("Account Collateral: ");
 		for (var i = 0; i < accounts.length; i++){
 			console.log(accounts[i]);
-			await collateralInstance.claimedToken(accounts[i]).then((res) => {
+			await exchangeInstance.claimedToken(accounts[i]).then((res) => {
 				console.log('Claimed Tokens: '+(res.toNumber()/satUnits));
 			});
-			await collateralInstance.claimedStable(accounts[i]).then((res) => {
+			await exchangeInstance.claimedStable(accounts[i]).then((res) => {
 				console.log('Cliamed Stablecoins: '+(res.toNumber()/scUnits));
 			})
 		}		

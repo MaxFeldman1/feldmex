@@ -20,31 +20,23 @@ module.exports = function(callback){
 	}
 
 	oracle = artifacts.require("./oracle.sol");
-	dappToken = artifacts.require("./DappToken.sol");
-	calls = artifacts.require("./calls.sol");
-	collateral = artifacts.require("./collateral.sol");
+	exchange = artifacts.require("./exchange.sol");
 
 	oracle.deployed().then((i) => {
 		oracleInstance = i;
-		return dappToken.deployed();
+		return exchange.deployed();
 	}).then((i) => {
-		tokenInstance = i;
-		return calls.deployed();
-	}).then((i) => {
-		callsInstance = i;
-		return collateral.deployed();
-	}).then((i) => {
-		collateralInstance = i;
+		exchangeInstance = i;
 	    return askQuestion("What is the node identifier?\n");
 	}).then(async (res) => {
 		hash = res;
-		return collateralInstance.linkedNodes(hash);
+		return exchangeInstance.linkedNodes(hash);
 	}).then((res) => {
 		console.log("hash: "+res.hash);
 		console.log("name: "+res.name);
 		console.log("next: "+res.next);
 		console.log("previous: "+res.previous);
-		return collateralInstance.offers(res.hash);
+		return exchangeInstance.offers(res.hash);
 	}).then((res) => {
 		console.log("\n"+((res.buy)? "Buy" : "Sell" )+" Offer\n");
 		console.log("Offerer: "+res.offerer);

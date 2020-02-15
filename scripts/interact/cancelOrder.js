@@ -21,34 +21,30 @@ module.exports = function(callback){
 
 	oracle = artifacts.require("./oracle.sol");
 	dappToken = artifacts.require("./DappToken.sol");
-	calls = artifacts.require("./calls.sol");
-	collateral = artifacts.require("./collateral.sol");
+	exchange = artifacts.require("./exchange.sol");
 
 	oracle.deployed().then((i) => {
 		oracleInstance = i;
 		return dappToken.deployed();
 	}).then((i) => {
 		tokenInstance = i;
-		return calls.deployed();
+		return exchange.deployed();
 	}).then((i) => {
-		callsInstance = i;
-		return collateral.deployed();
-	}).then((i) => {
-		collateralInstance = i;
+		exchangeInstance = i;
 	}).then(() => {
 	    return askQuestion("Contract Identifier (Bytes32 name)?\n");
 	}).then((res) => {
 		name = res;
-		return collateralInstance.linkedNodes(name);
+		return exchangeInstance.linkedNodes(name);
 	}).then((res) => {
 		node = res;
 		hash = node.hash;
-		return collateralInstance.offers(hash);
+		return exchangeInstance.offers(hash);
 	}).then((res) => {
 		offer = res;
 		offerer = res.offerer;
 		console.log("Canceling "+(offer.buy? "Buy" : "Sell" ));
-		return collateralInstance.cancelOrder(name, {from: offer.offerer});
+		return exchangeInstance.cancelOrder(name, {from: offer.offerer});
 	}).then(() => console.log("Success")).catch(() => {
 		console.log("ERROR!");
 		if (node.name == 0)

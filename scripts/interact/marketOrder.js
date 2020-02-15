@@ -23,20 +23,16 @@ module.exports = function(callback){
 
 	oracle = artifacts.require("./oracle.sol");
 	dappToken = artifacts.require("./DappToken.sol");
-	calls = artifacts.require("./calls.sol");
-	collateral = artifacts.require("./collateral.sol");
+	exchange = artifacts.require("./exchange.sol");
 
 	oracle.deployed().then((i) => {
 		oracleInstance = i;
 		return dappToken.deployed();
 	}).then((i) => {
 		tokenInstance = i;
-		return calls.deployed();
+		return exchange.deployed();
 	}).then((i) => {
-		callsInstance = i;
-		return collateral.deployed();
-	}).then((i) => {
-		collateralInstance = i;
+		exchangeInstance = i;
 		return web3.eth.getAccounts();
 	}).then((accts) => {
 		accounts = accts;
@@ -66,11 +62,10 @@ module.exports = function(callback){
 		if (buy && call) index = 1;
 		else if (!buy && !call) index = 2;
 		else if (buy && !call) index = 3;
-		console.log(index);
-		return collateralInstance.listHeads(maturity, strike, index);
+		return exchangeInstance.listHeads(maturity, strike, index);
 	}).then((res) => {
 		if (res == defaultBytes32) throw "Error: no orders that you can take";
-		if (buy) return collateralInstance.marketBuy(maturity, strike, amount, call, {from: reciverAccount});
-		return collateralInstance.marketSell(maturity, strike, amount, call, {from: reciverAccount});
+		if (buy) return exchangeInstance.marketBuy(maturity, strike, amount, call, {from: reciverAccount});
+		return exchangeInstance.marketSell(maturity, strike, amount, call, {from: reciverAccount});
 	}).then(() => console.log("Market Order completed")).catch((err) => console.log(err));
 }

@@ -21,7 +21,7 @@ module.exports = function(callback){
 
 	oracle = artifacts.require("./oracle.sol");
 	dappToken = artifacts.require("./DappToken.sol");
-	collateral = artifacts.require("./collateral.sol");
+	exchange = artifacts.require("./exchange.sol");
 	stablecoin = artifacts.require("./stablecoin.sol");
 
 	oracle.deployed().then((i) => {
@@ -29,9 +29,9 @@ module.exports = function(callback){
 		return dappToken.deployed();
 	}).then((i) => {
 		tokenInstance = i;
-		return collateral.deployed();
+		return exchange.deployed();
 	}).then((i) => {
-		collateralInstance = i;
+		exchangeInstance = i;
 		return stablecoin.deployed();
 	}).then((i) => {
 		stablecoinInstance = i;
@@ -73,10 +73,10 @@ module.exports = function(callback){
 	}).then(async (res) => {
 		toClaimStable = res;
 		for (var i = 0; i < accounts.length; i++){
-			await tokenInstance.approve(collateral.address, toClaim, true, {from: accounts[i]}).then(() => {
-				return stablecoinInstance.approve(collateral.address, toClaimStable, true, {from: accounts[i]})
+			await tokenInstance.approve(exchange.address, toClaim, true, {from: accounts[i]}).then(() => {
+				return stablecoinInstance.approve(exchange.address, toClaimStable, true, {from: accounts[i]})
 			}).then(() => {
-				return collateralInstance.postCollateral(toClaim, true, toClaimStable, true, {from: accounts[i]});
+				return exchangeInstance.postCollateral(toClaim, true, toClaimStable, true, {from: accounts[i]});
 			}).then(() => console.log('posted collateral for '+accounts[i]));
 		}
 	});

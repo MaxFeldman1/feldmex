@@ -21,47 +21,39 @@ module.exports = function(callback){
 	}
 
 	oracle = artifacts.require("./oracle.sol");
-	dappToken = artifacts.require("./DappToken.sol");
-	calls = artifacts.require("./calls.sol");
-	collateral = artifacts.require("./collateral.sol");
+	exchange = artifacts.require("./exchange.sol");
 
 	oracle.deployed().then((i) => {
 		oracleInstance = i;
-		return dappToken.deployed();
+		return exchange.deployed();
 	}).then((i) => {
-		tokenInstance = i;
-		return calls.deployed();
-	}).then((i) => {
-		callsInstance = i;
-		return collateral.deployed();
-	}).then((i) => {
-		collateralInstance = i;
+		exchangeInstance = i;
 	    return askQuestion("What Maturity?\n");
 	}).then((res) => {
 		maturity = res;
 		return askQuestion("What Stike?\n");
 	}).then((res) => {
 		strike = res;
-		return collateralInstance.listHeads(maturity, strike, 0);
+		return exchangeInstance.listHeads(maturity, strike, 0);
 	}).then((res) => {
 		callBuy = res;
-		return collateralInstance.listHeads(maturity, strike, 1);
+		return exchangeInstance.listHeads(maturity, strike, 1);
 	}).then((res) => {
 		callSell = res;
-		return collateralInstance.listHeads(maturity, strike, 2);
+		return exchangeInstance.listHeads(maturity, strike, 2);
 	}).then((res) => {
 		putBuy = res;
-		return collateralInstance.listHeads(maturity, strike, 3);
+		return exchangeInstance.listHeads(maturity, strike, 3);
 	}).then((res) => {
 		putSell = res;
 	}).then(async () => {
 		var node;
 		console.log("\nCALL BUYS\n");
 		do {	
-			await collateralInstance.linkedNodes(callBuy).then((res) => {
+			await exchangeInstance.linkedNodes(callBuy).then((res) => {
 				node = res;
 				callBuy = node.next;
-				return collateralInstance.offers(node.hash);
+				return exchangeInstance.offers(node.hash);
 			}).then((res) => {
 				if (res.price.toNumber() == 0) return;
 				console.log("OFFER:");
@@ -79,10 +71,10 @@ module.exports = function(callback){
 		var node;
 		console.log("\nCALL SELLS\n");
 		do {	
-			await collateralInstance.linkedNodes(callSell).then((res) => {
+			await exchangeInstance.linkedNodes(callSell).then((res) => {
 				node = res;
 				callSell = node.next;
-				return collateralInstance.offers(node.hash);
+				return exchangeInstance.offers(node.hash);
 			}).then((res) => {
 				if (res.price.toNumber() == 0) return;
 				console.log("OFFER:");
@@ -100,10 +92,10 @@ module.exports = function(callback){
 		var node;
 		console.log("\nPUT BUYS\n");
 		do {	
-			await collateralInstance.linkedNodes(putBuy).then((res) => {
+			await exchangeInstance.linkedNodes(putBuy).then((res) => {
 				node = res;
 				putBuy = node.next;
-				return collateralInstance.offers(node.hash);
+				return exchangeInstance.offers(node.hash);
 			}).then((res) => {
 				if (res.price.toNumber() == 0) return;
 				console.log("OFFER:");
@@ -121,10 +113,10 @@ module.exports = function(callback){
 		var node;
 		console.log("\nPUT SELLS\n");
 		do {	
-			await collateralInstance.linkedNodes(putSell).then((res) => {
+			await exchangeInstance.linkedNodes(putSell).then((res) => {
 				node = res;
 				putSell = node.next;
-				return collateralInstance.offers(node.hash);
+				return exchangeInstance.offers(node.hash);
 			}).then((res) => {
 				if (res.price.toNumber() == 0) return;
 				console.log("OFFER:");
