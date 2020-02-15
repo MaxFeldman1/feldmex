@@ -99,7 +99,7 @@ contract('exchange', function(accounts) {
 			firstSellAmount = 5;
 			receiverAccountPosition -= firstSellAmount;
 			defaultAccountPosition += firstSellAmount;
-			return exchangeInstance.marketSell(maturity, strike, firstSellAmount, true, {from: receiverAccount});
+			return exchangeInstance.marketSell(maturity, strike, 0, firstSellAmount, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
@@ -110,7 +110,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.amount, firstSellAmount, "the amount of the contract has decreaced the correct amount");
 			receiverAccountPosition -= amount-firstSellAmount+1;
 			defaultAccountPosition += amount-firstSellAmount+1;
-			return exchangeInstance.marketSell(maturity, strike, amount-firstSellAmount+1, true, {from: receiverAccount});
+			return exchangeInstance.marketSell(maturity, strike, 0, amount-firstSellAmount+1, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
@@ -121,7 +121,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.amount, amount-1, "amount of second order after marketSell is correct");
 			receiverAccountPosition -= amount-1;
 			defaultAccountPosition += amount-1;
-			return exchangeInstance.marketSell(maturity, strike, 2*amount-1, true, {from:receiverAccount});
+			return exchangeInstance.marketSell(maturity, strike, 0, 2*amount-1, true, {from:receiverAccount});
 		}).then(() => {
 			//we have not updated the receiverAccountBalance yet so we will aggregate the impact of all orders here
 			receiverAccountBalance -= (satUnits*2*amount) - (amount*(2*price-10000));
@@ -172,7 +172,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.postOrder(maturity, strike, price-10000, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			firstBuyAmount = 5;
-			return exchangeInstance.marketBuy(maturity, strike, firstBuyAmount, true, {from: receiverAccount});
+			return exchangeInstance.marketBuy(maturity, strike, price+100000, firstBuyAmount, true, {from: receiverAccount});
 		}).then((res) => {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
@@ -181,7 +181,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, firstBuyAmount, "the amount of the contract has decreaced the correct amount");
-			return exchangeInstance.marketBuy(maturity, strike, amount-firstBuyAmount+1, true, {from: receiverAccount});
+			return exchangeInstance.marketBuy(maturity, strike, price+100000, amount-firstBuyAmount+1, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
@@ -190,7 +190,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, amount-1, "amount of second order after marketBuy is correct");
-			return exchangeInstance.marketBuy(maturity, strike, 2*amount-1, true, {from: receiverAccount});
+			return exchangeInstance.marketBuy(maturity, strike, price+100000, 2*amount-1, true, {from: receiverAccount});
 		}).then((res) => {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
@@ -278,7 +278,7 @@ contract('exchange', function(accounts) {
 			firstSellAmount = amount-4;
 			receiverAccountPosition -= firstSellAmount;
 			defaultAccountPosition += firstSellAmount;
-			return exchangeInstance.marketSell(maturity, strike, firstSellAmount, false, {from: receiverAccount});
+			return exchangeInstance.marketSell(maturity, strike, 0, firstSellAmount, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.linkedNodes(head);
 		}).then((res) => {
@@ -287,7 +287,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.amount, amount-firstSellAmount, "the amount left in the list head has decreaced the correct amount");
 			receiverAccountPosition -= amount+1;
 			defaultAccountPosition += amount+1;
-			return exchangeInstance.marketSell(maturity, strike, amount+1, false, {from: receiverAccount});
+			return exchangeInstance.marketSell(maturity, strike, 0, amount+1, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 2);
 		}).then((res) => {
@@ -357,14 +357,14 @@ contract('exchange', function(accounts) {
 			firstBuyAmount = amount-4;
 			receiverAccountPosition += firstBuyAmount;
 			defaultAccountPosition -= firstBuyAmount;
-			return exchangeInstance.marketBuy(maturity, strike, firstBuyAmount, false, {from: receiverAccount});
+			return exchangeInstance.marketBuy(maturity, strike, price+100000, firstBuyAmount, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.offers(current);
 		}).then((res)  => {
 			assert.equal(res.amount.toNumber(), amount-firstBuyAmount, "the amount has been decremented correctly");
 			receiverAccountPosition += amount+1;
 			defaultAccountPosition -= amount+1;
-			return exchangeInstance.marketBuy(maturity, strike, amount+1, false, {from: receiverAccount});
+			return exchangeInstance.marketBuy(maturity, strike, price+100000, amount+1, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 3);
 		}).then((res) => {
@@ -458,4 +458,43 @@ contract('exchange', function(accounts) {
 			return;
 		});
 	});
+
+	it('conducts limit orders', function(){
+		otherMaturity = maturity*2;
+		return exchangeInstance.postOrder(otherMaturity, strike, price, amount, true, true, {from: defaultAccount}).then(() => {
+			return exchangeInstance.postOrder(otherMaturity, strike, price-10000, amount, true, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(otherMaturity, strike, price+10000, amount, true, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(otherMaturity, strike, price-5000, amount, true, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketSell(otherMaturity, strike, price-5000, amount*5, true, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.listHeads(otherMaturity, strike, 0);
+		}).then((res) => {
+			return exchangeInstance.linkedNodes(res);
+		}).then((res) => {
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price, price-10000, "the limit price stopped further selling at prices lower than the limit price");
+			//now we will test the same for posting Sell orders and making market Buy orders
+			return exchangeInstance.postOrder(otherMaturity, strike, price, amount, false, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(otherMaturity, strike, price-10000, amount, false, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(otherMaturity, strike, price+10000, amount, false, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(otherMaturity, strike, price-5000, amount, false, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketBuy(otherMaturity, strike, price, amount*5, true, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.listHeads(otherMaturity, strike, 1);
+		}).then((res) => {
+			return exchangeInstance.linkedNodes(res);
+		}).then((res) => {
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price, price+10000, "the limit price stopped further buying at prices higher than the limit price");
+		});
+	})
 });

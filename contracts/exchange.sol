@@ -3,10 +3,6 @@ import "./DappToken.sol";
 import "./options.sol";
 import "./stablecoin.sol";
 
-/*
-    To-Do
-    .) add a fouth parameter uint _limitPrice to marketSell and marketBuy to ensure price of contracts
-*/
 
 contract exchange{
     //denominated in Underlying Token
@@ -465,7 +461,7 @@ contract exchange{
         return true;
     }
 
-    function marketSell(uint _maturity, uint _strike, uint _amount, bool _call) public {
+    function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
@@ -473,7 +469,7 @@ contract exchange{
         if (_call) require(claimedToken[msg.sender] >= satUnits * _amount);
         else require(claimedStable[msg.sender] >= scUnits * _amount * _strike);
         //in each iteration we mint one contract
-        while (_amount > 0 && node.name != 0){
+        while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
             if (offer.amount > _amount){
                 options optionsContract = options(optionsAddress);
                 if (_call){
@@ -508,12 +504,12 @@ contract exchange{
         }
     }
 
-    function marketBuy(uint _maturity, uint _strike, uint _amount, bool _call) public {
+    function marketBuy(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
         uint8 index = (_call ? 1 : 3);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
         require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
-        while (_amount > 0 && node.name != 0 && claimedToken[msg.sender] >= offer.price){
+        while (_amount > 0 && node.name != 0 && claimedToken[msg.sender] >= offer.price && offer.price <= _limitPrice){
             if (offer.amount > _amount){
                 options optionsContract = options(optionsAddress);
                 if (_call){
