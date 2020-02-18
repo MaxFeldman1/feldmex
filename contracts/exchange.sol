@@ -13,9 +13,9 @@ contract exchange{
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{
-        //offers[hash] is the offer
+        //offers[hash] => offer
         bytes32 hash;
-        //this == linkedNodes[name]
+        //linkedNodes[this.name] => this
         bytes32 name;
         bytes32 next;
         bytes32 previous;
@@ -35,13 +35,16 @@ contract exchange{
         bytes32 hash
     );
 
-    //-----------mappings for marketplace functionality--------------
+    /*
+        listHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
+        the linked lists are ordered by price with the most enticing offers at the top near the head
+    */
     //maturity => strike => headNode.name [longCall, shortCall, longPut, shortPut]
     mapping(uint => mapping(uint => bytes32[4])) public listHeads;
     
-    //holds all nodes
+    //holds all nodes node.name is the identifier for the location in this mapping
     mapping (bytes32 => linkedNode) public linkedNodes;
-    
+
     /*
         Note all linkedNodes correspond to a buyOffer
         The offers[linkedNodes[name].hash] links to a buyOffer
@@ -49,20 +52,30 @@ contract exchange{
     
     //holds all offers
     mapping(bytes32 => Offer) public offers;
-    //---------------END---------------------------------------------
     
-    //address of outside token contract
+    //address of the contract of the underlying digital asset such as WBTC or WETH
     address dappAddress;
+    //address of a digital asset that represents a unit of account such as DAI
     address stablecoinAddress;
+    //address of the smart contract that handles the creation of calls and puts and thier subsequent redemption
     address optionsAddress;
-    //incrementing identifier for each order
+    //incrementing identifier for each order that garunties unique hashes for all identifiers
     uint public totalOrders;
-    //number of satoshis in one DappToken _fullUnit
+    //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
     uint satUnits;
+    //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint scUnits;
 
-    uint public testing;
+    //variable occasionally used for testing purposes should not be present in production
+    //uint public testing;
     
+    /*  
+        @Description: initialise globals and preform initial processes with the token and stablecoin contracts
+
+        @param address _dappAddress: address that shall be assigned to dappAddress
+        @param address _stablecoinAddress: address that shall be assigned to stablecoinAddress
+        @param address _optionsAddress: address that shall be assigned to optionsAddress
+    */
     constructor (address _dappAddress, address _stablecoinAddress, address _optionsAddress) public{
         dappAddress = _dappAddress;
         optionsAddress = _optionsAddress;
@@ -76,6 +89,14 @@ contract exchange{
         sc.approve(optionsAddress, 2**255, false);
     }
     
+    /*
+        @Description: deposit funds in this contract, funds tracked by the claimedToken and claimedStable mappings
+
+        @param uint _amount: the amount of the token to be deposited
+        @param boolean _fullUnit: if true _amount is full units of the token if false _amount is the samllest unit of the token
+        @param uint _amountStable: the amount of the stablecoin to be deposited
+        @param boolean _fullUnitStable: if true _amountStable is full units of the stablecoin if false _amountStable is the smallest unit of the stablecoin
+    */
     function postCollateral(uint _amount, bool _fullUnit, uint _amountStable, bool _fullUnitStable) public returns(bool success){
         DappToken dt = DappToken(dappAddress);
         if (_amount != 0){
@@ -91,16 +112,10 @@ contract exchange{
         return false;
     }
     
-    function claimedCollateral(address _addr, bool _fullUnit) public view returns(uint){
-        return claimedToken[_addr]/(_fullUnit ? satUnits : 1);
-    }
-    
-    function withdrawCollateral(uint _value, bool _fullUnit) public returns(bool success){
-        DappToken dt = DappToken(dappAddress);
-        require(claimedToken[msg.sender]/(_fullUnit ? satUnits : 1) >= _value);
-        return dt.transfer(msg.sender, _value, _fullUnit);
-    }
-    
+    /*
+        @Description: send back all funds tracked in the claimedToken and claimedStable mappings of the caller to the callers address
+
+    */
     function withdrawMaxCollateral() public returns(bool success){
         uint val = claimedToken[msg.sender];
         require(val > 0);
@@ -111,12 +126,18 @@ contract exchange{
     
     //------The following set of functions relate to management of the marketplace
     
-    //the output of this function for each offer is its identifier in the offers mapping
+    /*
+        @Description: creates a hash of a given order by which it will it will be identified
+            offers[returnValue] == _offer
+    */
     function orderHasher(Offer memory _offer) internal view returns(bytes32){
         return keccak256(abi.encodePacked(_offer.maturity, _offer.strike, _offer.price, _offer.offerer, _offer.buy, _offer.call, now));
     }
     
-    //the output of this function for each linkedNode is its identifier in the linkedNodes mapping
+    /*
+        @Description: returns a unique identifier by which the node corresponding to each order may be accesse
+            linkedNodes[returnValue].hash == _offerHash
+    */
     function nodeHasher(bytes32 _offerHash) internal returns(bytes32){
         totalOrders++;
         return keccak256(abi.encodePacked(_offerHash, now, totalOrders));
@@ -125,7 +146,16 @@ contract exchange{
     
     //---------------------The following set of functions relates to buying and selling of contracts---------------------
 
-    //consolodates functionality for buying and selling calls and puts into one function
+    /*
+        @Description: creates an order and posts it in one of the 4 linked lists depending on if it is a buy or sell order and if it is for calls or puts
+
+        @param unit _maturity: the timstamp at which the call or put is settled
+        @param uint _strike: the settlement price of the the underlying asset at the maturity
+        @param uint _price: the amount paid or received for the call or put
+        @param uint _amount: the amount of calls or puts that this offer is for
+        @param bool _buy: if true this is a buy order if false this is a sell order
+        @param bool _call: if true this is a call order if false this is a put order
+    */
     function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public {
         //require collateral and deduct collateral from balance
         uint index;
@@ -200,6 +230,18 @@ contract exchange{
     }
 
     //allows for users to post Orders with less transaction fees by giving another order as refrence to find their orders position from
+    /*
+        @Description: this is the same as post order though it allows for gas to be saved by searching for the orders location in relation to another order
+            this function is best called by passing in the name of an order that is directly next to the future location of your order
+        
+        @param unit _maturity: the timstamp at which the call or put is settled
+        @param uint _strike: the settlement price of the the underlying asset at the maturity
+        @param uint _price: the amount paid or received for the call or put
+        @param uint _amount: the amount of calls or puts that this offer is for
+        @param bool _buy: if true this is a buy order if false this is a sell order
+        @param bool _call: if true this is a call order if false this is a put order 
+        @param bytes32 _name: the name identifier of the order from which to search for the location to insert this order
+    */
     function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike);
         uint index;
@@ -297,6 +339,11 @@ contract exchange{
         }
     }
 
+    /*
+        @Description: removes the order with name identifier _name, prevents said order from being filled or taken
+
+        @param bytes32: the identifier of the node which stores the order to cancel, offerToCancel == offers[linkedNodes[_name].hash]
+    */
     function cancelOrder(bytes32 _name) public {
         linkedNode memory node = linkedNodes[_name];
         require(msg.sender == offers[node.hash].offerer);
@@ -340,6 +387,13 @@ contract exchange{
             claimedStable[msg.sender] += scUnits * offer.strike * offer.amount;
     }
     
+
+    /*
+        @Description: handles logistics of the seller accepting a buy order with identifier _name
+
+        @param address payable _seller: the seller that is taking the buy offer
+        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == offers[linkedNodes[_name].hash]
+    */
     function takeBuyOffer(address payable _seller, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
@@ -401,6 +455,12 @@ contract exchange{
         return true;
     }
 
+    /*
+        @Description: handles logistics of the buyer accepting a sell order with the identifier _name
+
+        @param address payable _buyer: the buyer that is taking the sell offer
+        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == offers[linkedNodes[_name].hash]
+    */
     function takeSellOffer(address payable _buyer, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
@@ -461,6 +521,16 @@ contract exchange{
         return true;
     }
 
+    /*
+        @Description: Caller of the function takes the best buy offers of either calls or puts, when offer is taken the contract in options.sol is called to mint the calls or puts
+            After an offer is taken it is removed so that it may not be taken again
+
+        @param unit _maturity: the timstamp at which the call or put is settled
+        @param uint _strike: the settlement price of the the underlying asset at the maturity
+        @param uint _limitPrice: lowest price to sell at
+        @param uint _amount: the amount of calls or puts that this order is for
+        @param bool _call: if true this is a call order if false this is a put order 
+    */
     function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
@@ -504,6 +574,16 @@ contract exchange{
         }
     }
 
+    /*
+        @Description: Caller of the function takes the best sell offers of either calls or puts, when offer is taken the contract in options.sol is called to mint the calls or puts
+            After an offer is taken it is removed so that it may not be taken again
+
+        @param unit _maturity: the timstamp at which the call or put is settled
+        @param uint _strike: the settlement price of the the underlying asset at the maturity
+        @param uint _limitPrice: highest price to buy at
+        @param uint _amount: the amount of calls or puts that this order is for
+        @param bool _call: if true this is a call order if false this is a put order 
+    */
     function marketBuy(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
         uint8 index = (_call ? 1 : 3);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
