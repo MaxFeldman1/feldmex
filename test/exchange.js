@@ -66,9 +66,9 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike, true, {from: receiverAccount});
 		}).then(() => {
-			return exchangeInstance.postCollateral(10*transferAmount, true, 10*transferAmount*strike, true, {from: defaultAccount});
+			return exchangeInstance.depositFunds(10*transferAmount, true, 10*transferAmount*strike, true, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postCollateral(10*transferAmount, true, 10*transferAmount*strike, true, {from: receiverAccount});
+			return exchangeInstance.depositFunds(10*transferAmount, true, 10*transferAmount*strike, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.claimedToken(defaultAccount);
 		}).then((res) => {

@@ -97,19 +97,22 @@ contract exchange{
         @param uint _amountStable: the amount of the stablecoin to be deposited
         @param boolean _fullUnitStable: if true _amountStable is full units of the stablecoin if false _amountStable is the smallest unit of the stablecoin
     */
-    function postCollateral(uint _amount, bool _fullUnit, uint _amountStable, bool _fullUnitStable) public returns(bool success){
-        DappToken dt = DappToken(dappAddress);
+    function depositFunds(uint _amount, bool _fullUnit, uint _amountStable, bool _fullUnitStable) public returns(bool success){
         if (_amount != 0){
-            if (dt.transferFrom(msg.sender, address(this), _amount, _fullUnit)){
+            DappToken dt = DappToken(dappAddress);
+            if (dt.transferFrom(msg.sender, address(this), _amount, _fullUnit))
                 claimedToken[msg.sender]+=_amount * (_fullUnit ? satUnits : 1);
-                if (_amountStable == 0) return true;
-            }
+            else 
+                return false;
         }
-        stablecoin sc = stablecoin(stablecoinAddress);
-        if (sc.transferFrom(msg.sender, address(this), _amountStable, _fullUnit)){
-            claimedStable[msg.sender]+=_amountStable *(_fullUnitStable ? scUnits : 1);
+        if (_amountStable != 0){
+            stablecoin sc = stablecoin(stablecoinAddress);
+            if (sc.transferFrom(msg.sender, address(this), _amountStable, _fullUnit))
+                claimedStable[msg.sender]+=_amountStable *(_fullUnitStable ? scUnits : 1);
+            else 
+                return false;
         }
-        return false;
+        return true;
     }
     
     /*
