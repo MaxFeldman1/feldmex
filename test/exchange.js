@@ -496,5 +496,65 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.price, price+10000, "the limit price stopped further buying at prices higher than the limit price");
 		});
-	})
+	});
+
+	it('withdraws funds', function(){
+		return exchangeInstance.claimedToken(defaultAccount).then((res) => {
+			defTokens = res.toNumber();
+			return exchangeInstance.claimedToken(receiverAccount);
+		}).then((res) => {
+			recTokens = res.toNumber();
+			return tokenInstance.addrBalance(defaultAccount, false);
+		}).then((res) => {
+			defBalance = res.toNumber();
+			return tokenInstance.addrBalance(receiverAccount, false);
+		}).then((res) => {
+			recBalance = res.toNumber();
+			return exchangeInstance.withdrawAllFunds(true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.withdrawAllFunds(true, {from: receiverAccount});
+		}).then(() => {
+			return tokenInstance.addrBalance(defaultAccount, false);
+		}).then((res) => {
+			assert.equal(res.toNumber(), defTokens+defBalance, "awarded correct amount");
+			return tokenInstance.addrBalance(receiverAccount, false);
+		}).then((res) => {
+			assert.equal(res.toNumber(), recTokens+recBalance, "awarded correct amount");
+			return exchangeInstance.claimedToken(defaultAccount);
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
+			return exchangeInstance.claimedToken(receiverAccount);
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
+			//now test for the same for stablecoin
+			return exchangeInstance.claimedStable(defaultAccount);
+		}).then((res) => {
+			defStable = res.toNumber();
+			return exchangeInstance.claimedStable(receiverAccount);
+		}).then((res) => {
+			recStable = res.toNumber();
+			return stablecoinInstance.addrBalance(defaultAccount, false);
+		}).then((res) => {
+			defBalance = res.toNumber();
+			return stablecoinInstance.addrBalance(receiverAccount, false);
+		}).then((res) => {
+			recBalance = res.toNumber();
+			return exchangeInstance.withdrawAllFunds(false, {from: defaultAccount});
+		}).then((res) => {
+			return exchangeInstance.withdrawAllFunds(false, {from: receiverAccount});
+		}).then(() => {
+			return stablecoinInstance.addrBalance(defaultAccount, false);
+		}).then((res) => {
+			assert.equal(res.toNumber(), defStable+defBalance, "awarded correct amount");
+			return stablecoinInstance.addrBalance(receiverAccount, false);
+		}).then((res) => {
+			assert.equal(res.toNumber(), recStable+recBalance, "awarded correct amount");
+			return exchangeInstance.claimedStable(defaultAccount);
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
+			return exchangeInstance.claimedStable(receiverAccount);
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
+		});
+	});
 });

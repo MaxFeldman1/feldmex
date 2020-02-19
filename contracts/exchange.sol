@@ -115,13 +115,24 @@ contract exchange{
     /*
         @Description: send back all funds tracked in the claimedToken and claimedStable mappings of the caller to the callers address
 
+        @param bool _token: if true withdraw the tokens recorded in claimedToken if false withdraw the stablecoins stored in claimedStable
     */
-    function withdrawMaxCollateral() public returns(bool success){
-        uint val = claimedToken[msg.sender];
-        require(val > 0);
-        DappToken dt = DappToken(dappAddress);
-        claimedToken[msg.sender] = 0;
-        return dt.transfer(msg.sender, val, false);
+    function withdrawAllFunds(bool _token) public returns(bool success){
+        if (_token){
+            uint val = claimedToken[msg.sender];
+            require(val > 0);
+            DappToken dt = DappToken(dappAddress);
+            claimedToken[msg.sender] = 0;
+            return dt.transfer(msg.sender, val, false);
+        }
+        else {
+            uint val = claimedStable[msg.sender];
+            require(val > 0);
+            stablecoin sc = stablecoin(stablecoinAddress);
+            claimedStable[msg.sender] = 0;
+            return sc.transfer(msg.sender, val, false);
+        }
+
     }
     
     //------The following set of functions relate to management of the marketplace
@@ -144,8 +155,6 @@ contract exchange{
     }
     
     
-    //---------------------The following set of functions relates to buying and selling of contracts---------------------
-
     /*
         @Description: creates an order and posts it in one of the 4 linked lists depending on if it is a buy or sell order and if it is for calls or puts
 
