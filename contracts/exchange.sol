@@ -96,6 +96,8 @@ contract exchange{
         @param boolean _fullUnit: if true _amount is full units of the token if false _amount is the samllest unit of the token
         @param uint _amountStable: the amount of the stablecoin to be deposited
         @param boolean _fullUnitStable: if true _amountStable is full units of the stablecoin if false _amountStable is the smallest unit of the stablecoin
+
+        @return bool success: if an error occurs returns false if no error return true
     */
     function depositFunds(uint _amount, bool _fullUnit, uint _amountStable, bool _fullUnitStable) public returns(bool success){
         if (_amount != 0){
@@ -119,6 +121,8 @@ contract exchange{
         @Description: send back all funds tracked in the claimedToken and claimedStable mappings of the caller to the callers address
 
         @param bool _token: if true withdraw the tokens recorded in claimedToken if false withdraw the stablecoins stored in claimedStable
+
+        @return bool success: if an error occurs returns false if no error return true
     */
     function withdrawAllFunds(bool _token) public returns(bool success){
         if (_token){
@@ -143,6 +147,7 @@ contract exchange{
     /*
         @Description: creates a hash of a given order by which it will it will be identified
             offers[returnValue] == _offer
+        @return bytes32: key in offers mapping
     */
     function orderHasher(Offer memory _offer) internal view returns(bytes32){
         return keccak256(abi.encodePacked(_offer.maturity, _offer.strike, _offer.price, _offer.offerer, _offer.buy, _offer.call, now));
@@ -151,6 +156,7 @@ contract exchange{
     /*
         @Description: returns a unique identifier by which the node corresponding to each order may be accesse
             linkedNodes[returnValue].hash == _offerHash
+        @return bytes32: key in linkedNodes mapping
     */
     function nodeHasher(bytes32 _offerHash) internal returns(bytes32){
         totalOrders++;
@@ -405,6 +411,8 @@ contract exchange{
 
         @param address payable _seller: the seller that is taking the buy offer
         @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == offers[linkedNodes[_name].hash]
+
+        @return bool success: if an error occurs returns false if no error return true
     */
     function takeBuyOffer(address payable _seller, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
@@ -472,6 +480,8 @@ contract exchange{
 
         @param address payable _buyer: the buyer that is taking the sell offer
         @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == offers[linkedNodes[_name].hash]
+
+        @return bool success: if an error occurs returns false if no error return true
     */
     function takeSellOffer(address payable _buyer, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
