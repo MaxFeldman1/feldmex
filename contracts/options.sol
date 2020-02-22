@@ -15,7 +15,7 @@ contract options {
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint scUnits;
     //variable occasionally used for testing purposes should not be present in production
-    //uint public testing;
+    uint public testing;
     
     /*
         @Description: assigns the addesses of external contracts
@@ -96,11 +96,9 @@ contract options {
         DappToken dt = DappToken(dappAddress);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
-        uint debtorMinSats = minSats(_debtor, _maturity, -int(_amount), _strike);
-        uint holderMinSats = minSats(_holder, _maturity, int(_amount), _strike);
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
-        uint debtorLiabilities = liabilities(_debtor, _maturity, true) + (_amount*satUnits);
-        uint holderLiabilities = liabilities(_holder, _maturity, true);
+        (uint debtorMinSats, uint debtorLiabilities) = minSats(_debtor, _maturity, -int(_amount), _strike);
+        (uint holderMinSats, uint holderLiabilities) = minSats(_holder, _maturity, int(_amount), _strike);
 
         transferAmount = debtorMinSats - satCollateral[_debtor][_maturity];
         require(dt.transferFrom(msg.sender, address(this), transferAmount, false));
@@ -138,11 +136,10 @@ contract options {
         stablecoin sc = stablecoin(stablecoinAddress);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
-        uint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
-        uint holderMinSc = minSc(_holder, _maturity, int(_amount), _strike);
-        uint debtorLiabilities = liabilities(_debtor, _maturity, false) + (_amount*scUnits*_strike);
-        uint holderLiabilities = liabilities(_holder, _maturity, false);
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
+        (uint debtorMinSc, uint debtorLiabilities) = minSc(_debtor, _maturity, -int(_amount), _strike);
+        (uint holderMinSc, uint holderLiabilities) = minSc(_holder, _maturity, int(_amount), _strike);
+
         transferAmount = debtorMinSc - scCollateral[_debtor][_maturity];
         require(sc.transferFrom(msg.sender,  address(this), transferAmount, false));
         scCollateral[_debtor][_maturity] += transferAmount; // == debtorMinSc
@@ -366,14 +363,15 @@ contract options {
         @param uint _strike: the strike price of the added position
 
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in the underlying
+        @return uint: sum of all short call positions multiplied by satUnits
     */
-    function minSats(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint){
+    function minSats(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minValue, uint liabilities){
         uint strike = _strike;
         //total number of bought calls minus total number of sold calls
         _amount += callAmounts[_addr][_maturity][_strike];
         int sum = _amount;
-        uint liabilities = (_amount < 0) ? uint(-_amount) : 0;
-        uint value = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
+        liabilities = (_amount < 0) ? uint(-_amount) : 0;
+        minValue = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
         uint cValue = 0;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             strike = strikes[_addr][_maturity][i];
@@ -381,13 +379,14 @@ contract options {
             sum += callAmounts[_addr][_maturity][strike];
             liabilities += (callAmounts[_addr][_maturity][strike] < 0)? uint(-callAmounts[_addr][_maturity][strike]) : 0;
             cValue = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
-            if (value > cValue) value = cValue;
+            if (minValue > cValue) minValue = cValue;
         }
         //liabilities has been subtrcted from sum priviously so this is equal to # of bought contracts at infinite spot
         uint valAtInf = uint(sum+int(liabilities))*satUnits; //assets
-        value = (valAtInf < value ? valAtInf : value);
-        if (value > liabilities*satUnits) return 0;
-        return (liabilities*satUnits) - value;
+        minValue = (valAtInf < minValue ? valAtInf : minValue);
+        liabilities*=satUnits;
+        if (minValue > liabilities) return (0, liabilities);
+        return ((liabilities) - minValue, liabilities);
     }
 
     /*
@@ -400,52 +399,27 @@ contract options {
         @param uint _strike: the strike price of the added position
 
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in stablecoin
+        @return uint: negative value denominated in scUnits of all short put postions at a spot price of 0
     */
-    function minSc(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint){
+    function minSc(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minValue, uint liabilities){
         //account for spot price of 0
         uint strike = 0;
         _amount += putAmounts[_addr][_maturity][_strike];
-        uint value = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
+        minValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
         int sum = _amount;
-        uint liabilities = _strike * ((_amount < 0) ? uint(-_amount) : 0);
+        liabilities = _strike * ((_amount < 0) ? uint(-_amount) : 0);
         uint cValue = totalScValueOf(_addr, _maturity, _strike, _amount, _strike);
-        if (value > cValue) value = cValue;
+        if (minValue > cValue) minValue = cValue;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             strike = strikes[_addr][_maturity][i];
             if (strike == _strike) continue;
             sum += putAmounts[_addr][_maturity][strike];
             liabilities += strike * ((putAmounts[_addr][_maturity][strike] < 0)? uint(-putAmounts[_addr][_maturity][strike]) : 0);
             cValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
-            if (value > cValue) value = cValue;
+            if (minValue > cValue) minValue = cValue;
         }
-        if (value > liabilities*satUnits) return 0;
-        return (liabilities*scUnits) - value;
-    }
-
-    //when token is true it returns the liabilities for the calls when false it returns for puts
-    /*
-        @Description: returns the sum of all short call/put positions multiplied by satUnits/scUnits
-
-        @param address _addr: address in question
-        @param uint _maturity: maturity in question
-        @param bool _token: if true returns call liabilities false returns put liabilities
-
-        @return uint: sum of all short call/put positions multiplied by satUnits/scUnits
-    */
-    function liabilities(address _addr, uint _maturity, bool _token) internal view returns(uint){
-        uint count = 0;
-        uint strike = 0;
-        if (_token){
-            for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-                strike = strikes[_addr][_maturity][i];
-                count += (callAmounts[_addr][_maturity][strike] < 0)? uint(-callAmounts[_addr][_maturity][strike]) : 0;
-            }
-            return count*satUnits;
-        }
-        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            strike = strikes[_addr][_maturity][i];
-            count += (putAmounts[_addr][_maturity][strike] < 0)? uint(-putAmounts[_addr][_maturity][strike]) : 0;
-        }
-        return count*scUnits;
+        liabilities*=scUnits;
+        if (minValue > liabilities) return (0, liabilities);
+        return ((liabilities) - minValue, liabilities);
     }
 }
