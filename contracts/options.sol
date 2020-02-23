@@ -87,11 +87,13 @@ contract options {
         @param uint _maturity: the evm and unix timestamp at which the call contract matures and settles
         @param uint _strike: the spot price of the underlying in terms of the stablecoin at which this option contract settles at the maturity timestamp
         @param uint _amount: the amount of calls that the debtor is adding as short and the holder is adding as long
+        @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in satUnits
+            if this limit needs to be broken to mint the call the transaction will return (true, 0)
 
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmount: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintCall(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount) public returns(bool success, uint transferAmount){
+    function mintCall(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmount){
         require(_debtor != _holder);
         DappToken dt = DappToken(dappAddress);
         //satDeduction == liabilities - minSats
@@ -101,6 +103,7 @@ contract options {
         (uint holderMinSats, uint holderLiabilities) = minSats(_holder, _maturity, int(_amount), _strike);
 
         transferAmount = debtorMinSats - satCollateral[_debtor][_maturity];
+        if (transferAmount > _maxTransfer) return(false, 0);
         require(dt.transferFrom(msg.sender, address(this), transferAmount, false));
         satCollateral[_debtor][_maturity] += transferAmount; // == debtorMinSats
         claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
@@ -127,11 +130,13 @@ contract options {
         @param uint _maturity: the evm and unix timestamp at which the put contract matures and settles
         @param uint _strike: the spot price of the underlying in terms of the stablecoin at which this option contract settles at the maturity timestamp
         @param uint _amount: the amount of puts that the debtor is adding as short and the holder is adding as long
+        @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in scUnits
+            if this limit needs to be broken to mint the put the transaction will return (false, 0)
 
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmount: returns the amount of stablecoin that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintPut(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount) public returns(bool success, uint transferAmount){
+    function mintPut(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmount){
         require(_debtor != _holder);
         stablecoin sc = stablecoin(stablecoinAddress);
         //scDeduction == liabilities - minSc
@@ -141,6 +146,7 @@ contract options {
         (uint holderMinSc, uint holderLiabilities) = minSc(_holder, _maturity, int(_amount), _strike);
 
         transferAmount = debtorMinSc - scCollateral[_debtor][_maturity];
+        if (transferAmount > _maxTransfer) return (false, 0);
         require(sc.transferFrom(msg.sender,  address(this), transferAmount, false));
         scCollateral[_debtor][_maturity] += transferAmount; // == debtorMinSc
         claimedStable[_holder] += scCollateral[_holder][_maturity] - holderMinSc;
@@ -365,13 +371,13 @@ contract options {
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in the underlying
         @return uint: sum of all short call positions multiplied by satUnits
     */
-    function minSats(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minValue, uint liabilities){
+    function minSats(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minCollateral, uint liabilities){
         uint strike = _strike;
         //total number of bought calls minus total number of sold calls
         _amount += callAmounts[_addr][_maturity][_strike];
         int sum = _amount;
         liabilities = (_amount < 0) ? uint(-_amount) : 0;
-        minValue = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
+        uint minValue = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
         uint cValue = 0;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             strike = strikes[_addr][_maturity][i];
@@ -401,11 +407,11 @@ contract options {
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in stablecoin
         @return uint: negative value denominated in scUnits of all short put postions at a spot price of 0
     */
-    function minSc(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minValue, uint liabilities){
+    function minSc(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minCollateral, uint liabilities){
         //account for spot price of 0
         uint strike = 0;
         _amount += putAmounts[_addr][_maturity][_strike];
-        minValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
+        uint minValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
         int sum = _amount;
         liabilities = _strike * ((_amount < 0) ? uint(-_amount) : 0);
         uint cValue = totalScValueOf(_addr, _maturity, _strike, _amount, _strike);
@@ -421,5 +427,19 @@ contract options {
         liabilities*=scUnits;
         if (minValue > liabilities) return (0, liabilities);
         return ((liabilities) - minValue, liabilities);
+    }
+
+
+    /*
+    -----------ToDo Function description-----------------
+    */
+    function transferAmount(bool _token, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint){
+        if (_amount >= 0) return 0;
+        if (_token){
+            (uint minVal, ) = minSats(_addr, _maturity, _amount, _strike);
+            return minVal-satCollateral[_addr][_maturity];
+        }
+        (uint minVal, ) = minSc(_addr, _maturity, _amount, _strike);
+        return minVal-scCollateral[_addr][_maturity];
     }
 }

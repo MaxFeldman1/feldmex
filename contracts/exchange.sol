@@ -452,22 +452,20 @@ contract exchange{
         //dt.approve(optionsAddress, satUnits, false);
         //give the seller the amount paid
         if (offer.call){
-            claimedToken[_seller] += offer.price * offer.amount;
-
-            (bool safe, uint transferAmount) = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount);
+            //uint expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
+            (bool safe, uint transferAmt) = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, offer.amount*satUnits);
             assert(safe);
+            claimedToken[_seller] += offer.price * offer.amount;
             //redeem the seller collateral that was not required
-            claimedToken[_seller] += (satUnits * offer.amount) - transferAmount;
-            //assert(optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
+            claimedToken[_seller] += (satUnits * offer.amount) - transferAmt;
         }
         else{
-            claimedStable[_seller] += offer.price * offer.amount;
-
-            (bool safe, uint transferAmount) = optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount);
+            //uint expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
+            (bool safe, uint transferAmt) = optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, offer.amount*scUnits*offer.strike);
             assert(safe);
+            claimedStable[_seller] += offer.price * offer.amount;
             //redeem seller collateral that was not required
-            claimedStable[_seller] += (scUnits * offer.amount * offer.strike) - transferAmount;
-            //assert(optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount));
+            claimedStable[_seller] += (scUnits * offer.amount * offer.strike) - transferAmt;
         }
         //clean storage
         delete linkedNodes[_name];
@@ -520,22 +518,19 @@ contract exchange{
         options optionsContract = options(optionsAddress);
         //give the seller the amount paid
         if (offer.call){
-            claimedToken[offer.offerer] += offer.price * offer.amount;
-
-            (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount);
+            (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*satUnits);
             assert(safe);
+            claimedToken[offer.offerer] += offer.price * offer.amount;
             //redeem the seller collateral that was not required
             claimedToken[offer.offerer] += (satUnits * offer.amount) - transferAmount;
-            //assert(optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
         }
         else{
-            claimedStable[offer.offerer] += offer.price * offer.amount;
 
-            (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount);
+            (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*scUnits*offer.strike);
             assert(safe);
+            claimedStable[offer.offerer] += offer.price * offer.amount;
             //redeem the seller collateral that was not required
             claimedStable[offer.offerer] += (scUnits * offer.amount * offer.strike) - transferAmount;
-            //assert(optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount));
         }
         //clean storage
         delete linkedNodes[_name];
@@ -558,34 +553,30 @@ contract exchange{
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
         require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
-        if (_call) require(claimedToken[msg.sender] >= satUnits * _amount);
-        else require(claimedStable[msg.sender] >= scUnits * _amount * _strike);
         //in each iteration we mint one contract
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
             if (offer.amount > _amount){
+                offers[node.hash].amount -= _amount;
                 options optionsContract = options(optionsAddress);
                 if (_call){
                     claimedToken[msg.sender] -= satUnits * _amount;
 
-                    (bool safe, uint transferAmount) = optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount);
+                    (bool safe, uint transferAmount) = optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, _amount*satUnits);
                     assert(safe);
                     //redeem the seller collateral that was not required
                     claimedToken[msg.sender] += (satUnits * _amount) - transferAmount;
-                    //assert(optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
                     claimedToken[msg.sender] += offer.price * _amount;
 
                 }
                 else {
                     claimedStable[msg.sender] -= scUnits * _amount * _strike;
-
-                    (bool safe, uint transferAmount) = optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount);
+                    uint limit = _amount*scUnits*offer.strike;
+                    (bool safe, uint transferAmount) = optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, limit);
                     assert(safe);
                     //redeem the seller collateral that was not required
                     claimedStable[msg.sender] += (scUnits * _amount * _strike) - transferAmount;
-                    //assert(optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount));
                     claimedStable[msg.sender] += offer.price * _amount;
                 }
-                offers[node.hash].amount -= _amount;
                 break;
             }
             _amount-=offer.amount;
@@ -613,30 +604,28 @@ contract exchange{
         require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
         while (_amount > 0 && node.name != 0 && claimedToken[msg.sender] >= offer.price && offer.price <= _limitPrice){
             if (offer.amount > _amount){
+                offers[node.hash].amount -= _amount;
                 options optionsContract = options(optionsAddress);
                 if (_call){
                     require(claimedToken[msg.sender] >= offer.price * _amount);
                     claimedToken[msg.sender] -= offer.price * _amount;
                     
-                    (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount);
+                    (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, _amount*satUnits);
                     assert(safe);
                     //redeem the seller collateral that was not required
                     claimedToken[offer.offerer] += (satUnits * _amount) - transferAmount;
-                    //assert(optionsContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
                     claimedToken[offer.offerer] += offer.price * _amount;
                 }
                 else {
                     require(claimedStable[msg.sender] >= offer.price * _amount);
                     claimedStable[msg.sender] -= offer.price * _amount;
-
-                    (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount);
+                    uint limit = _amount*scUnits*offer.strike;
+                    (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
                     assert(safe);
                     //redeem the seller collateral that was not used
                     claimedStable[offer.offerer] += (scUnits * _amount * _strike) - transferAmount;
-                    //assert(optionsContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount));
                     claimedStable[offer.offerer] += offer.price * _amount;
                 }
-                offers[node.hash].amount -= _amount;
                 break;
             }
             _amount-=offer.amount;

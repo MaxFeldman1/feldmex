@@ -557,4 +557,31 @@ contract('exchange', function(accounts) {
 			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
 		});
 	});
+
+	it('does not require excessive amount of collateral', function(){
+		newMaturity = 2*maturity;
+		return tokenInstance.transfer(receiverAccount, 10*transferAmount, true, {from: defaultAccount}).then(() => {
+			return tokenInstance.approve(exchange.address, 10*transferAmount, true, {from: defaultAccount});
+		}).then(() => {
+			return tokenInstance.approve(exchange.address, 10*transferAmount, true, {from: receiverAccount});
+		}).then(() => {
+			return stablecoinInstance.transfer(receiverAccount, 10*transferAmount*strike, true, {from: defaultAccount});
+		}).then(() => {
+			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike, true, {from: defaultAccount});
+		}).then(() => {
+			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike, true, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.depositFunds(price*amount, false, 10*transferAmount*strike, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.depositFunds(2*amount, true, 10*transferAmount*strike, true, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, true, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, true, {from: receiverAccount});
+		}).then(() => {
+			return;//return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: defaultAccount});
+		});
+	});
 });

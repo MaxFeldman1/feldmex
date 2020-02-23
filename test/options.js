@@ -53,7 +53,7 @@ contract('options', function(accounts){
 			maturity = res.timestamp;
 			return new Promise(resolve => setTimeout(resolve, 2000));
 		}).then((res) => {
-			return optionsInstance.mintCall(debtor, holder, maturity, strike, amount, {from: defaultAccount});
+			return optionsInstance.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
 		}).then(() => {
 			return optionsInstance.strikes(debtor, maturity, 0);
 		}).then((res) => {
@@ -103,7 +103,7 @@ contract('options', function(accounts){
 	it('mints and exercizes put options', function() {
 		return web3.eth.getBlock('latest').then((res) => {
 			maturity = res.timestamp+1;
-			return optionsInstance.mintPut(debtor, holder, maturity, strike, amount, {from: defaultAccount});
+			return optionsInstance.mintPut(debtor, holder, maturity, strike, amount, strike*scUnits*amount, {from: defaultAccount});
 		}).then(() => {
 			difference = 30;
 			return oracleInstance.set(strike - difference);
