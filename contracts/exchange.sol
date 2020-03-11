@@ -35,6 +35,10 @@ contract exchange{
         bytes32 hash
     );
 
+    event hit(
+        uint oof
+    );
+
     /*
         listHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
         the linked lists are ordered by price with the most enticing offers at the top near the head
@@ -58,7 +62,7 @@ contract exchange{
     //address of a digital asset that represents a unit of account such as DAI
     address stablecoinAddress;
     //address of the smart contract that handles the creation of calls and puts and thier subsequent redemption
-    address optionsAddress;
+    address payable optionsAddress;
     //incrementing identifier for each order that garunties unique hashes for all identifiers
     uint public totalOrders;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
@@ -67,7 +71,7 @@ contract exchange{
     uint scUnits;
 
     //variable occasionally used for testing purposes should not be present in production
-    //uint public testing;
+    uint public testing;
     
     /*  
         @Description: initialise globals and preform initial processes with the token and stablecoin contracts
@@ -76,7 +80,7 @@ contract exchange{
         @param address _stablecoinAddress: address that shall be assigned to stablecoinAddress
         @param address _optionsAddress: address that shall be assigned to optionsAddress
     */
-    constructor (address _dappAddress, address _stablecoinAddress, address _optionsAddress) public{
+    constructor (address _dappAddress, address _stablecoinAddress, address payable _optionsAddress) public{
         dappAddress = _dappAddress;
         optionsAddress = _optionsAddress;
         stablecoinAddress = _stablecoinAddress;
@@ -109,7 +113,7 @@ contract exchange{
         }
         if (_amountStable != 0){
             stablecoin sc = stablecoin(stablecoinAddress);
-            if (sc.transferFrom(msg.sender, address(this), _amountStable, _fullUnit))
+            if (sc.transferFrom(msg.sender, address(this), _amountStable, _fullUnitStable))
                 claimedStable[msg.sender]+=_amountStable *(_fullUnitStable ? scUnits : 1);
             else 
                 return false;
@@ -415,18 +419,23 @@ contract exchange{
         @return bool success: if an error occurs returns false if no error return true
     */
     function takeBuyOffer(address payable _seller, bytes32 _name) internal returns(bool success){
+
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
         require(offer.buy && _seller != offer.offerer);
         uint8 index = (offer.call? 0 : 2);
         //make sure the seller has sufficient collateral posted
+        options optionsContract = options(optionsAddress);
+        uint expectedAmt;
         if (offer.call){
-            require(claimedToken[_seller] >= satUnits * offer.amount);
-            claimedToken[_seller] -= satUnits * offer.amount;
+            expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
+            require(claimedToken[_seller] >= expectedAmt);
+            claimedToken[_seller] -= expectedAmt;
         }
         else{
-            require(claimedStable[_seller] >= scUnits * offer.amount * offer.strike);
-            claimedStable[_seller] -= scUnits * offer.amount * offer.strike;
+            expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
+            require(claimedStable[_seller] >= expectedAmt);
+            claimedStable[_seller] -= expectedAmt;
         }
 
         if (node.next != 0 && node.previous != 0){
@@ -448,24 +457,19 @@ contract exchange{
         }
         
         //now we make the trade happen
-        options optionsContract = options(optionsAddress);
-        //dt.approve(optionsAddress, satUnits, false);
-        //give the seller the amount paid
         if (offer.call){
-            //uint expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
-            (bool safe, uint transferAmt) = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, offer.amount*satUnits);
+            (bool safe, uint transferAmt) = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
             assert(safe);
             claimedToken[_seller] += offer.price * offer.amount;
-            //redeem the seller collateral that was not required
-            claimedToken[_seller] += (satUnits * offer.amount) - transferAmt;
+            //redeem seller collateral that was not required
+            claimedToken[_seller] += expectedAmt-transferAmt;
         }
-        else{
-            //uint expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
-            (bool safe, uint transferAmt) = optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, offer.amount*scUnits*offer.strike);
+        else{            
+            (bool safe, uint transferAmt) = optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
             assert(safe);
             claimedStable[_seller] += offer.price * offer.amount;
             //redeem seller collateral that was not required
-            claimedStable[_seller] += (scUnits * offer.amount * offer.strike) - transferAmt;
+            claimedStable[_seller] += expectedAmt - transferAmt;
         }
         //clean storage
         delete linkedNodes[_name];
@@ -549,38 +553,43 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order 
     */
     function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
+        if (!_call){
+            testing++;
+        }
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
-        require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
+        //require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
         //in each iteration we mint one contract
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
             if (offer.amount > _amount){
                 offers[node.hash].amount -= _amount;
                 options optionsContract = options(optionsAddress);
                 if (_call){
-                    claimedToken[msg.sender] -= satUnits * _amount;
-
-                    (bool safe, uint transferAmount) = optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, _amount*satUnits);
+                    uint expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(_amount), offer.strike);
+                    require(claimedToken[msg.sender] >= expectedAmt);
+                    claimedToken[msg.sender] -= expectedAmt;
+                    (bool safe, uint transferAmount) = optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     assert(safe);
                     //redeem the seller collateral that was not required
-                    claimedToken[msg.sender] += (satUnits * _amount) - transferAmount;
+                    claimedToken[msg.sender] += expectedAmt - transferAmount;
                     claimedToken[msg.sender] += offer.price * _amount;
 
                 }
                 else {
-                    claimedStable[msg.sender] -= scUnits * _amount * _strike;
-                    uint limit = _amount*scUnits*offer.strike;
-                    (bool safe, uint transferAmount) = optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, limit);
+                    uint expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(_amount), offer.strike);
+                    require(claimedStable[msg.sender] >= expectedAmt);
+                    claimedStable[msg.sender] -= expectedAmt;
+                    (bool safe, uint transferAmount) = optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     assert(safe);
                     //redeem the seller collateral that was not required
-                    claimedStable[msg.sender] += (scUnits * _amount * _strike) - transferAmount;
+                    claimedStable[msg.sender] += expectedAmt - transferAmount;
                     claimedStable[msg.sender] += offer.price * _amount;
                 }
                 break;
             }
             _amount-=offer.amount;
-            if (!takeBuyOffer(msg.sender, node.name)) break;
+            if (!takeBuyOffer(msg.sender, node.name)) {break;}
             //find the next offer
             node = linkedNodes[listHeads[_maturity][_strike][index]];
             offer = offers[node.hash];

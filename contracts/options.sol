@@ -436,10 +436,10 @@ contract options {
     function transferAmount(bool _token, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint){
         if (_amount >= 0) return 0;
         if (_token){
-            (uint minVal, ) = minSats(_addr, _maturity, _amount, _strike);
-            return minVal-satCollateral[_addr][_maturity];
+            (uint minCollateral, ) = minSats(_addr, _maturity, _amount, _strike);
+            return minCollateral-satCollateral[_addr][_maturity];
         }
-        (uint minVal, ) = minSc(_addr, _maturity, _amount, _strike);
-        return minVal-scCollateral[_addr][_maturity];
+        (uint minCollateral, ) = minSc(_addr, _maturity, _amount, _strike);
+        return minCollateral-scCollateral[_addr][_maturity];
     }
 }

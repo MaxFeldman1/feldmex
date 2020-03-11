@@ -555,6 +555,8 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.claimedStable(receiverAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
+			//now witdraw all funds from options smart contract for tidyness
+			return optionsInstance.withdrawFunds({from: receiverAccount});
 		});
 	});
 
@@ -571,17 +573,80 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike, true, {from: receiverAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(price*amount, false, 10*transferAmount*strike, true, {from: defaultAccount});
+		//------------------------------------------------------test with calls-------------------------------------
+			return exchangeInstance.depositFunds(price*amount, false, 0, false, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(2*amount, true, 10*transferAmount*strike, true, {from: receiverAccount});
+			return exchangeInstance.depositFunds(amount, true, 0, false, {from: receiverAccount});
 		}).then(() => {
+			//fist defaultAccount buys from receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, true, {from: receiverAccount});
-		}).then(() => {
+		}).then(() => {		
+			//second defaultAccount sells back to receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, true, {from: receiverAccount});
 		}).then(() => {
-			return;//return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: defaultAccount});
+			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, true, {from: defaultAccount});
+		}).then(() => {
+			//default account has funds in exchange contract while receiver account has funds in the options smart contract
+			return exchangeInstance.withdrawAllFunds(true, {from: defaultAccount});
+		}).then(() => {
+			return optionsInstance.withdrawFunds({from: receiverAccount});
+		}).then(() => {
+			/*
+				note that we need to deposit more collateral here because to post an order it must be fully collateralised
+			*/
+			return exchangeInstance.depositFunds(amount*(price+satUnits), false, 0, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.depositFunds(amount*(price+satUnits), false, 0, false, {from: receiverAccount});
+		}).then(() => {
+			//fist defaultAccount sells to receiver account
+			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: receiverAccount});
+		}).then(() => {		
+			//second defaultAccount sells back to receiver account
+			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, true, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: defaultAccount});
+		}).then(() => {
+		//----------------------------------------------test with puts--------------------------------------------
+			return exchangeInstance.depositFunds(0, false, price*amount, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.depositFunds(0, false, amount*strike, true, {from: receiverAccount});
+		}).then(() => {
+			//fist defaultAccount buys from receiver account
+			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, false, {from: receiverAccount});
+		}).then(() => {		
+			//second defaultAccount sells back to receiver account
+			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, false, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, false, {from: defaultAccount});
+		}).then(() => {
+			//default account has funds in exchange contract while receiver account has funds in the options smart contract
+			return exchangeInstance.withdrawAllFunds(false, {from: defaultAccount});
+		}).then(() => {
+			return optionsInstance.withdrawFunds({from: receiverAccount});
+		}).then(() => {
+			/*
+				note that we need to deposit more collateral here because to post an order it must be fully collateralised
+			*/
+			return exchangeInstance.depositFunds(0, false, amount*(price+scUnits*strike), false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.depositFunds(0, false, amount*(price+scUnits*strike), false, {from: receiverAccount});
+		}).then(() => {
+			//fist defaultAccount sells to receiver account
+			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, false, {from: receiverAccount});
+		}).then(() => {		
+			//second defaultAccount sells back to receiver account
+			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, false, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, false, {from: defaultAccount});
+		//*/
 		});
 	});
 });
