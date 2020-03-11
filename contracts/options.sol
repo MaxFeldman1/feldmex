@@ -431,7 +431,15 @@ contract options {
 
 
     /*
-    -----------ToDo Function description-----------------
+        @Description: used to find the amount by which a user's account would need to be funded for a user to make an order
+
+        @param bool _token: _token => call also !_token => put
+        @param address _addr: the user in question
+        @param uint _maturity: the maturity timestamp in question
+        @param int _amount: the amount of calls or puts in the order, positive amount means buy, negative amount means sell
+        @param uint _strike: the strike price in question
+
+        @return uint: the amount of satUnits or scUnits that must be sent as collateral for the order described to go through
     */
     function transferAmount(bool _token, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint){
         if (_amount >= 0) return 0;

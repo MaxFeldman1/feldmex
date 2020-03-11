@@ -35,10 +35,6 @@ contract exchange{
         bytes32 hash
     );
 
-    event hit(
-        uint oof
-    );
-
     /*
         listHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
         the linked lists are ordered by price with the most enticing offers at the top near the head
