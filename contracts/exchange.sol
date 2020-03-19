@@ -5,11 +5,16 @@ import "./stablecoin.sol";
 
 
 contract exchange{
-    //denominated in Underlying Token
-    mapping(address => uint) public claimedToken;
+    //denominated in Underlying Token satUnits
+    mapping(address => uint) claimedToken;
     
-    //denominated in the unit of account
-    mapping(address => uint) public claimedStable;
+    //denominated in the unit of account scUnits
+    mapping(address => uint) claimedStable;
+
+    //------------functions to view balances----------------
+    function viewClaimedToken() public view returns(uint){return claimedToken[msg.sender];}
+
+    function viewClaimedStable() public view returns(uint){return claimedStable[msg.sender];}
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{
