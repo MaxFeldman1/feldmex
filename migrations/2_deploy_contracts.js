@@ -13,5 +13,10 @@ module.exports = function(deployer) {
   	return deployer.deploy(options, oracle.address, DappToken.address, stablecoin.address);
   }).then(() => {
   	return deployer.deploy(exchange, DappToken.address, stablecoin.address, options.address);
+  }).then(() => {
+  	return options.deployed();
+  }).then((instance) => {
+  	optionsInstance = instance;
+  	return optionsInstance.setExchangeAddress(exchange.address);
   });
 };

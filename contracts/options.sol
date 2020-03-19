@@ -10,6 +10,10 @@ contract options {
     address dappAddress;
     //address of a digital asset that represents a unit of account such as DAI
     address stablecoinAddress;
+    //address of the exchange is allowed to see collateral requirements for all users
+    address exchangeAddress;
+    //deployer can set the exchange address once
+    address deployerAddress;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
@@ -28,12 +32,19 @@ contract options {
         oracleAddress = _oracleAddress;
         dappAddress = _dappAddress;
         stablecoinAddress = _stablecoinAddress;
+        exchangeAddress = msg.sender;
+        deployerAddress = msg.sender;
         DappToken dt = DappToken(dappAddress);
         satUnits = dt.satUnits();
         stablecoin sc = stablecoin(stablecoinAddress);
         scUnits = sc.scUnits();
     }
     
+    function setExchangeAddress(address _exchangeAddress) public {
+        require(exchangeAddress == deployerAddress && msg.sender == deployerAddress);
+        exchangeAddress = _exchangeAddress;
+    }
+
     /*
         callAmounts and putAmounts store the net position of each type of calls and puts respectively for each user at each matirity and strike
     */
@@ -461,6 +472,7 @@ contract options {
         @return uint: the amount of satUnits or scUnits that must be sent as collateral for the order described to go through
     */
     function transferAmount(bool _token, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint){
+        require(msg.sender == _addr || msg.sender == exchangeAddress);
         if (_amount >= 0) return 0;
         if (_token){
             (uint minCollateral, ) = minSats(_addr, _maturity, _amount, _strike);

@@ -130,4 +130,19 @@ contract('options', function(accounts){
 			return;
 		});
 	});
+
+	it('sets exchange address only once', function(){
+		return optionsInstance.setExchangeAddress(oracle.address).catch((err) => {
+			//res will only be defined if the above call fails
+			return "Caught";
+		}).then((res) => {
+			assert.equal(res, "Caught", "cannot set exchange address multiple times");
+			return optionsInstance.transferAmount(true, holder, maturity, amount, strike, {from: debtor});
+		}).catch((err) => {
+			//res will only be defined if the above call fails
+			return "Caught";
+		}).then((res) => {
+			assert.equal(res, "Caught", "users cannot see the collateral requirements of other users");
+		});
+	})
 });
