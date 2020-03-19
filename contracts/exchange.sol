@@ -32,7 +32,21 @@ contract exchange{
     }
     
     event offerPosted(
-        bytes32 hash
+        bytes32 name,
+        uint maturity,
+        uint strike,
+        uint price,
+        uint amount,
+        uint index
+    );
+
+    event offerCalceled(
+        bytes32 name
+    );
+
+    event offerAccepted(
+        bytes32 name,
+        uint amount
     );
 
     /*
@@ -211,7 +225,7 @@ contract exchange{
                 linkedNodes[listHeads[_maturity][_strike][index]].previous = name;
             }
             listHeads[_maturity][_strike][index] = name;
-            emit offerPosted(hash);
+            emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
             return;
         }
         linkedNode memory previousNode;
@@ -226,7 +240,7 @@ contract exchange{
         if (offers[previousNode.hash].price == 0){
             linkedNodes[name] = linkedNode(hash, name, currentNode.name, 0);
             linkedNodes[currentNode.name].next = name;
-            emit offerPosted(hash);
+            emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
             return;
         }
         //if this is the last node
@@ -234,7 +248,7 @@ contract exchange{
             linkedNodes[name] = linkedNode(hash, name, 0, previousNode.name);
             linkedNodes[currentNode.name].previous = name;
             linkedNodes[previousNode.name].next = name;
-            emit offerPosted(hash);
+            emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
             return;
         }
         //it falls somewhere in the middle of the chain
@@ -242,7 +256,7 @@ contract exchange{
             linkedNodes[name] = linkedNode(hash, name, currentNode.name, previousNode.name);
             linkedNodes[currentNode.name].previous = name;
             linkedNodes[previousNode.name].next = name;
-            emit offerPosted(hash);
+            emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
             return;
         }
     }
@@ -310,7 +324,7 @@ contract exchange{
                 linkedNodes[name] = linkedNode(hash, name, 0, previousNode.name);
                 linkedNodes[currentNode.name].previous = name;
                 linkedNodes[previousNode.name].next = name;
-                emit offerPosted(hash);
+                emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
                 return;
             }
             //it falls somewhere in the middle of the chain
@@ -318,7 +332,7 @@ contract exchange{
                 linkedNodes[name] = linkedNode(hash, name, currentNode.name, previousNode.name);
                 linkedNodes[currentNode.name].previous = name;
                 linkedNodes[previousNode.name].next = name;
-                emit offerPosted(hash);
+                emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
                 return;
             }
 
@@ -343,7 +357,7 @@ contract exchange{
                 linkedNodes[name] = linkedNode(hash, name, nextNode.name, 0);
                 linkedNodes[nextNode.name].previous = name;
                 listHeads[_maturity][_strike][index] = name;
-                emit offerPosted(hash);
+                emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
                 return; 
             }
             //falls somewhere in the middle of the list
@@ -351,7 +365,7 @@ contract exchange{
                 linkedNodes[name] = linkedNode(hash, name, nextNode.name, currentNode.name);
                 linkedNodes[nextNode.name].previous = name;
                 linkedNodes[currentNode.name].next = name;
-                emit offerPosted(hash);
+                emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
                 return;
             }
         }
@@ -393,6 +407,7 @@ contract exchange{
             linkedNodes[node.next].previous = 0;
             listHeads[offers[node.hash].maturity][offers[node.hash].strike][index] = node.next;
         }
+        emit offerCalceled(_name);
         delete linkedNodes[_name];
         delete offers[node.hash];
         if (index == 0)
@@ -451,7 +466,7 @@ contract exchange{
             linkedNodes[node.next].previous = 0;
             listHeads[offer.maturity][offer.strike][index] = node.next;
         }
-        
+        emit offerAccepted(_name, offer.amount);
         //now we make the trade happen
         if (offer.call){
             (bool safe, uint transferAmt) = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
@@ -513,7 +528,7 @@ contract exchange{
             linkedNodes[node.next].previous = 0;
             listHeads[offer.maturity][offer.strike][index] = node.next;
         }
-        
+        emit offerAccepted(_name, offer.amount);
         //now we make the trade happen
         options optionsContract = options(optionsAddress);
         //give the seller the amount paid
@@ -560,6 +575,7 @@ contract exchange{
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
             if (offer.amount > _amount){
                 offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
                 options optionsContract = options(optionsAddress);
                 if (_call){
                     uint expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(_amount), offer.strike);
@@ -610,6 +626,7 @@ contract exchange{
         while (_amount > 0 && node.name != 0 && claimedToken[msg.sender] >= offer.price && offer.price <= _limitPrice){
             if (offer.amount > _amount){
                 offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
                 options optionsContract = options(optionsAddress);
                 if (_call){
                     require(claimedToken[msg.sender] >= offer.price * _amount);
