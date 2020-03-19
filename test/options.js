@@ -55,13 +55,13 @@ contract('options', function(accounts){
 		}).then((res) => {
 			return optionsInstance.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
 		}).then(() => {
-			return optionsInstance.strikes(debtor, maturity, 0);
+			return optionsInstance.viewStrikes(maturity, {from: debtor});
 		}).then((res) => {
-			assert.equal(res.toNumber(), strike, "the correct strike is added");
-			return optionsInstance.callAmounts(debtor, maturity, strike);
+			assert.equal(res[0].toNumber(), strike, "the correct strike is added");
+			return optionsInstance.viewCallAmounts(maturity, strike, {from: debtor});
 		}).then((res) => {
 			assert.equal(res.toNumber(), -amount, "debtor holds negative amount of contracts");
-			return optionsInstance.callAmounts(holder, maturity, strike);
+			return optionsInstance.viewCallAmounts(maturity, strike, {from: holder});
 		}).then((res) => {
 			assert.equal(res.toNumber(), amount, "holder holds positive amount of contracts");
 		}).then(() => {
@@ -69,20 +69,20 @@ contract('options', function(accounts){
 		}).then(() => {
 			return optionsInstance.claim(maturity, {from: holder});
 		}).then(() => {
-			return optionsInstance.callAmounts(debtor, maturity, strike);
+			return optionsInstance.viewCallAmounts(maturity, strike, {from: debtor});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "debtor's contracts have been exerciced");
-			return optionsInstance.callAmounts(holder, maturity, strike);
+			return optionsInstance.viewCallAmounts(maturity, strike, {from: holder});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "holder's contracts have been exerciced");
 		});
 	});
 
 	it('distributes funds correctly', function(){
-		return optionsInstance.claimedTokens(debtor).then((res) => {
+		return optionsInstance.viewClaimedTokens({from: debtor}).then((res) => {
 			payout = Math.floor(amount*satUnits*(finalSpot-strike)/finalSpot);
 			assert.equal(res.toNumber(), satUnits*amount - (payout+1), "debtor repaid correct amount");
-			return optionsInstance.claimedTokens(holder);
+			return optionsInstance.viewClaimedTokens({from: holder});
 		}).then((res) => {
 			assert.equal(res.toNumber(), payout, "holder compensated sufficiently")
 			return;
@@ -116,7 +116,7 @@ contract('options', function(accounts){
 		}).then(() => {
 			return optionsInstance.withdrawFunds({from: debtor});
 		}).then(() => {
-			return optionsInstance.claimedStable(holder);
+			return optionsInstance.viewClaimedStable({from: holder});
 		}).then((res) => {
 			claimedSc = res.toNumber();
 			return optionsInstance.withdrawFunds({from: holder});

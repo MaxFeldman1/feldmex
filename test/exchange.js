@@ -210,14 +210,14 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.claimedToken(defaultAccount);
 		}).then((res) => {
 			defaultTotal = res.toNumber();
-			return optionsInstance.claimedTokens(receiverAccount);
+			return optionsInstance.viewClaimedTokens({from: receiverAccount});
 		}).then((res) => {
 			optRecTotal = res.toNumber();
 			assert.equal(defaultTotal, 10*transferAmount*satUnits, "defaultAccount has correct balance");
 			return exchangeInstance.claimedToken(receiverAccount);
 		}).then((res) => {
 			recTotal = res.toNumber();
-			return optionsInstance.claimedTokens(receiverAccount);
+			return optionsInstance.viewClaimedTokens({from: receiverAccount});
 		}).then((res) => {
 			recTotal += res.toNumber();			
 			assert.equal(recTotal, 10*transferAmount*satUnits, "recieverAccount has the correct balance");
@@ -305,7 +305,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.claimedStable(receiverAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber(), receiverAccountBalance, "receiver account balance is correct");
-			return optionsInstance.putAmounts(defaultAccount, maturity, strike);
+			return optionsInstance.viewPutAmounts(maturity, strike, {from: defaultAccount});
 		}).then((res) => {
 			halfPutAmount = res.toNumber();
 			return;
@@ -375,7 +375,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.price.toNumber(), price, "the price of the last node order is correct");
 			assert.equal(res.amount.toNumber(), amount-firstBuyAmount-1, "the amount has decremented correctly");
 			//return exchangeInstance.cancelOrder(head, {from: defaultAccount})
-			return optionsInstance.putAmounts(defaultAccount, maturity, strike);
+			return optionsInstance.viewPutAmounts(maturity, strike, {from: defaultAccount});
 		}).then((res) => {
 			//aggregate impact of market orders on both accounts
 			defaultAccountBalance += amount*(price-5000) + (firstBuyAmount+1)*price;
@@ -383,7 +383,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.claimedStable(defaultAccount);
 		}).then((res) => {
 			defaultTotal = res.toNumber();
-			return optionsInstance.claimedStable(defaultAccount);
+			return optionsInstance.viewClaimedStable({from: defaultAccount});
 		}).then((res) => {
 			defaultTotal += res.toNumber();
 			//add (halfPutAmount*strike*scUnits) to make up for the amount that was bought and then sold as we subtracted it out when puts were sold

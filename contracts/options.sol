@@ -38,44 +38,63 @@ contract options {
         callAmounts and putAmounts store the net position of each type of calls and puts respectively for each user at each matirity and strike
     */
     //address => maturity => strike => amount of calls
-    mapping(address => mapping(uint => mapping(uint => int))) public callAmounts;
+    mapping(address => mapping(uint => mapping(uint => int))) callAmounts;
     
     //address => maturity => strike => amount of puts
-    mapping(address => mapping(uint => mapping(uint => int))) public putAmounts;
+    mapping(address => mapping(uint => mapping(uint => int))) putAmounts;
 
     /*
         claimedTokens and claimedStable refers to the amount of the underlying and stablecoin respectively that each user may withdraw
     */
     //denominated in satUnits
-    mapping(address => uint) public claimedTokens;
+    mapping(address => uint) claimedTokens;
     //denominated in scUnits
-    mapping(address => uint) public claimedStable;
+    mapping(address => uint) claimedStable;
 
     /*
         satCollateral maps each user to the amount of collateral in the underlying that they have locked at each maturuty for calls
         scCollateral maps each user to the amount of collateral in stablecoin that they have locked at each maturity for puts
     */
     //address => maturity => amount (denominated in satUnits)
-    mapping(address => mapping(uint => uint)) public satCollateral;
+    mapping(address => mapping(uint => uint)) satCollateral;
     //address => maturity => amount (denominated in scUnits)
-    mapping(address => mapping(uint => uint)) public scCollateral;
+    mapping(address => mapping(uint => uint)) scCollateral;
 
 
     /*
         strikes maps each user to the strikes that they have traded calls or puts on for each maturity
     */
     //address => maturity => array of strikes
-    mapping(address => mapping(uint => uint[])) public strikes;
+    mapping(address => mapping(uint => uint[])) strikes;
 
     /*
         satDeduction is the amount of underlying asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for calls
         scDeduction is the amount of stablecoin collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for puts
     */
     //address => maturity => amount of collateral not required //denominated in satUnits
-    mapping(address => mapping(uint => uint)) public satDeduction;
+    mapping(address => mapping(uint => uint)) satDeduction;
     //address => maturity => amount of collateral not required //denominated in scUnits
-    mapping(address => mapping(uint => uint)) public scDeduction;
+    mapping(address => mapping(uint => uint)) scDeduction;
     
+    //---------------------view functions---------------
+    function viewCallAmounts(uint _maturity, uint _strike) public view returns (int){return callAmounts[msg.sender][_maturity][_strike];}
+
+    function viewPutAmounts(uint _maturity, uint _strike) public view returns (int){return putAmounts[msg.sender][_maturity][_strike];}
+
+    function viewClaimedTokens() public view returns(uint){return claimedTokens[msg.sender];}
+
+    function viewClaimedStable() public view returns(uint){return claimedStable[msg.sender];}
+
+    function viewSatCollateral(uint _maturity) public view returns(uint){return satCollateral[msg.sender][_maturity];}
+
+    function viewScCollateral(uint _maturity) public view returns(uint){return scCollateral[msg.sender][_maturity];}
+
+    function viewStrikes(uint _maturity) public view returns(uint[] memory){return strikes[msg.sender][_maturity];}
+
+    function viewSatDeduction(uint _maturity) public view returns(uint){return satDeduction[msg.sender][_maturity];}
+
+    function viewScDeduction(uint _maturity) public view returns(uint){return scDeduction[msg.sender][_maturity];}
+    //---------------------end view functions-----------
 
     /*
         @Description: handles the logistics of creating a long call position for the holder and short call position for the debtor
