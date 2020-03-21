@@ -58,10 +58,10 @@ contract('options', function(accounts){
 			return optionsInstance.viewStrikes(maturity, {from: debtor});
 		}).then((res) => {
 			assert.equal(res[0].toNumber(), strike, "the correct strike is added");
-			return optionsInstance.viewCallAmounts(maturity, strike, {from: debtor});
+			return optionsInstance.balanceOf(debtor, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), -amount, "debtor holds negative amount of contracts");
-			return optionsInstance.viewCallAmounts(maturity, strike, {from: holder});
+			return optionsInstance.balanceOf(holder, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), amount, "holder holds positive amount of contracts");
 		}).then(() => {
@@ -69,10 +69,10 @@ contract('options', function(accounts){
 		}).then(() => {
 			return optionsInstance.claim(maturity, {from: holder});
 		}).then(() => {
-			return optionsInstance.viewCallAmounts(maturity, strike, {from: debtor});
+			return optionsInstance.balanceOf(debtor, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "debtor's contracts have been exerciced");
-			return optionsInstance.viewCallAmounts(maturity, strike, {from: holder});
+			return optionsInstance.balanceOf(holder, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "holder's contracts have been exerciced");
 		});
@@ -145,4 +145,79 @@ contract('options', function(accounts){
 			assert.equal(res, "Caught", "users cannot see the collateral requirements of other users");
 		});
 	})
+
+	it('Implenents ERC 20', function(){
+		maturity *= 2;
+		strike = 50;
+		return tokenInstance.transfer(debtor, 1000, true, {from: defaultAccount}).then(() => {
+			return stablecoinInstance.transfer(debtor, 1000*strike, true, {from: defaultAccount})
+		}).then(() => {
+			return tokenInstance.approve(options.address, 1000, true, {from: defaultAccount});
+		}).then(() => {
+			return stablecoinInstance.approve(options.address, 1000*strike, true, {from: defaultAccount});
+		}).then(() => {
+			return tokenInstance.approve(options.address, 1000, true, {from: debtor});
+		}).then(() => {
+			return stablecoinInstance.approve(options.address, 1000*strike, true, {from: debtor});
+		}).then(() => {
+			return optionsInstance.depositFunds(900, true, 1000*strike, true, {from: defaultAccount});
+		}).then(() => {
+			return optionsInstance.depositFunds(1000, true, 1000*strike, true, {from: debtor});
+		}).then(() => {
+			amount = 10;
+			return optionsInstance.transfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});
+		}).then(() => {
+			return optionsInstance.balanceOf(debtor, maturity, strike, true);
+		}).then((res) => {
+			assert.equal(res.toNumber(), amount, "correct amount for the debtor");
+			return optionsInstance.balanceOf(defaultAccount, maturity, strike, true);
+		}).then((res) => {
+			assert.equal(res.toNumber(), -amount, "correct amount for the defaultAccount");
+			return optionsInstance.viewSatCollateral(maturity, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(res.toNumber(), amount*satUnits, "correct amount of collateral required for "+defaultAccount);
+			return optionsInstance.viewSatCollateral(maturity, {from: debtor});
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "correct amount of collateral required from "+debtor);
+			return optionsInstance.viewSatDeduction(maturity, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "correct sat deduction for "+defaultAccount);
+			return optionsInstance.viewSatDeduction(maturity, {from: debtor});
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "correct sat deduction for "+debtor);
+			return optionsInstance.transfer(debtor, amount, maturity, strike, amount*strike*scUnits, false, {from: defaultAccount});
+		}).then(() => {
+			newStrike = strike+10;
+			return optionsInstance.approve(defaultAccount, amount, maturity, newStrike, false, {from: debtor});
+		}).then(() => {
+			return optionsInstance.transferFrom(debtor, defaultAccount, amount, maturity, newStrike, amount*newStrike*scUnits, false, {from: defaultAccount});
+		}).then(() => {
+			return optionsInstance.balanceOf(debtor, maturity, strike, false);
+		}).then((res) => {
+			assert.equal(res.toNumber(), amount, "correct put balance at strike "+strike+" for "+debtor);
+			return optionsInstance.balanceOf(debtor, maturity, newStrike, false);
+		}).then((res) => {
+			assert.equal(res.toNumber(), -amount, "correct put balance at strike "+newStrike+" for "+debtor);
+			return optionsInstance.balanceOf(defaultAccount, maturity, strike, false);
+		}).then((res) => {
+			assert.equal(res.toNumber(), -amount, "correct put balance at strike "+strike+" for "+defaultAccount);
+			return optionsInstance.balanceOf(defaultAccount, maturity, newStrike, false);
+		}).then((res) => {
+			assert.equal(res.toNumber(), amount, "correct put balance at strike "+newStrike+" for "+defaultAccount);
+			return optionsInstance.viewScCollateral(maturity, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(res.toNumber(), 0, "correct amount of collateral for "+defaultAccount);
+			return optionsInstance.viewScCollateral(maturity, {from: debtor});
+		}).then((res) => {
+			assert.equal(res.toNumber(), (newStrike-strike)*amount*scUnits, "correct amount of collateral for "+debtor);
+			return optionsInstance.viewScDeduction(maturity, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(res.toNumber(), strike*amount*scUnits, "correct SC Deduction for "+defaultAccount);
+			return optionsInstance.viewScDeduction(maturity, {from: debtor});
+		}).then((res) => {
+			assert.equal(res.toNumber(), strike*amount*scUnits, "correct SC deduction for "+debtor);
+		});
+		//debtor ---- short 50 long 60 ---- liabilities 50 minSc 0 minVal 50
+		//default --- long 50 short 60 ---- liabilities 60 minSc 10 minVal 50
+	});
 });

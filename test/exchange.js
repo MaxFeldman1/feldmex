@@ -305,7 +305,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.viewClaimedStable({from: receiverAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), receiverAccountBalance, "receiver account balance is correct");
-			return optionsInstance.viewPutAmounts(maturity, strike, {from: defaultAccount});
+			return optionsInstance.balanceOf(defaultAccount, maturity, strike, false);
 		}).then((res) => {
 			halfPutAmount = res.toNumber();
 			return;
@@ -375,7 +375,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.price.toNumber(), price, "the price of the last node order is correct");
 			assert.equal(res.amount.toNumber(), amount-firstBuyAmount-1, "the amount has decremented correctly");
 			//return exchangeInstance.cancelOrder(head, {from: defaultAccount})
-			return optionsInstance.viewPutAmounts(maturity, strike, {from: defaultAccount});
+			return optionsInstance.balanceOf(defaultAccount, maturity, strike, false);
 		}).then((res) => {
 			//aggregate impact of market orders on both accounts
 			defaultAccountBalance += amount*(price-5000) + (firstBuyAmount+1)*price;

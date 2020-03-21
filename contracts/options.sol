@@ -86,26 +86,6 @@ contract options {
     mapping(address => mapping(uint => uint)) satDeduction;
     //address => maturity => amount of collateral not required //denominated in scUnits
     mapping(address => mapping(uint => uint)) scDeduction;
-    
-    //---------------------view functions---------------
-    function viewCallAmounts(uint _maturity, uint _strike) public view returns (int){return callAmounts[msg.sender][_maturity][_strike];}
-
-    function viewPutAmounts(uint _maturity, uint _strike) public view returns (int){return putAmounts[msg.sender][_maturity][_strike];}
-
-    function viewClaimedTokens() public view returns(uint){return claimedTokens[msg.sender];}
-
-    function viewClaimedStable() public view returns(uint){return claimedStable[msg.sender];}
-
-    function viewSatCollateral(uint _maturity) public view returns(uint){return satCollateral[msg.sender][_maturity];}
-
-    function viewScCollateral(uint _maturity) public view returns(uint){return scCollateral[msg.sender][_maturity];}
-
-    function viewStrikes(uint _maturity) public view returns(uint[] memory){return strikes[msg.sender][_maturity];}
-
-    function viewSatDeduction(uint _maturity) public view returns(uint){return satDeduction[msg.sender][_maturity];}
-
-    function viewScDeduction(uint _maturity) public view returns(uint){return scDeduction[msg.sender][_maturity];}
-    //---------------------end view functions-----------
 
     /*
         @Description: handles the logistics of creating a long call position for the holder and short call position for the debtor
@@ -121,9 +101,9 @@ contract options {
             if this limit needs to be broken to mint the call the transaction will return (true, 0)
 
         @return bool success: if an error occurs returns false if no error return true
-        @return uint transferAmount: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
+        @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintCall(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmount){
+    function mintCall(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         require(_debtor != _holder);
         DappToken dt = DappToken(dappAddress);
         //satDeduction == liabilities - minSats
@@ -132,10 +112,10 @@ contract options {
         (uint debtorMinSats, uint debtorLiabilities) = minSats(_debtor, _maturity, -int(_amount), _strike);
         (uint holderMinSats, uint holderLiabilities) = minSats(_holder, _maturity, int(_amount), _strike);
 
-        transferAmount = debtorMinSats - satCollateral[_debtor][_maturity];
-        if (transferAmount > _maxTransfer) return(false, 0);
-        require(dt.transferFrom(msg.sender, address(this), transferAmount, false));
-        satCollateral[_debtor][_maturity] += transferAmount; // == debtorMinSats
+        transferAmt = debtorMinSats - satCollateral[_debtor][_maturity];
+        if (transferAmt > _maxTransfer) return(false, 0);
+        require(dt.transferFrom(msg.sender, address(this), transferAmt, false));
+        satCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSats
         claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
         satCollateral[_holder][_maturity] = holderMinSats;
 
@@ -146,7 +126,7 @@ contract options {
         callAmounts[_holder][_maturity][_strike] += int(_amount);
         if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
         if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
-        return (true, transferAmount);
+        return (true, transferAmt);
     }
 
 
@@ -164,9 +144,9 @@ contract options {
             if this limit needs to be broken to mint the put the transaction will return (false, 0)
 
         @return bool success: if an error occurs returns false if no error return true
-        @return uint transferAmount: returns the amount of stablecoin that was transfered from the message sender to act as collateral for the debtor
+        @return uint transferAmt: returns the amount of stablecoin that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintPut(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmount){
+    function mintPut(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         require(_debtor != _holder);
         stablecoin sc = stablecoin(stablecoinAddress);
         //scDeduction == liabilities - minSc
@@ -175,10 +155,10 @@ contract options {
         (uint debtorMinSc, uint debtorLiabilities) = minSc(_debtor, _maturity, -int(_amount), _strike);
         (uint holderMinSc, uint holderLiabilities) = minSc(_holder, _maturity, int(_amount), _strike);
 
-        transferAmount = debtorMinSc - scCollateral[_debtor][_maturity];
-        if (transferAmount > _maxTransfer) return (false, 0);
-        require(sc.transferFrom(msg.sender,  address(this), transferAmount, false));
-        scCollateral[_debtor][_maturity] += transferAmount; // == debtorMinSc
+        transferAmt = debtorMinSc - scCollateral[_debtor][_maturity];
+        if (transferAmt > _maxTransfer) return (false, 0);
+        require(sc.transferFrom(msg.sender,  address(this), transferAmt, false));
+        scCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSc
         claimedStable[_holder] += scCollateral[_holder][_maturity] - holderMinSc;
         scCollateral[_holder][_maturity] = holderMinSc;
 
@@ -189,7 +169,7 @@ contract options {
         putAmounts[_holder][_maturity][_strike] += int(_amount);
         if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
         if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
-        return (true, transferAmount);
+        return (true, transferAmt);
     }
     
     /*
@@ -252,12 +232,12 @@ contract options {
         if (_sats > 0){
             DappToken dt = DappToken(dappAddress);
             require(dt.transferFrom(msg.sender, address(this), _sats, _fullToken));
-            claimedTokens[msg.sender] += _sats;
+            claimedTokens[msg.sender] += _sats*(_fullToken? satUnits: 1);
         }
         if (_sc > 0){
             stablecoin sc = stablecoin(stablecoinAddress);
             require(sc.transferFrom(msg.sender, address(this), _sc, _fullSc));
-            claimedStable[msg.sender] += _sc;
+            claimedStable[msg.sender] += _sc*(_fullSc? scUnits: 1);
         }
         return true;
     }
@@ -287,7 +267,7 @@ contract options {
         @param uint _strike: the strike price in question
 
         @return bool: returns true if strike[_addr][_maturity] contains _strike otherwise returns false
-    */    
+    */
     function contains(address _addr, uint _maturity, uint _strike)internal view returns(bool){
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             if (strikes[_addr][_maturity][i] == _strike) return true;
@@ -481,4 +461,152 @@ contract options {
         (uint minCollateral, ) = minSc(_addr, _maturity, _amount, _strike);
         return minCollateral-scCollateral[_addr][_maturity];
     }
+
+    //------------------------------------------------------------------------------------E-R-C---2-0---I-m-p-l-e-m-e-n-t-a-t-i-o-n---------------------------
+    //-------Implenentation helpers-------------------
+    
+    event Transfer(
+        address indexed _from,
+        address indexed _to,
+        uint256 _value,
+        uint256 _maturity,
+        uint256 _strike,
+        bool _call
+    );
+
+    event Approval(
+        address indexed _owner,
+        address indexed _spender,
+        uint256 _value,
+        uint256 _maturity,
+        uint256 _strike,
+        bool _call
+    );
+
+    //approver => spender => maturity => strike => amount of calls
+    mapping(address => mapping(address => mapping(uint => mapping(uint => uint)))) callAllowance;
+    
+    //approver => spender => strike => amount of puts
+    mapping(address => mapping(address => mapping(uint => mapping(uint => uint)))) putAllowance;
+    
+    string public name = "Feldmex";
+
+    /*
+        the total supply will always be zero as all long positions(positive values) are canceled out by all short positions(negative values)
+        this applys for both calls and puts at all maturities and strikes
+    */
+
+    uint256 public totalSupply = 0;
+    
+    /*
+        @Description: this function takes from claimedTokens[msg.sender] as the source of needed collateral instead of calling transferFrom
+            which would take the funds from msg.sender directly
+            msg.sender needs to have sufficent funds deposited in this contract before calling this function
+
+    */
+    function transferCall(address _from, address _to, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns(bool success, uint transferAmt){
+        require(_from != _to);
+        if (_amount == 0) return(true, 0);
+        //satDeduction == liabilities - minSats
+        //minSats == liabilities - satDeduction
+        //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
+        (uint debtorMinSats, uint debtorLiabilities) = minSats(_from, _maturity, -int(_amount), _strike);
+        (uint toMinSats, uint toLiabilities) = minSats(_to, _maturity, int(_amount), _strike);
+
+        transferAmt = debtorMinSats - satCollateral[_from][_maturity];
+        if (transferAmt > _maxTransfer || claimedTokens[_from] < transferAmt) return(false, 0);
+        claimedTokens[_from] -= transferAmt;
+        satCollateral[_from][_maturity] += transferAmt; // == debtorMinSats
+        
+        claimedTokens[_to] += satCollateral[_to][_maturity] - toMinSats;
+        satCollateral[_to][_maturity] = toMinSats;
+
+        satDeduction[_from][_maturity] = debtorLiabilities-debtorMinSats;
+        satDeduction[_to][_maturity] = toLiabilities-toMinSats;
+
+        callAmounts[_from][_maturity][_strike] -= int(_amount);
+        callAmounts[_to][_maturity][_strike] += int(_amount);
+        
+        if (!contains(_from, _maturity, _strike)) strikes[_from][_maturity].push(_strike);
+        if (!contains(_to, _maturity, _strike)) strikes[_to][_maturity].push(_strike);
+        return (true, transferAmt);
+    }
+
+    function transferPut(address _from, address _to, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns(bool success, uint transferAmt){
+        require(_from != _to);
+        if (_amount == 0) return(true, 0);
+        //scDeduction == liabilities - minSc
+        //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
+        //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
+        (uint debtorMinSc, uint debtorLiabilities) = minSc(_from, _maturity, -int(_amount), _strike);
+        (uint toMinSc, uint toLiabilities) = minSc(_to, _maturity, int(_amount), _strike);
+
+        transferAmt = debtorMinSc - scCollateral[_from][_maturity];
+        if (transferAmt > _maxTransfer || claimedStable[_from] < transferAmt) return (false, 0);
+        claimedStable[_from] -= transferAmt;
+        scCollateral[_from][_maturity] += transferAmt; // == debtorMinSc
+
+        claimedStable[_to] += scCollateral[_to][_maturity] - toMinSc;
+        scCollateral[_to][_maturity] = toMinSc;
+
+        scDeduction[_from][_maturity] = debtorLiabilities-debtorMinSc;
+        scDeduction[_to][_maturity] = toLiabilities-toMinSc;
+
+        putAmounts[_from][_maturity][_strike] -= int(_amount);
+        putAmounts[_to][_maturity][_strike] += int(_amount);
+        
+        if (!contains(_from, _maturity, _strike)) strikes[_from][_maturity].push(_strike);
+        if (!contains(_to, _maturity, _strike)) strikes[_to][_maturity].push(_strike);
+        return (true, transferAmt);
+    }
+
+    function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
+        emit Transfer(msg.sender, _to, _value, _maturity, _strike, _call);
+        if (_call) return transferCall(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
+        return transferPut(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
+    }
+
+    function approve(address _spender, uint256 _value, uint _maturity, uint _strike, bool _call) public returns(bool success){
+        emit Approval(msg.sender, _spender, _value, _maturity, _strike, _call);
+        if (_call) callAllowance[msg.sender][_spender][_maturity][_strike] = _value;
+        else putAllowance[msg.sender][_spender][_maturity][_strike] = _value;
+        return true;
+    }
+
+    function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
+        require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
+        emit Transfer(_from, _to, _value, _maturity, _strike, _call);
+        if (_call) {
+            callAllowance[_from][msg.sender][_maturity][_strike] -= _value;
+            return transferCall(_from, _to, _maturity, _strike, _value, _maxTransfer);
+        }
+        putAllowance[_from][msg.sender][_maturity][_strike] -= _value;
+        return transferPut(_from, _to, _maturity, _strike, _value, _maxTransfer);
+    }
+
+    function allowance(address _owner, address _spender, uint _maturity, uint _strike, bool _call) public view returns(uint256 remaining){
+        if (_call) return callAllowance[_owner][_spender][_maturity][_strike];
+        return putAllowance[_owner][_spender][_maturity][_strike];
+    }
+
+    function balanceOf(address _owner, uint _maturity, uint _strike, bool _call) public view returns(int256 balance){
+        if (_call) return callAmounts[_owner][_maturity][_strike];
+        return putAmounts[_owner][_maturity][_strike];
+    }
+
+    //---------------------view functions---------------
+    function viewClaimedTokens() public view returns(uint){return claimedTokens[msg.sender];}
+
+    function viewClaimedStable() public view returns(uint){return claimedStable[msg.sender];}
+
+    function viewSatCollateral(uint _maturity) public view returns(uint){return satCollateral[msg.sender][_maturity];}
+
+    function viewScCollateral(uint _maturity) public view returns(uint){return scCollateral[msg.sender][_maturity];}
+
+    function viewStrikes(uint _maturity) public view returns(uint[] memory){return strikes[msg.sender][_maturity];}
+
+    function viewSatDeduction(uint _maturity) public view returns(uint){return satDeduction[msg.sender][_maturity];}
+
+    function viewScDeduction(uint _maturity) public view returns(uint){return scDeduction[msg.sender][_maturity];}
+    //---------------------end view functions-----------
 }
