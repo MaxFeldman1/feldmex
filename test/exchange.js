@@ -12,6 +12,7 @@ var amount = 10;
 var strike = 100;
 var amount = 10;
 var transferAmount = 1000;
+var feeDenominator = 5000;
 var satUnits;
 var scUnits;
 var oracleInstance;
@@ -46,14 +47,19 @@ contract('exchange', function(accounts) {
 			return web3.eth.getAccounts();
 		}).then((accts) => {
 			accounts = accts;
-			defaultAccount = accounts[0];
-			receiverAccount = accounts[1];
+			originAccount = accounts[0]
+			defaultAccount = accounts[1];
+			receiverAccount = accounts[2];
 			return tokenInstance.satUnits();
 		}).then((res) => {
 			satUnits = res.toNumber();
 			return stablecoinInstance.scUnits();
 		}).then((res) => {
 			scUnits = res.toNumber();
+			return tokenInstance.transfer(defaultAccount, 21000000, true, {from: originAccount});
+		}).then(() => {
+			return stablecoinInstance.transfer(defaultAccount, 21000000, true, {from: originAccount});
+		}).then(() => {
 			return tokenInstance.transfer(receiverAccount, 10*transferAmount, true, {from: defaultAccount});
 		}).then(() => {
 			return tokenInstance.approve(exchange.address, 10*transferAmount, true, {from: defaultAccount});
@@ -125,6 +131,10 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			//we have not updated the receiverAccountBalance yet so we will aggregate the impact of all orders here
 			receiverAccountBalance -= (satUnits*2*amount) - (amount*(2*price-10000));
+			//account for the fees
+			fee = Math.floor((firstSellAmount*price)/feeDenominator) + Math.floor(((amount-firstSellAmount)*price)/feeDenominator)
+				+ Math.floor((price-10000)/feeDenominator) + Math.floor((amount-1)*(price-10000)/feeDenominator);
+			receiverAccountBalance-=fee;
 			return exchangeInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
 			assert.equal(res, defaultBytes32, "after orderbook has been emptied there are no orders");
@@ -213,14 +223,14 @@ contract('exchange', function(accounts) {
 			return optionsInstance.viewClaimedTokens({from: receiverAccount});
 		}).then((res) => {
 			optRecTotal = res.toNumber();
-			assert.equal(defaultTotal, 10*transferAmount*satUnits, "defaultAccount has correct balance");
+			assert.equal(defaultTotal, 10*transferAmount*satUnits - fee, "defaultAccount has correct balance");
 			return exchangeInstance.viewClaimedToken({from: receiverAccount});
 		}).then((res) => {
 			recTotal = res.toNumber();
 			return optionsInstance.viewClaimedTokens({from: receiverAccount});
 		}).then((res) => {
 			recTotal += res.toNumber();			
-			assert.equal(recTotal, 10*transferAmount*satUnits, "recieverAccount has the correct balance");
+			assert.equal(recTotal, 10*transferAmount*satUnits - fee, "recieverAccount has the correct balance");
 			return;
 		});
 	});
@@ -269,7 +279,7 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.price.toNumber(), price, "the price is correct in the third node in the linkedList");
 			defaultAccountBalance += (price+10000)*amount;
-			return exchangeInstance.cancelOrder(head);
+			return exchangeInstance.cancelOrder(head, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 2);
 		}).then((res) => {
@@ -299,6 +309,9 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.amount, amount-firstSellAmount-1, "the amount in the orders after three orders is still correct");
 			receiverAccountBalance -= (amount+firstSellAmount+1)*strike*scUnits -(amount*(price+5000)+(1+firstSellAmount)*price);
+			//account for fees
+			fee = Math.floor((6*(price+5000))/feeDenominator)+Math.floor((4*(price+5000))/feeDenominator)+Math.floor(7*price/feeDenominator);
+			receiverAccountBalance -= fee;
 			return exchangeInstance.viewClaimedStable({from: defaultAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), defaultAccountBalance, "default account balance is correct");
@@ -386,8 +399,9 @@ contract('exchange', function(accounts) {
 			return optionsInstance.viewClaimedStable({from: defaultAccount});
 		}).then((res) => {
 			defaultTotal += res.toNumber();
+			fee = Math.floor((6*(price-5000))/feeDenominator)+Math.floor((4*(price-5000))/feeDenominator)+Math.floor(7*price/feeDenominator);
 			//add (halfPutAmount*strike*scUnits) to make up for the amount that was bought and then sold as we subtracted it out when puts were sold
-			defaultAccountBalance += (halfPutAmount*strike*scUnits);
+			defaultAccountBalance += (halfPutAmount*strike*scUnits) - fee;
 			assert.equal(defaultTotal, defaultAccountBalance, "defaultAccount has the correct balance");
 			return exchangeInstance.viewClaimedStable({from: receiverAccount});
 		}).then((res) => {
@@ -576,7 +590,7 @@ contract('exchange', function(accounts) {
 		//------------------------------------------------------test with calls-------------------------------------
 			return exchangeInstance.depositFunds(price*amount, false, 0, false, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(amount, true, 0, false, {from: receiverAccount});
+			return exchangeInstance.depositFunds(amount*satUnits + Math.floor(price*amount/feeDenominator), false, 0, false, {from: receiverAccount});
 		}).then(() => {
 			//fist defaultAccount buys from receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, true, {from: defaultAccount});
@@ -613,7 +627,7 @@ contract('exchange', function(accounts) {
 		//----------------------------------------------test with puts--------------------------------------------
 			return exchangeInstance.depositFunds(0, false, price*amount, false, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(0, false, amount*strike, true, {from: receiverAccount});
+			return exchangeInstance.depositFunds(0, false, amount*strike*scUnits + Math.floor(price*amount/feeDenominator), false, {from: receiverAccount});
 		}).then(() => {
 			//fist defaultAccount buys from receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, false, {from: defaultAccount});

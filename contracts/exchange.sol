@@ -78,15 +78,18 @@ contract exchange{
     address stablecoinAddress;
     //address of the smart contract that handles the creation of calls and puts and thier subsequent redemption
     address payable optionsAddress;
+    //address to which to credit all exchange fees
+    address payable deployerAddress;
     //incrementing identifier for each order that garunties unique hashes for all identifiers
-    uint public totalOrders;
+    uint totalOrders;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint scUnits;
-
+    //fee == (pricePaid)/feeDenominator
+    uint feeDenominator = 5000;
     //variable occasionally used for testing purposes should not be present in production
-    uint public testing;
+    //uint public testing;
     
     /*  
         @Description: initialise globals and preform initial processes with the token and stablecoin contracts
@@ -99,6 +102,7 @@ contract exchange{
         dappAddress = _dappAddress;
         optionsAddress = _optionsAddress;
         stablecoinAddress = _stablecoinAddress;
+        deployerAddress = msg.sender;
         totalOrders = 1;
         DappToken dt = DappToken(dappAddress);
         satUnits = dt.satUnits();
@@ -476,14 +480,18 @@ contract exchange{
         if (offer.call){
             (bool safe, uint transferAmt) = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
             assert(safe);
-            claimedToken[_seller] += offer.price * offer.amount;
+            uint fee = offer.price*offer.amount/feeDenominator;
+            claimedToken[deployerAddress] += fee;
+            claimedToken[_seller] += offer.price * offer.amount - fee;
             //redeem seller collateral that was not required
             claimedToken[_seller] += expectedAmt-transferAmt;
         }
         else{            
             (bool safe, uint transferAmt) = optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
             assert(safe);
-            claimedStable[_seller] += offer.price * offer.amount;
+            uint fee = offer.price*offer.amount/feeDenominator;
+            claimedStable[deployerAddress] += fee;
+            claimedStable[_seller] += offer.price * offer.amount - fee;
             //redeem seller collateral that was not required
             claimedStable[_seller] += expectedAmt - transferAmt;
         }
@@ -540,7 +548,9 @@ contract exchange{
         if (offer.call){
             (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*satUnits);
             assert(safe);
-            claimedToken[offer.offerer] += offer.price * offer.amount;
+            uint fee = offer.price*offer.amount/feeDenominator;
+            claimedToken[deployerAddress] += fee;
+            claimedToken[offer.offerer] += offer.price * offer.amount - fee;
             //redeem the seller collateral that was not required
             claimedToken[offer.offerer] += (satUnits * offer.amount) - transferAmount;
         }
@@ -548,7 +558,9 @@ contract exchange{
 
             (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*scUnits*offer.strike);
             assert(safe);
-            claimedStable[offer.offerer] += offer.price * offer.amount;
+            uint fee = offer.price*offer.amount/feeDenominator;
+            claimedStable[deployerAddress] += fee;
+            claimedStable[offer.offerer] += offer.price * offer.amount - fee;
             //redeem the seller collateral that was not required
             claimedStable[offer.offerer] += (scUnits * offer.amount * offer.strike) - transferAmount;
         }
@@ -569,9 +581,6 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order 
     */
     function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
-        if (!_call){
-            testing++;
-        }
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
@@ -589,9 +598,10 @@ contract exchange{
                     (bool safe, uint transferAmount) = optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     assert(safe);
                     //redeem the seller collateral that was not required
+                    uint fee = offer.price*_amount/feeDenominator;
+                    claimedToken[deployerAddress] += fee;
+                    claimedToken[msg.sender] += offer.price * _amount - fee;
                     claimedToken[msg.sender] += expectedAmt - transferAmount;
-                    claimedToken[msg.sender] += offer.price * _amount;
-
                 }
                 else {
                     uint expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(_amount), offer.strike);
@@ -600,8 +610,10 @@ contract exchange{
                     (bool safe, uint transferAmount) = optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     assert(safe);
                     //redeem the seller collateral that was not required
+                    uint fee = offer.price * _amount/feeDenominator;
+                    claimedStable[deployerAddress] += fee;
+                    claimedStable[msg.sender] += offer.price * _amount - fee;
                     claimedStable[msg.sender] += expectedAmt - transferAmount;
-                    claimedStable[msg.sender] += offer.price * _amount;
                 }
                 break;
             }
@@ -640,8 +652,10 @@ contract exchange{
                     (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, _amount*satUnits);
                     assert(safe);
                     //redeem the seller collateral that was not required
+                    uint fee = offer.price * _amount/feeDenominator;
+                    claimedToken[deployerAddress] += fee;
+                    claimedToken[offer.offerer] += offer.price * _amount - fee;
                     claimedToken[offer.offerer] += (satUnits * _amount) - transferAmount;
-                    claimedToken[offer.offerer] += offer.price * _amount;
                 }
                 else {
                     require(claimedStable[msg.sender] >= offer.price * _amount);
@@ -650,8 +664,10 @@ contract exchange{
                     (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
                     assert(safe);
                     //redeem the seller collateral that was not used
+                    uint fee = offer.price * _amount/feeDenominator;
+                    claimedStable[deployerAddress] += fee;
+                    claimedStable[offer.offerer] += offer.price * _amount - fee;
                     claimedStable[offer.offerer] += (scUnits * _amount * _strike) - transferAmount;
-                    claimedStable[offer.offerer] += offer.price * _amount;
                 }
                 break;
             }
