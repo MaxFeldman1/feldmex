@@ -12,9 +12,10 @@ contract exchange{
     mapping(address => uint) claimedStable;
 
     //------------functions to view balances----------------
-    function viewClaimedToken() public view returns(uint){return claimedToken[msg.sender];}
+    function viewClaimed(bool _token) public view returns(uint){return _token? claimedToken[msg.sender] : claimedStable[msg.sender];}
+    //function viewClaimedToken() public view returns(uint){return claimedToken[msg.sender];}
 
-    function viewClaimedStable() public view returns(uint){return claimedStable[msg.sender];}
+    //function viewClaimedStable() public view returns(uint){return claimedStable[msg.sender];}
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{
@@ -103,7 +104,6 @@ contract exchange{
         optionsAddress = _optionsAddress;
         stablecoinAddress = _stablecoinAddress;
         deployerAddress = msg.sender;
-        totalOrders = 1;
         DappToken dt = DappToken(dappAddress);
         satUnits = dt.satUnits();
         dt.approve(optionsAddress, 2**255, false);
@@ -112,6 +112,17 @@ contract exchange{
         sc.approve(optionsAddress, 2**255, false);
     }
     
+    /*
+        @Description: allows the deployer to set a new fee
+
+        @param uint _feeDenominator: the value which will be the denominator in the fee on all transactions
+            fee == (amount*priceOfOption)/feeDenominator
+    */
+    function setFee(uint _feeDeonominator) public {
+        require(msg.sender == deployerAddress && _feeDeonominator >= 500);
+        feeDenominator = _feeDeonominator;
+    }
+
     /*
         @Description: deposit funds in this contract, funds tracked by the claimedToken and claimedStable mappings
 
@@ -165,28 +176,21 @@ contract exchange{
 
     }
     
-    //------The following set of functions relate to management of the marketplace
-    
     /*
-        @Description: creates a hash of a given order by which it will it will be identified
-            offers[returnValue] == _offer
-        @return bytes32: key in offers mapping
+        @Description: creates two hashes to be keys in the linkedNodes and the offers mapping
+
+        @param Offer _offer: the offer for which to make the identifiers
+
+        @return bytes32 _hash: key in offers mapping
+        @return bytes32 _name: key in linkedNodes mapping
     */
-    function orderHasher(Offer memory _offer) internal view returns(bytes32){
-        return keccak256(abi.encodePacked(_offer.maturity, _offer.strike, _offer.price, _offer.offerer, _offer.buy, _offer.call, now));
-    }
-    
-    /*
-        @Description: returns a unique identifier by which the node corresponding to each order may be accesse
-            linkedNodes[returnValue].hash == _offerHash
-        @return bytes32: key in linkedNodes mapping
-    */
-    function nodeHasher(bytes32 _offerHash) internal returns(bytes32){
+    function hasher(Offer memory _offer) internal returns(bytes32 _hash, bytes32 _name){
+        bytes32 ret1 =  keccak256(abi.encodePacked(_offer.maturity, _offer.strike, _offer.price, _offer.offerer, _offer.buy, _offer.call, totalOrders));
         totalOrders++;
-        return keccak256(abi.encodePacked(_offerHash, now, totalOrders));
+        return (ret1, keccak256(abi.encodePacked(ret1, now, totalOrders)));
     }
-    
-    
+
+
     /*
         @Description: creates an order and posts it in one of the 4 linked lists depending on if it is a buy or sell order and if it is for calls or puts
 
@@ -221,10 +225,8 @@ contract exchange{
             index = 3;
         }
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
-        //buyOffer identifier
-        bytes32 hash = orderHasher(offer);
-        //linkedNode identifier
-        bytes32 name = nodeHasher(hash);
+        //get hashes
+        (bytes32 hash, bytes32 name) = hasher(offer);
         offers[hash] = offer;
         //set current node to the head node
         linkedNode memory currentNode = linkedNodes[listHeads[_maturity][_strike][index]];
@@ -312,10 +314,8 @@ contract exchange{
         }
 
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
-        //buyOffer identifier
-        bytes32 hash = orderHasher(offer);
-        //linkedNode identifier
-        bytes32 name = nodeHasher(hash);
+        //get hashes
+        (bytes32 hash, bytes32 name) = hasher(offer);
         //if we need to traverse down the list further away from the list head
         linkedNode memory currentNode = linkedNodes[_name];
         if ((_buy &&  offers[currentNode.hash].price >= _price) || (!_buy  && offers[currentNode.hash].price <= _price)){

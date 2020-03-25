@@ -76,11 +76,11 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return exchangeInstance.depositFunds(10*transferAmount, true, 10*transferAmount*strike, true, {from: receiverAccount});
 		}).then(() => {
-			return exchangeInstance.viewClaimedToken({from: defaultAccount});
+			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 10*satUnits*transferAmount, "correct amount of collateral claimed for " + defaultAccount);
 			defaultAccountBalance = res.toNumber();
-			return exchangeInstance.viewClaimedToken({from: receiverAccount});
+			return exchangeInstance.viewClaimed(true, {from: receiverAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 10*satUnits*transferAmount, "correct amount of collateral claimed for " + receiverAccount);
 			receiverAccountBalance = res.toNumber();
@@ -151,10 +151,10 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res, defaultBytes32, "the order cancellation has been recognized");
 			//now we make sure the balances of each user are correct
-			return exchangeInstance.viewClaimedToken({from: defaultAccount});
+			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), defaultAccountBalance, "default Account balance is correct");
-			return exchangeInstance.viewClaimedToken({from: receiverAccount});
+			return exchangeInstance.viewClaimed(true, {from: receiverAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), receiverAccountBalance, "receiver Account balance is correct");
 			return;
@@ -162,8 +162,8 @@ contract('exchange', function(accounts) {
 	});
 
 	it('can post and take sell orders of calls', function(){
-		return exchangeInstance.viewClaimedToken({from: defaultAccount}).then((res) => {
-			return exchangeInstance.viewClaimedToken({from: receiverAccount});
+		return exchangeInstance.viewClaimed(true, {from: defaultAccount}).then((res) => {
+			return exchangeInstance.viewClaimed(true, {from: receiverAccount});
 		}).then((res) => {
 			return exchangeInstance.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});			
 		}).then(() => {
@@ -217,14 +217,14 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
 			assert.equal(res, defaultBytes32, "the order cancellation has been recognized");
-			return exchangeInstance.viewClaimedToken({from: defaultAccount});
+			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
 		}).then((res) => {
 			defaultTotal = res.toNumber();
 			return optionsInstance.viewClaimedTokens({from: receiverAccount});
 		}).then((res) => {
 			optRecTotal = res.toNumber();
 			assert.equal(defaultTotal, 10*transferAmount*satUnits - fee, "defaultAccount has correct balance");
-			return exchangeInstance.viewClaimedToken({from: receiverAccount});
+			return exchangeInstance.viewClaimed(true, {from: receiverAccount});
 		}).then((res) => {
 			recTotal = res.toNumber();
 			return optionsInstance.viewClaimedTokens({from: receiverAccount});
@@ -236,11 +236,11 @@ contract('exchange', function(accounts) {
 	});
 
 	it('can post and take buy orders of puts', function(){
-		return exchangeInstance.viewClaimedStable({from: defaultAccount}).then((res) => {
+		return exchangeInstance.viewClaimed(false, {from: defaultAccount}).then((res) => {
 			receiverAccountPosition = 0;
 			defaultAccountPosition = 0;
 			defaultAccountBalance = res.toNumber();
-			return exchangeInstance.viewClaimedStable({from: receiverAccount});
+			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			receiverAccountBalance = res.toNumber();
 			defaultAccountBalance -= price*amount;
@@ -312,10 +312,10 @@ contract('exchange', function(accounts) {
 			//account for fees
 			fee = Math.floor((6*(price+5000))/feeDenominator)+Math.floor((4*(price+5000))/feeDenominator)+Math.floor(7*price/feeDenominator);
 			receiverAccountBalance -= fee;
-			return exchangeInstance.viewClaimedStable({from: defaultAccount});
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), defaultAccountBalance, "default account balance is correct");
-			return exchangeInstance.viewClaimedStable({from: receiverAccount});
+			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), receiverAccountBalance, "receiver account balance is correct");
 			return optionsInstance.balanceOf(defaultAccount, maturity, strike, false);
@@ -326,9 +326,9 @@ contract('exchange', function(accounts) {
 	});
 
 	it('can post and take sell orders of puts', function(){
-		return exchangeInstance.viewClaimedStable({from: defaultAccount}).then((res) => {
+		return exchangeInstance.viewClaimed(false, {from: defaultAccount}).then((res) => {
 			defaultAccountBalance = res.toNumber();
-			return exchangeInstance.viewClaimedStable({from: receiverAccount});
+			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			receiverAccountBalance = res.toNumber();
 			defaultAccountBalance -= strike*amount*scUnits;
@@ -393,7 +393,7 @@ contract('exchange', function(accounts) {
 			//aggregate impact of market orders on both accounts
 			defaultAccountBalance += amount*(price-5000) + (firstBuyAmount+1)*price;
 			receiverAccountBalance -= amount*(price-5000) + (firstBuyAmount+1)*price;
-			return exchangeInstance.viewClaimedStable({from: defaultAccount});
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
 			defaultTotal = res.toNumber();
 			return optionsInstance.viewClaimedStable({from: defaultAccount});
@@ -403,7 +403,7 @@ contract('exchange', function(accounts) {
 			//add (halfPutAmount*strike*scUnits) to make up for the amount that was bought and then sold as we subtracted it out when puts were sold
 			defaultAccountBalance += (halfPutAmount*strike*scUnits) - fee;
 			assert.equal(defaultTotal, defaultAccountBalance, "defaultAccount has the correct balance");
-			return exchangeInstance.viewClaimedStable({from: receiverAccount});
+			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), receiverAccountBalance, "receiverAccount has the correct balance");
 		});
@@ -513,9 +513,9 @@ contract('exchange', function(accounts) {
 	});
 
 	it('withdraws funds', function(){
-		return exchangeInstance.viewClaimedToken({from: defaultAccount}).then((res) => {
+		return exchangeInstance.viewClaimed(true, {from: defaultAccount}).then((res) => {
 			defTokens = res.toNumber();
-			return exchangeInstance.viewClaimedToken({from: receiverAccount});
+			return exchangeInstance.viewClaimed(true, {from: receiverAccount});
 		}).then((res) => {
 			recTokens = res.toNumber();
 			return tokenInstance.addrBalance(defaultAccount, false);
@@ -534,17 +534,17 @@ contract('exchange', function(accounts) {
 			return tokenInstance.addrBalance(receiverAccount, false);
 		}).then((res) => {
 			assert.equal(res.toNumber(), recTokens+recBalance, "awarded correct amount");
-			return exchangeInstance.viewClaimedToken({from: defaultAccount});
+			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
-			return exchangeInstance.viewClaimedToken({from: receiverAccount});
+			return exchangeInstance.viewClaimed(true, {from: receiverAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
 			//now test for the same for stablecoin
-			return exchangeInstance.viewClaimedStable({from: defaultAccount});
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
 			defStable = res.toNumber();
-			return exchangeInstance.viewClaimedStable({from: receiverAccount});
+			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			recStable = res.toNumber();
 			return stablecoinInstance.addrBalance(defaultAccount, false);
@@ -563,10 +563,10 @@ contract('exchange', function(accounts) {
 			return stablecoinInstance.addrBalance(receiverAccount, false);
 		}).then((res) => {
 			assert.equal(res.toNumber(), recStable+recBalance, "awarded correct amount");
-			return exchangeInstance.viewClaimedStable({from: defaultAccount});
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
-			return exchangeInstance.viewClaimedStable({from: receiverAccount});
+			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
 			//now witdraw all funds from options smart contract for tidyness
@@ -663,4 +663,28 @@ contract('exchange', function(accounts) {
 		//*/
 		});
 	});
+	it ('changes the fee', function(){
+		return exchangeInstance.setFee(1000, {from: originAccount}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OK", "Successfully changed the fee");
+			return exchangeInstance.setFee(400, {from: originAccount});
+		}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", "Fee change was stopped because fee was too high");
+			return exchangeInstance.setFee(800, {from: recieverAccount});
+		}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", "Fee change was stopped because the sender was not the deployer");
+		});
+	});
+
 });
