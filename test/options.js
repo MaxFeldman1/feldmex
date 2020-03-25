@@ -220,4 +220,30 @@ contract('options', function(accounts){
 		//debtor ---- short 50 long 60 ---- liabilities 50 minSc 0 minVal 50
 		//default --- long 50 short 60 ---- liabilities 60 minSc 10 minVal 50
 	});
+
+	it ('changes the fee', function(){
+		deployer = defaultAccount;
+		nonDeployer = reciverAccount;
+		return optionsInstance.setFee(1000, {from: deployer}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OK", "Successfully changed the fee");
+			return optionsInstance.setFee(400, {from: deployer});
+		}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", "Fee change was stopped because fee was too high");
+			return optionsInstance.setFee(800, {from: nonDeployer});
+		}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", "Fee change was stopped because the sender was not the deployer");
+		});
+	});
 });

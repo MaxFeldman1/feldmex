@@ -18,6 +18,8 @@ contract options {
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint scUnits;
+    //fee == (pricePaid)/feeDenominator
+    uint public feeDenominator = 2**255;
     //variable occasionally used for testing purposes should not be present in production
     uint public testing;
     
@@ -43,6 +45,17 @@ contract options {
     function setExchangeAddress(address _exchangeAddress) public {
         require(exchangeAddress == deployerAddress && msg.sender == deployerAddress);
         exchangeAddress = _exchangeAddress;
+    }
+
+    /*
+        @Description: allows the deployer to set a new fee
+
+        @param uint _feeDenominator: the value which will be the denominator in the fee on all transactions
+            fee == (amount*priceOfOption)/feeDenominator
+    */
+    function setFee(uint _feeDeonominator) public {
+        require(msg.sender == deployerAddress && _feeDeonominator >= 500);
+        feeDenominator = _feeDeonominator;
     }
 
     /*
@@ -199,11 +212,15 @@ contract options {
         delete strikes[msg.sender][_maturity];
         if (callValue > satDeduction[msg.sender][_maturity]){
             callValue -= satDeduction[msg.sender][_maturity];
-            claimedTokens[msg.sender] += callValue;
+            uint fee = callValue/feeDenominator;
+            claimedTokens[deployerAddress] += fee;
+            claimedTokens[msg.sender] += callValue - fee;
         }
         if (putValue > scDeduction[msg.sender][_maturity]){
             putValue -= scDeduction[msg.sender][_maturity];
-            claimedStable[msg.sender] += putValue;
+            uint fee = putValue/feeDenominator;
+            claimedStable[deployerAddress] += fee;
+            claimedStable[msg.sender] += putValue - fee;
         }
         return true;
     }
