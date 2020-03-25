@@ -19,21 +19,21 @@ contract('DappToken', function(accounts) {
 			return dappInstance.satUnits.call();
 		}).then((sats) => {
 			satUnits = sats.toNumber();
-			return dappInstance.addrBalance(accountTo, true);
+			return dappInstance.balanceOf(accountTo);
 		}).then((balance) => {
 			toStartBalance = balance;
-			return dappInstance.addrBalance(accountFrom, true);
+			return dappInstance.balanceOf(accountFrom);
 		}).then((balance) => {
 			fromStartBalance = balance;
-			return dappInstance.transfer(accountTo, transferAmount, true, {from: accountFrom});
+			return dappInstance.transfer(accountTo, transferAmount*satUnits, {from: accountFrom});
 		}).then((reciept) => {
 			assert.equal(reciept.logs[0].args._value, transferAmount*satUnits, 'tokens transfer returns true');
-			return dappInstance.addrBalance(accountTo, true);
+			return dappInstance.balanceOf(accountTo);
 		}).then((balance) => {
-			assert.equal(balance-toStartBalance, transferAmount, 'amount credited to toAccount');
-			return dappInstance.addrBalance(accountFrom, true);
+			assert.equal(balance-toStartBalance, transferAmount*satUnits, 'amount credited to toAccount');
+			return dappInstance.balanceOf(accountFrom);
 		}).then((balance) => {
-			assert.equal(fromStartBalance-balance, transferAmount, 'amount debited from fromAccount');
+			assert.equal(fromStartBalance-balance, transferAmount*satUnits, 'amount debited from fromAccount');
 			return;
 		});
 	});

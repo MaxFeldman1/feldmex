@@ -132,7 +132,7 @@ contract options {
 
         transferAmt = debtorMinSats - satCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return(false, 0);
-        require(dt.transferFrom(msg.sender, address(this), transferAmt, false));
+        require(dt.transferFrom(msg.sender, address(this), transferAmt));
         satCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSats
         claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
         satCollateral[_holder][_maturity] = holderMinSats;
@@ -238,7 +238,7 @@ contract options {
         DappToken dt = DappToken(dappAddress);
         uint funds = claimedTokens[msg.sender];
         claimedTokens[msg.sender] = 0;
-        assert(dt.transfer(msg.sender, funds, false));
+        assert(dt.transfer(msg.sender, funds));
         stablecoin sc = stablecoin(stablecoinAddress);
         funds = claimedStable[msg.sender];
         claimedStable[msg.sender] = 0;
@@ -250,11 +250,11 @@ contract options {
         @Description: allows for users to deposit funds that are not tided up as collateral
             these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and stablecoins respectively
     */
-    function depositFunds(uint _sats, bool _fullToken, uint _sc, bool _fullSc) public returns(bool success){
+    function depositFunds(uint _sats, uint _sc, bool _fullSc) public returns(bool success){
         if (_sats > 0){
             DappToken dt = DappToken(dappAddress);
-            require(dt.transferFrom(msg.sender, address(this), _sats, _fullToken));
-            claimedTokens[msg.sender] += _sats*(_fullToken? satUnits: 1);
+            require(dt.transferFrom(msg.sender, address(this), _sats));
+            claimedTokens[msg.sender] += _sats;
         }
         if (_sc > 0){
             stablecoin sc = stablecoin(stablecoinAddress);

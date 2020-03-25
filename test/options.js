@@ -40,7 +40,7 @@ contract('options', function(accounts){
 			return stablecoinInstance.scUnits();
 		}).then((res) => {
 			scUnits = res.toNumber()
-			return tokenInstance.approve(options.address, 1000, true, {from: defaultAccount});
+			return tokenInstance.approve(options.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
 			return stablecoinInstance.approve(options.address, 1000, true, {from: defaultAccount});
 		}).then(() => {
@@ -94,7 +94,7 @@ contract('options', function(accounts){
 		return optionsInstance.withdrawFunds({from: debtor}).then(() => {
 			return optionsInstance.withdrawFunds({from: holder});
 		}).then(() => {
-			return tokenInstance.addrBalance(options.address, false);
+			return tokenInstance.balanceOf(options.address);
 		}).then((res) => {
 			assert.equal(res.toNumber() <= 2, true, "non excessive amount of funds left");
 		});
@@ -149,20 +149,20 @@ contract('options', function(accounts){
 	it('Implenents ERC 20', function(){
 		maturity *= 2;
 		strike = 50;
-		return tokenInstance.transfer(debtor, 1000, true, {from: defaultAccount}).then(() => {
+		return tokenInstance.transfer(debtor, 1000*satUnits, {from: defaultAccount}).then(() => {
 			return stablecoinInstance.transfer(debtor, 1000*strike, true, {from: defaultAccount})
 		}).then(() => {
-			return tokenInstance.approve(options.address, 1000, true, {from: defaultAccount});
+			return tokenInstance.approve(options.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
 			return stablecoinInstance.approve(options.address, 1000*strike, true, {from: defaultAccount});
 		}).then(() => {
-			return tokenInstance.approve(options.address, 1000, true, {from: debtor});
+			return tokenInstance.approve(options.address, 1000*satUnits, {from: debtor});
 		}).then(() => {
 			return stablecoinInstance.approve(options.address, 1000*strike, true, {from: debtor});
 		}).then(() => {
-			return optionsInstance.depositFunds(900, true, 1000*strike, true, {from: defaultAccount});
+			return optionsInstance.depositFunds(900*satUnits, 1000*strike, true, {from: defaultAccount});
 		}).then(() => {
-			return optionsInstance.depositFunds(1000, true, 1000*strike, true, {from: debtor});
+			return optionsInstance.depositFunds(1000*satUnits, 1000*strike, true, {from: debtor});
 		}).then(() => {
 			amount = 10;
 			return optionsInstance.transfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});

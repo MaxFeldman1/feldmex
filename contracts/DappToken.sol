@@ -19,8 +19,8 @@ contract DappToken {
         uint256 _value
     );
 
-    mapping(address => uint256) balanceOf;
-    mapping(address => mapping(address => uint256)) allowance;
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
 
     constructor (uint256 _initialSupply) public {
         if (_initialSupply == 0)
@@ -29,9 +29,7 @@ contract DappToken {
         totalSupply = _initialSupply;
     }
 
-    function transfer(address _to, uint256 _value, bool _fullUnit) public returns (bool success) {
-        if (_fullUnit)
-            _value*=satUnits;
+    function transfer(address _to, uint256 _value) public returns (bool success) {
         require(balanceOf[msg.sender] >= _value);
 
         balanceOf[msg.sender] -= _value;
@@ -42,9 +40,7 @@ contract DappToken {
         return true;
     }
 
-    function approve(address _spender, uint256 _value, bool _fullUnit) public returns (bool success) {
-        if (_fullUnit)
-            _value*=satUnits;
+    function approve(address _spender, uint256 _value) public returns (bool success) {
         allowance[msg.sender][_spender] = _value;
 
         emit Approval(msg.sender, _spender, _value);
@@ -52,9 +48,7 @@ contract DappToken {
         return true;
     }
 
-    function transferFrom(address _from, address _to, uint256 _value, bool _fullUnit) public returns (bool success) {
-        if (_fullUnit)
-            _value*=satUnits;
+    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
         require(_value <= balanceOf[_from]);
         require(_value <= allowance[_from][msg.sender]);
 
@@ -68,11 +62,4 @@ contract DappToken {
         return true;
     }
     
-    function addrBalance(address _addr, bool _fullUnit) public view returns (uint) {
-        return (balanceOf[_addr])/((_fullUnit)? satUnits: 1);
-    }
-    
-    function addrAllowance(address _holder, address _spender, bool _fullUnit) public view returns (uint) {
-        return (allowance[_holder][_spender])/((_fullUnit)? satUnits : 1);
-    }
 }
