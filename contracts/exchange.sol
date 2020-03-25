@@ -109,7 +109,7 @@ contract exchange{
         dt.approve(optionsAddress, 2**255);
         stablecoin sc = stablecoin(stablecoinAddress);
         scUnits = sc.scUnits();
-        sc.approve(optionsAddress, 2**255, false);
+        sc.approve(optionsAddress, 2**255);
     }
     
     /*
@@ -133,7 +133,7 @@ contract exchange{
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function depositFunds(uint _amount, uint _amountStable, bool _fullUnitStable) public returns(bool success){
+    function depositFunds(uint _amount, uint _amountStable) public returns(bool success){
         if (_amount != 0){
             DappToken dt = DappToken(dappAddress);
             if (dt.transferFrom(msg.sender, address(this), _amount))
@@ -143,8 +143,8 @@ contract exchange{
         }
         if (_amountStable != 0){
             stablecoin sc = stablecoin(stablecoinAddress);
-            if (sc.transferFrom(msg.sender, address(this), _amountStable, _fullUnitStable))
-                claimedStable[msg.sender]+=_amountStable *(_fullUnitStable ? scUnits : 1);
+            if (sc.transferFrom(msg.sender, address(this), _amountStable))
+                claimedStable[msg.sender]+=_amountStable;
             else 
                 return false;
         }
@@ -171,7 +171,7 @@ contract exchange{
             require(val > 0);
             stablecoin sc = stablecoin(stablecoinAddress);
             claimedStable[msg.sender] = 0;
-            return sc.transfer(msg.sender, val, false);
+            return sc.transfer(msg.sender, val);
         }
 
     }

@@ -58,7 +58,7 @@ contract('exchange', function(accounts) {
 			scUnits = res.toNumber();
 			return tokenInstance.transfer(defaultAccount, 21000000*satUnits, {from: originAccount});
 		}).then(() => {
-			return stablecoinInstance.transfer(defaultAccount, 21000000, true, {from: originAccount});
+			return stablecoinInstance.transfer(defaultAccount, 21000000*scUnits, {from: originAccount});
 		}).then(() => {
 			return tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount});
 		}).then(() => {
@@ -66,15 +66,15 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return tokenInstance.approve(exchange.address, 10*transferAmount*satUnits, {from: receiverAccount});
 		}).then(() => {
-			return stablecoinInstance.transfer(receiverAccount, 10*transferAmount*strike, true, {from: defaultAccount});
+			return stablecoinInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike, true, {from: defaultAccount});
+			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike, true, {from: receiverAccount});
+			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike, true, {from: defaultAccount});
+			return exchangeInstance.depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike, true, {from: receiverAccount});
+			return exchangeInstance.depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
 		}).then((res) => {
@@ -547,20 +547,20 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			recStable = res.toNumber();
-			return stablecoinInstance.addrBalance(defaultAccount, false);
+			return stablecoinInstance.balanceOf(defaultAccount);
 		}).then((res) => {
 			defBalance = res.toNumber();
-			return stablecoinInstance.addrBalance(receiverAccount, false);
+			return stablecoinInstance.balanceOf(receiverAccount);
 		}).then((res) => {
 			recBalance = res.toNumber();
 			return exchangeInstance.withdrawAllFunds(false, {from: defaultAccount});
 		}).then((res) => {
 			return exchangeInstance.withdrawAllFunds(false, {from: receiverAccount});
 		}).then(() => {
-			return stablecoinInstance.addrBalance(defaultAccount, false);
+			return stablecoinInstance.balanceOf(defaultAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber(), defStable+defBalance, "awarded correct amount");
-			return stablecoinInstance.addrBalance(receiverAccount, false);
+			return stablecoinInstance.balanceOf(receiverAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber(), recStable+recBalance, "awarded correct amount");
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
@@ -581,16 +581,16 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return tokenInstance.approve(exchange.address, 10*transferAmount*satUnits, {from: receiverAccount});
 		}).then(() => {
-			return stablecoinInstance.transfer(receiverAccount, 10*transferAmount*strike, true, {from: defaultAccount});
+			return stablecoinInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike, true, {from: defaultAccount});
+			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike, true, {from: receiverAccount});
+			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		}).then(() => {
 		//------------------------------------------------------test with calls-------------------------------------
-			return exchangeInstance.depositFunds(price*amount, 0, false, {from: defaultAccount});
+			return exchangeInstance.depositFunds(price*amount, 0, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(amount*satUnits + Math.floor(price*amount/feeDenominator), 0, false, {from: receiverAccount});
+			return exchangeInstance.depositFunds(amount*satUnits + Math.floor(price*amount/feeDenominator), 0, {from: receiverAccount});
 		}).then(() => {
 			//fist defaultAccount buys from receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, true, {from: defaultAccount});
@@ -610,9 +610,9 @@ contract('exchange', function(accounts) {
 			/*
 				note that we need to deposit more collateral here because to post an order it must be fully collateralised
 			*/
-			return exchangeInstance.depositFunds(amount*(price+satUnits), 0, false, {from: defaultAccount});
+			return exchangeInstance.depositFunds(amount*(price+satUnits), 0, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(amount*(price+satUnits), 0, false, {from: receiverAccount});
+			return exchangeInstance.depositFunds(amount*(price+satUnits), 0, {from: receiverAccount});
 		}).then(() => {
 			//fist defaultAccount sells to receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, true, {from: defaultAccount});
@@ -625,9 +625,9 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: defaultAccount});
 		}).then(() => {
 		//----------------------------------------------test with puts--------------------------------------------
-			return exchangeInstance.depositFunds(0, price*amount, false, {from: defaultAccount});
+			return exchangeInstance.depositFunds(0, price*amount, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(0, amount*strike*scUnits + Math.floor(price*amount/feeDenominator), false, {from: receiverAccount});
+			return exchangeInstance.depositFunds(0, amount*strike*scUnits + Math.floor(price*amount/feeDenominator), {from: receiverAccount});
 		}).then(() => {
 			//fist defaultAccount buys from receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, false, {from: defaultAccount});
@@ -647,9 +647,9 @@ contract('exchange', function(accounts) {
 			/*
 				note that we need to deposit more collateral here because to post an order it must be fully collateralised
 			*/
-			return exchangeInstance.depositFunds(0, amount*(price+scUnits*strike), false, {from: defaultAccount});
+			return exchangeInstance.depositFunds(0, amount*(price+scUnits*strike), {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.depositFunds(0, amount*(price+scUnits*strike), false, {from: receiverAccount});
+			return exchangeInstance.depositFunds(0, amount*(price+scUnits*strike), {from: receiverAccount});
 		}).then(() => {
 			//fist defaultAccount sells to receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, false, {from: defaultAccount});

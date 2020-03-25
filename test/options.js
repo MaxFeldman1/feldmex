@@ -42,7 +42,7 @@ contract('options', function(accounts){
 			scUnits = res.toNumber()
 			return tokenInstance.approve(options.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(options.address, 1000, true, {from: defaultAccount});
+			return stablecoinInstance.approve(options.address, 1000*scUnits, {from: defaultAccount});
 		}).then(() => {
 			return oracleInstance.set(finalSpot);
 		}).then(() => {
@@ -121,10 +121,10 @@ contract('options', function(accounts){
 			claimedSc = res.toNumber();
 			return optionsInstance.withdrawFunds({from: holder});
 		}).then(() => {
-			return stablecoinInstance.addrBalance(debtor, false);
+			return stablecoinInstance.balanceOf(debtor);
 		}).then((res) => {
 			assert.equal(res.toNumber(), amount*strike*scUnits-difference*scUnits*amount, "correct amount sent to debtor of the put contract");
-			return stablecoinInstance.addrBalance(holder, false);
+			return stablecoinInstance.balanceOf(holder);
 		}).then((res) => {
 			assert.equal(res.toNumber(), difference*scUnits*amount, "correct amount sent to the holder of the put contract");
 			return;
@@ -150,19 +150,19 @@ contract('options', function(accounts){
 		maturity *= 2;
 		strike = 50;
 		return tokenInstance.transfer(debtor, 1000*satUnits, {from: defaultAccount}).then(() => {
-			return stablecoinInstance.transfer(debtor, 1000*strike, true, {from: defaultAccount})
+			return stablecoinInstance.transfer(debtor, 1000*strike*scUnits, {from: defaultAccount})
 		}).then(() => {
 			return tokenInstance.approve(options.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(options.address, 1000*strike, true, {from: defaultAccount});
+			return stablecoinInstance.approve(options.address, 1000*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
 			return tokenInstance.approve(options.address, 1000*satUnits, {from: debtor});
 		}).then(() => {
-			return stablecoinInstance.approve(options.address, 1000*strike, true, {from: debtor});
+			return stablecoinInstance.approve(options.address, 1000*strike*scUnits, {from: debtor});
 		}).then(() => {
-			return optionsInstance.depositFunds(900*satUnits, 1000*strike, true, {from: defaultAccount});
+			return optionsInstance.depositFunds(900*satUnits, 1000*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return optionsInstance.depositFunds(1000*satUnits, 1000*strike, true, {from: debtor});
+			return optionsInstance.depositFunds(1000*satUnits, 1000*strike*scUnits, {from: debtor});
 		}).then(() => {
 			amount = 10;
 			return optionsInstance.transfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});
