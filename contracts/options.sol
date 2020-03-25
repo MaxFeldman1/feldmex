@@ -42,6 +42,11 @@ contract options {
         scUnits = sc.scUnits();
     }
     
+    /*
+        @Descripton: Sets the address of the smart contract that is trusted to see all users collateral requirements
+
+        @param address _exchangeAddress: this is the address that will be assigned to this contracts exchangeAddress variable
+    */
     function setExchangeAddress(address _exchangeAddress) public {
         require(exchangeAddress == deployerAddress && msg.sender == deployerAddress);
         exchangeAddress = _exchangeAddress;
@@ -260,23 +265,6 @@ contract options {
     }
 
     /*
-        @Description: returns the total amount of the underlying that is held by this smart contract
-    */
-    function contractTokenBalance() public view returns(uint){
-        DappToken dt = DappToken(dappAddress);
-        return dt.addrBalance(address(this), false);
-    }
-    
-
-    /*
-        @Description: returns the total amount of stablecoin that is held by this smart contract
-    */
-    function contractStableBalance() public view returns(uint){
-        stablecoin sc = stablecoin(stablecoinAddress);
-        return sc.addrBalance(address(this), false);
-    }
-
-    /*
         @Description: used to tell if strikes[givenAddress][givenMaturity] contains a given strike
 
         @param address _addr: the address is question
@@ -480,7 +468,6 @@ contract options {
     }
 
     //------------------------------------------------------------------------------------E-R-C---2-0---I-m-p-l-e-m-e-n-t-a-t-i-o-n---------------------------
-    //-------Implenentation helpers-------------------
     
     event Transfer(
         address indexed _from,

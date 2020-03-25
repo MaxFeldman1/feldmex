@@ -94,7 +94,7 @@ contract('options', function(accounts){
 		return optionsInstance.withdrawFunds({from: debtor}).then(() => {
 			return optionsInstance.withdrawFunds({from: holder});
 		}).then(() => {
-			return optionsInstance.contractTokenBalance();
+			return tokenInstance.addrBalance(options.address, false);
 		}).then((res) => {
 			assert.equal(res.toNumber() <= 2, true, "non excessive amount of funds left");
 		});
