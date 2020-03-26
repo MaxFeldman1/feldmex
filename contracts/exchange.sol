@@ -90,7 +90,7 @@ contract exchange{
     //fee == (pricePaid)/feeDenominator
     uint feeDenominator = 5000;
     //variable occasionally used for testing purposes should not be present in production
-    //uint public testing;
+    uint public testing;
     
     /*  
         @Description: initialise globals and preform initial processes with the token and stablecoin contracts
@@ -117,11 +117,11 @@ contract exchange{
 
         @param uint _feeDenominator: the value which will be the denominator in the fee on all transactions
             fee == (amount*priceOfOption)/feeDenominator
-    */
+    *
     function setFee(uint _feeDeonominator) public {
         require(msg.sender == deployerAddress && _feeDeonominator >= 500);
         feeDenominator = _feeDeonominator;
-    }
+    }//*/
 
     /*
         @Description: deposit funds in this contract, funds tracked by the claimedToken and claimedStable mappings
@@ -202,7 +202,7 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order
     */
     function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public {
-        //require collateral and deduct collateral from balance
+        require(_maturity != 0 && _price != 0);
         uint index;
         if (_buy && _call){
             require(claimedToken[msg.sender] >= _price*_amount);
@@ -286,7 +286,8 @@ contract exchange{
         @param bytes32 _name: the name identifier of the order from which to search for the location to insert this order
     */
     function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
-        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike);
+        //make sure the offer and node corresponding to the name is in the correct list
+        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0);
         uint index;
         if (_buy && _call){
             require(claimedToken[msg.sender] >= _price*_amount);
@@ -348,7 +349,7 @@ contract exchange{
         }
         //here we traverse up towards the list head
         else {
-            /*  curent node should == linkedNodes[currentNode.next]
+            /*  node node should == linkedNodes[currentNode.next]
                 do not be confused by the fact that is lags behind in the loop and == the value of currentNode in the previous iteration
             */
             linkedNode memory nextNode;

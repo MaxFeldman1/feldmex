@@ -411,6 +411,7 @@ contract('exchange', function(accounts) {
 
 	it('inserts orders', function(){
 		altMaturity = maturity+5;
+		//we start wtith call buys
 		return exchangeInstance.postOrder(altMaturity, strike, price, amount, true, true, {from: defaultAccount}).then(() => {
 			return exchangeInstance.postOrder(altMaturity, strike, price+10000, amount, true, true, {from: defaultAccount});
 		}).then(() => {
@@ -469,7 +470,71 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.price.toNumber(), price+5000, "The price of the node is correct");
-			return;
+			//now test for put sells
+			strike = 1;
+			return exchangeInstance.postOrder(altMaturity, strike, price, amount, false, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(altMaturity, strike, price+10, amount, false, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(altMaturity, strike, price+20, amount, false, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.listHeads(altMaturity, strike, 3);
+		}).then((res) => {
+			head = res;
+			return exchangeInstance.insertOrder(altMaturity, strike, price+15, amount, false, false, head, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.linkedNodes(head);
+		}).then((res) => {
+			node = res
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price.toNumber(), price, "correct Price first");		
+			return exchangeInstance.linkedNodes(node.next);
+		}).then((res) => {
+			return exchangeInstance.insertOrder(altMaturity, strike, price+5, amount, false, false, res.next, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.listHeads(altMaturity, strike, 3);
+		}).then((res) => {
+			return exchangeInstance.linkedNodes(res);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price.toNumber(), price, "correct price on the first order in list");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price.toNumber(), price+5, "correct price on the second order in list");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price.toNumber(), price+10, "correct price on the third order in list");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price.toNumber(), price+15, "correct price on the fourth order in list");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			next = res.next;
+			name = res.name
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price.toNumber(), price+20, "correct price on the fifth order in list");
+			return exchangeInstance.insertOrder(altMaturity, strike, price+30, amount, false, false, name, {from: defaultAccount})
+		}).then(() => {
+			return exchangeInstance.linkedNodes(name);
+		}).then((res) => {
+			return exchangeInstance.linkedNodes(res.next);
+		}).then((res) => {
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.price.toNumber(), price+30, "correct price on the sixth order in list");
 		});
 	});
 
