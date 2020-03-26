@@ -165,6 +165,9 @@ contract('options', function(accounts){
 			return optionsInstance.depositFunds(1000*satUnits, 1000*strike*scUnits, {from: debtor});
 		}).then(() => {
 			amount = 10;
+			//debtor must accept transfers on a strike before recieving them
+			return optionsInstance.addStrike(strike, maturity, {from: debtor});
+		}).then(() => {
 			return optionsInstance.transfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});
 		}).then(() => {
 			return optionsInstance.balanceOf(debtor, maturity, strike, true);
@@ -189,6 +192,9 @@ contract('options', function(accounts){
 		}).then(() => {
 			newStrike = strike+10;
 			return optionsInstance.approve(defaultAccount, amount, maturity, newStrike, false, {from: debtor});
+		}).then(() => {
+			//defaultAccount must accept transfers on a strike before recieving them
+			return optionsInstance.addStrike(newStrike, maturity, {from: defaultAccount});
 		}).then(() => {
 			return optionsInstance.transferFrom(debtor, defaultAccount, amount, maturity, newStrike, amount*newStrike*scUnits, false, {from: defaultAccount});
 		}).then(() => {

@@ -467,6 +467,20 @@ contract options {
         return minCollateral-scCollateral[_addr][_maturity];
     }
 
+    /*
+        @Description: The function was created for positions at a strike to be inclueded in calculation of collateral requirements for a user
+            This is used instead of adding strikes automatically when funds are transfered to an address by the transfer or transferFrom functions
+            because it prevents a malicious actor from overloading a user with many different strikes thus making it impossible to claim funds because of the gas limit
+
+        @param uint _strike: this is the strike that will be added.
+        @param uint _maturity: this is the maturity at which the strike will be added if it is not already recorded at this maturity
+
+        @return bool: returns true if the strike is sucessfully added and false if the strike was already recorded at the maturity
+    */
+    function addStrike(uint _strike, uint _maturity) public returns(bool){
+        if (!contains(msg.sender, _maturity, _strike)) strikes[msg.sender][_maturity].push(_strike);
+    }
+
     //------------------------------------------------------------------------------------E-R-C---2-0---I-m-p-l-e-m-e-n-t-a-t-i-o-n---------------------------
     
     event Transfer(
@@ -532,7 +546,6 @@ contract options {
         callAmounts[_to][_maturity][_strike] += int(_amount);
         
         if (!contains(_from, _maturity, _strike)) strikes[_from][_maturity].push(_strike);
-        if (!contains(_to, _maturity, _strike)) strikes[_to][_maturity].push(_strike);
         return (true, transferAmt);
     }
 
@@ -560,11 +573,11 @@ contract options {
         putAmounts[_to][_maturity][_strike] += int(_amount);
         
         if (!contains(_from, _maturity, _strike)) strikes[_from][_maturity].push(_strike);
-        if (!contains(_to, _maturity, _strike)) strikes[_to][_maturity].push(_strike);
         return (true, transferAmt);
     }
 
     function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
+        require(contains(_to, _maturity, _strike));
         emit Transfer(msg.sender, _to, _value, _maturity, _strike, _call);
         if (_call) return transferCall(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
         return transferPut(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
@@ -578,6 +591,7 @@ contract options {
     }
 
     function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
+        require(contains(_to, _maturity, _strike));
         require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
         emit Transfer(_from, _to, _value, _maturity, _strike, _call);
         if (_call) {
