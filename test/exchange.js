@@ -689,4 +689,144 @@ contract('exchange', function(accounts) {
 		});
 	});
 
+	it('prioritises older orders', function(){
+		strike = 3;
+		return tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount}).then(() => {
+			return stablecoinInstance.transfer(receiverAccount, strike*10*transferAmount*satUnits, {from: defaultAccount});
+		}).then(() => {
+			return tokenInstance.balanceOf(defaultAccount);
+		}).then((res) => {
+			satBal = res.toNumber();
+			return stablecoinInstance.balanceOf(defaultAccount);
+		}).then((res) => {
+			scBal = res.toNumber();
+			return tokenInstance.approve(exchange.address, satBal, {from: defaultAccount});
+		}).then(() => {
+			return stablecoinInstance.approve(exchange.address, scBal, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.depositFunds(satBal, scBal, {from: defaultAccount});
+		}).then(() => {
+			return tokenInstance.balanceOf(receiverAccount);
+		}).then((res) => {
+			satBal = res.toNumber();
+			return stablecoinInstance.balanceOf(receiverAccount);
+		}).then((res) => {
+			scBal = res.toNumber();
+			return tokenInstance.approve(exchange.address, satBal, {from: receiverAccount});
+		}).then(() => {
+			return stablecoinInstance.approve(exchange.address, scBal, {from: receiverAccount});
+		}).then((res) => {
+			return exchangeInstance.depositFunds(satBal, scBal, {from: receiverAccount});
+		}).then(() => {
+			//test for index 0 calls buys
+			return exchangeInstance.postOrder(maturity, strike, price, 1, true, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(maturity, strike, price, 2, true, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.listHeads(maturity, strike, 0);
+		}).then((res) => {
+			head = res
+			return exchangeInstance.insertOrder(maturity, strike, price, 3, true, true, head, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.linkedNodes(head);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 1, "the first account is correct");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 2, "the second account is correct");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 3, "last account is correct");
+			//test for index 1 calls sells
+			return exchangeInstance.postOrder(maturity, strike, price, 1, false, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(maturity, strike, price, 2, false, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.listHeads(maturity, strike, 1);
+		}).then((res) => {
+			head = res
+			return exchangeInstance.insertOrder(maturity, strike, price, 3, false, true, head, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.linkedNodes(head);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 1, "the first account is correct");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 2, "the second account is correct");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 3, "last account is correct");
+			//test for index 2 puts buys
+			return exchangeInstance.postOrder(maturity, strike, price, 1, true, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(maturity, strike, price, 2, true, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.listHeads(maturity, strike, 2);
+		}).then((res) => {
+			head = res
+			return exchangeInstance.insertOrder(maturity, strike, price, 3, true, false, head, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.linkedNodes(head);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 1, "the first account is correct");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 2, "the second account is correct");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 3, "last account is correct");
+			//test for index 3 puts sells
+			return exchangeInstance.postOrder(maturity, strike, price, 1, false, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(maturity, strike, price, 2, false, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.listHeads(maturity, strike, 3);
+		}).then((res) => {
+			head = res
+			return exchangeInstance.linkedNodes(head);
+		}).then((res) => {
+			next = res.next;
+			headNode = res;
+			return exchangeInstance.insertOrder(maturity, strike, price, 3, false, false, next, {from: receiverAccount});
+		}).then(() => {
+			return exchangeInstance.offers(headNode.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 1, "the first account is correct");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			next = res.next;
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 2, "the second account is correct");
+			return exchangeInstance.linkedNodes(next);
+		}).then((res) => {
+			return exchangeInstance.offers(res.hash);
+		}).then((res) => {
+			assert.equal(res.amount, 3, "last account is correct");
+		});
+	});
 });

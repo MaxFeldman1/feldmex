@@ -230,7 +230,7 @@ contract exchange{
         offers[hash] = offer;
         //set current node to the head node
         linkedNode memory currentNode = linkedNodes[listHeads[_maturity][_strike][index]];
-        if ((_buy && offers[currentNode.hash].price <= _price) || (!_buy && (offers[currentNode.hash].price >= _price || offers[currentNode.hash].price == 0))){
+        if ((_buy && offers[currentNode.hash].price < _price) || (!_buy && (offers[currentNode.hash].price > _price || offers[currentNode.hash].price == 0))){
             linkedNodes[name] = linkedNode(hash, name, currentNode.name, 0);
             if (offers[currentNode.hash].price != 0){
                 linkedNodes[listHeads[_maturity][_strike][index]].previous = name;
@@ -243,7 +243,7 @@ contract exchange{
         while (currentNode.name != 0){
             previousNode = currentNode;
             currentNode = linkedNodes[currentNode.next];
-            if ((_buy && offers[currentNode.hash].price <= _price) || (!_buy && offers[currentNode.hash].price >= _price)){
+            if ((_buy && offers[currentNode.hash].price < _price) || (!_buy && offers[currentNode.hash].price > _price)){
                 break;
             }
         }
