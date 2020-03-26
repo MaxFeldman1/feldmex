@@ -110,8 +110,8 @@ contract options {
             collateral is given by the sender of this transaction who must have already approved this contract to spend on their behalf
             the sender of this transaction does not nessecarially need to be debtor or holder as the sender provides the needed collateral this cannot harm either the debtor or holder
 
-        @param address payable _debtor: the address that collateral posted here will be associated with and the for which the call will be considered a liability
-        @param address payable _holder: the address that owns the right to the value of the option contract at the maturity
+        @param address _debtor: the address that collateral posted here will be associated with and the for which the call will be considered a liability
+        @param address _holder: the address that owns the right to the value of the option contract at the maturity
         @param uint _maturity: the evm and unix timestamp at which the call contract matures and settles
         @param uint _strike: the spot price of the underlying in terms of the stablecoin at which this option contract settles at the maturity timestamp
         @param uint _amount: the amount of calls that the debtor is adding as short and the holder is adding as long
@@ -121,7 +121,7 @@ contract options {
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintCall(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
+    function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         require(_debtor != _holder);
         DappToken dt = DappToken(dappAddress);
         //satDeduction == liabilities - minSats
@@ -153,8 +153,8 @@ contract options {
             collateral is given by the sender of this transaction who must have already approved this contract to spend on their behalf
             the sender of this transaction does not nessecarially need to be debtor or holder as the sender provides the needed collateral this cannot harm either the debtor or holder
 
-        @param address payable _debtor: the address that collateral posted here will be associated with and the for which the put will be considered a liability
-        @param address payable _holder: the address that owns the right to the value of the option contract at the maturity
+        @param address _debtor: the address that collateral posted here will be associated with and the for which the put will be considered a liability
+        @param address _holder: the address that owns the right to the value of the option contract at the maturity
         @param uint _maturity: the evm and unix timestamp at which the put contract matures and settles
         @param uint _strike: the spot price of the underlying in terms of the stablecoin at which this option contract settles at the maturity timestamp
         @param uint _amount: the amount of puts that the debtor is adding as short and the holder is adding as long
@@ -164,7 +164,7 @@ contract options {
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of stablecoin that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintPut(address payable _debtor, address payable _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
+    function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         require(_debtor != _holder);
         stablecoin sc = stablecoin(stablecoinAddress);
         //scDeduction == liabilities - minSc

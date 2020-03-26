@@ -28,7 +28,7 @@ contract exchange{
     }
 
     struct Offer{
-        address payable offerer;
+        address offerer;
         uint maturity;
         uint strike;
         uint price;
@@ -78,9 +78,9 @@ contract exchange{
     //address of a digital asset that represents a unit of account such as DAI
     address stablecoinAddress;
     //address of the smart contract that handles the creation of calls and puts and thier subsequent redemption
-    address payable optionsAddress;
+    address optionsAddress;
     //address to which to credit all exchange fees
-    address payable deployerAddress;
+    address deployerAddress;
     //incrementing identifier for each order that garunties unique hashes for all identifiers
     uint totalOrders;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
@@ -99,7 +99,7 @@ contract exchange{
         @param address _stablecoinAddress: address that shall be assigned to stablecoinAddress
         @param address _optionsAddress: address that shall be assigned to optionsAddress
     */
-    constructor (address _dappAddress, address _stablecoinAddress, address payable _optionsAddress) public{
+    constructor (address _dappAddress, address _stablecoinAddress, address _optionsAddress) public{
         dappAddress = _dappAddress;
         optionsAddress = _optionsAddress;
         stablecoinAddress = _stablecoinAddress;
@@ -433,12 +433,12 @@ contract exchange{
     /*
         @Description: handles logistics of the seller accepting a buy order with identifier _name
 
-        @param address payable _seller: the seller that is taking the buy offer
+        @param address _seller: the seller that is taking the buy offer
         @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == offers[linkedNodes[_name].hash]
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function takeBuyOffer(address payable _seller, bytes32 _name) internal returns(bool success){
+    function takeBuyOffer(address _seller, bytes32 _name) internal returns(bool success){
 
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
@@ -504,12 +504,12 @@ contract exchange{
     /*
         @Description: handles logistics of the buyer accepting a sell order with the identifier _name
 
-        @param address payable _buyer: the buyer that is taking the sell offer
+        @param address _buyer: the buyer that is taking the sell offer
         @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == offers[linkedNodes[_name].hash]
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function takeSellOffer(address payable _buyer, bytes32 _name) internal returns(bool success){
+    function takeSellOffer(address _buyer, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
         require(!offer.buy && _buyer != offer.offerer);
