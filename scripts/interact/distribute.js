@@ -51,17 +51,17 @@ module.exports = function(callback){
 		return askQuestion("How many stablecoins?\n");
 	}).then(async (res) => {
 		stableAmount = res;
-		for (var i = 0; i < accounts.length; i++){
-			await tokenInstance.transfer(accounts[i], amount, true, {from: defaultAccount});
-			await stablecoinInstance.transfer(accounts[i], stableAmount, true, {from: defaultAccount});
+		for (var i = 1; i < accounts.length; i++){
+			await tokenInstance.transfer(accounts[i], amount*satUnits, {from: defaultAccount});
+			await stablecoinInstance.transfer(accounts[i], stableAmount*scUnits, {from: defaultAccount});
 		}
 	}).then(async () => {
 		for (var i = 0; i < accounts.length; i++){
 			console.log(accounts[i]);
-			await tokenInstance.addrBalance(accounts[i], false).then((res) => {
+			await tokenInstance.balanceOf(accounts[i]).then((res) => {
 				console.log('Token Balance: '+(res.toNumber()/satUnits));
 			});
-			await stablecoinInstance.addrBalance(accounts[i], false).then((res) => {
+			await stablecoinInstance.balanceOf(accounts[i]).then((res) => {
 				console.log('Stablecoin Balance: '+(res.toNumber()/scUnits));
 			});
 		}
@@ -73,11 +73,11 @@ module.exports = function(callback){
 	}).then(async (res) => {
 		toClaimStable = res;
 		for (var i = 0; i < accounts.length; i++){
-			await tokenInstance.approve(exchange.address, toClaim, true, {from: accounts[i]}).then(() => {
-				return stablecoinInstance.approve(exchange.address, toClaimStable, true, {from: accounts[i]})
+			await tokenInstance.approve(exchange.address, toClaim*satUnits, {from: accounts[i]}).then(() => {
+				return stablecoinInstance.approve(exchange.address, toClaimStable*scUnits, {from: accounts[i]})
 			}).then(() => {
-				return exchangeInstance.postCollateral(toClaim, true, toClaimStable, true, {from: accounts[i]});
+				return exchangeInstance.depositFunds(toClaim* satUnits, toClaimStable*scUnits, {from: accounts[i]});
 			}).then(() => console.log('posted collateral for '+accounts[i]));
 		}
-	});
+	}).then(() => {console.log("Finished Task sucessfully")});
 }

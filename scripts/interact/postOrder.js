@@ -55,6 +55,6 @@ module.exports = function(callback){
 		//console.log("maturity "+maturity+"\tstrike " +strike+"\tprice "+price+"\tamount "+amount+"\tbuy "+buy+"\tcall "+call);
 		console.log("Posting Order");
 		return exchangeInstance.postOrder(maturity, strike, price, amount, buy, call, {from: defaultAccount});
-	}).then(() => console.log("Order Posted"));
+	}).then(() => console.log("Order Posted Sucessfully"));
 
 }

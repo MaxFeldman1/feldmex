@@ -33,10 +33,10 @@ module.exports = function(callback){
 		console.log("Account Collateral: ");
 		for (var i = 0; i < accounts.length; i++){
 			console.log(accounts[i]);
-			await exchangeInstance.claimedToken(accounts[i]).then((res) => {
+			await exchangeInstance.viewClaimed(true, {from: accounts[i]}).then((res) => {
 				console.log('Claimed Tokens: '+(res.toNumber()/satUnits));
 			});
-			await exchangeInstance.claimedStable(accounts[i]).then((res) => {
+			await exchangeInstance.viewClaimed(false, {from: accounts[i]}).then((res) => {
 				console.log('Cliamed Stablecoins: '+(res.toNumber()/scUnits));
 			})
 		}		
@@ -44,10 +44,10 @@ module.exports = function(callback){
 		console.log("\nAccount Balances:");
 		for (var i = 0; i < accounts.length; i++){
 			console.log(accounts[i]);
-			await tokenInstance.addrBalance(accounts[i], false).then((res) => {
+			await tokenInstance.balanceOf(accounts[i]).then((res) => {
 				console.log('Token balance: '+(res.toNumber()/satUnits));
 			});
-			await stablecoinInstance.addrBalance(accounts[i], false).then((res) => {
+			await stablecoinInstance.balanceOf(accounts[i]).then((res) => {
 				console.log('Stablecoin balance: '+(res.toNumber()/scUnits));
 			});
 		}

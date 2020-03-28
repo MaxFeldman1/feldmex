@@ -65,7 +65,10 @@ module.exports = function(callback){
 		return exchangeInstance.listHeads(maturity, strike, index);
 	}).then((res) => {
 		if (res == defaultBytes32) throw "Error: no orders that you can take";
-		if (buy) return exchangeInstance.marketBuy(maturity, strike, amount, call, {from: reciverAccount});
-		return exchangeInstance.marketSell(maturity, strike, amount, call, {from: reciverAccount});
-	}).then(() => console.log("Market Order completed")).catch((err) => console.log(err));
+		return  askQuestion("what limit price?\n");
+	}).then((res) => {
+		limit = res;
+		if (buy) return exchangeInstance.marketBuy(maturity, strike, limit, amount, call, {from: reciverAccount});
+		return exchangeInstance.marketSell(maturity, strike, limit, amount, call, {from: reciverAccount});
+	}).then(() => console.log("Market Order completed")).catch((err) => {if (err.message) console.log(err.message+"\nperhaps you need to post more collateral"); else console.log(err)});
 }
