@@ -21,7 +21,7 @@ contract stablecoin {
 
     constructor (uint256 _initialSupply) public {
         if (_initialSupply == 0)
-            _initialSupply = 21000000;
+            _initialSupply = 21000000000000;
         balanceOf[msg.sender] = _initialSupply * scUnits;
         totalSupply = _initialSupply;
     }

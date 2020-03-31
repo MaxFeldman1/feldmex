@@ -731,20 +731,20 @@ contract('exchange', function(accounts) {
 	it ('changes the fee', function(){
 		deployer = originAccount;
 		nonDeployer = defaultAccount;
-		return optionsInstance.setFee(1000, {from: deployer}).then(() => {
+		return exchangeInstance.setFee(1000, {from: deployer}).then(() => {
 			return "OK";
 		}).catch(() => {
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OK", "Successfully changed the fee");
-			return optionsInstance.setFee(400, {from: deployer});
+			return exchangeInstance.setFee(400, {from: deployer});
 		}).then(() => {
 			return "OK";
 		}).catch(() => {
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OOF", "Fee change was stopped because fee was too high");
-			return optionsInstance.setFee(800, {from: nonDeployer});
+			return exchangeInstance.setFee(800, {from: nonDeployer});
 		}).then(() => {
 			return "OK";
 		}).catch(() => {

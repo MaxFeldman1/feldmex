@@ -90,7 +90,7 @@ contract exchange{
     //fee == (pricePaid)/feeDenominator
     uint feeDenominator = 5000;
     //variable occasionally used for testing purposes should not be present in production
-    uint public testing;
+    //uint public testing;
     
     /*  
         @Description: initialise globals and preform initial processes with the token and stablecoin contracts
@@ -117,11 +117,11 @@ contract exchange{
 
         @param uint _feeDenominator: the value which will be the denominator in the fee on all transactions
             fee == (amount*priceOfOption)/feeDenominator
-    *
+    */
     function setFee(uint _feeDeonominator) public {
         require(msg.sender == deployerAddress && _feeDeonominator >= 500);
         feeDenominator = _feeDeonominator;
-    }//*/
+    }
 
     /*
         @Description: deposit funds in this contract, funds tracked by the claimedToken and claimedStable mappings
