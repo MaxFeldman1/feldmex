@@ -17,32 +17,34 @@ var debtor;
 var holder;
 
 contract('options', function(accounts){
-	it ('mints, exercizes call options', function(){
-		return 	oracle.deployed().then((i) => {
+
+	it('before each', async() => {
+		return oracle.new().then((i) => {
 			oracleInstance = i;
-			return dappToken.deployed();
+			return dappToken.new(0);
 		}).then((i) => {
 			tokenInstance = i;
-			return options.deployed();
-		}).then((i) => {
-			optionsInstance = i;
-			return stablecoin.deployed();
+			return stablecoin.new(0);
 		}).then((i) => {
 			stablecoinInstance = i;
-			return web3.eth.getAccounts();
-		}).then((accts) => {
-			accounts = accts;
-			defaultAccount = accounts[0];
-			reciverAccount = accounts[1];
-			return tokenInstance.satUnits();
-		}).then((res) => {
+			return options.new(oracleInstance.address, tokenInstance.address, stablecoinInstance.address);
+		}).then((i) => {
+			optionsInstance = i;
+		});
+	});
+
+
+	it ('mints, exercizes call options', function(){
+		defaultAccount = accounts[0];
+		reciverAccount = accounts[1];
+		return tokenInstance.satUnits().then((res) => {
 			satUnits = res.toNumber();
 			return stablecoinInstance.scUnits();
 		}).then((res) => {
 			scUnits = res.toNumber()
-			return tokenInstance.approve(options.address, 1000*satUnits, {from: defaultAccount});
+			return tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(options.address, 1000*scUnits, {from: defaultAccount});
+			return stablecoinInstance.approve(optionsInstance.address, 1000*scUnits, {from: defaultAccount});
 		}).then(() => {
 			return oracleInstance.set(finalSpot);
 		}).then(() => {
@@ -94,19 +96,19 @@ contract('options', function(accounts){
 		return optionsInstance.withdrawFunds({from: debtor}).then(() => {
 			return optionsInstance.withdrawFunds({from: holder});
 		}).then(() => {
-			return tokenInstance.balanceOf(options.address);
+			return tokenInstance.balanceOf(optionsInstance.address);
 		}).then((res) => {
 			assert.equal(res.toNumber() <= 2, true, "non excessive amount of funds left");
 		});
 	});
 
 	it('mints and exercizes put options', function() {
-		return web3.eth.getBlock('latest').then((res) => {
+		difference = 30;
+		return oracleInstance.set(strike-difference).then(() => {
+			return web3.eth.getBlock('latest');
+		}).then((res) => {
 			maturity = res.timestamp+1;
 			return optionsInstance.mintPut(debtor, holder, maturity, strike, amount, strike*scUnits*amount, {from: defaultAccount});
-		}).then(() => {
-			difference = 30;
-			return oracleInstance.set(strike - difference);
 		}).then(() => {
 			return new Promise(resolve => setTimeout(resolve, 2000));
 		}).then(() => {
@@ -132,7 +134,8 @@ contract('options', function(accounts){
 	});
 
 	it('sets exchange address only once', function(){
-		return optionsInstance.setExchangeAddress(oracle.address).catch((err) => {
+		//it does not matter what we set it to because we are not interacting with the exchange while testing
+		return optionsInstance.setExchangeAddress(oracleInstance.address).catch((err) => {
 			//res will only be defined if the above call fails
 			return "Caught";
 		}).then((res) => {
@@ -152,13 +155,13 @@ contract('options', function(accounts){
 		return tokenInstance.transfer(debtor, 1000*satUnits, {from: defaultAccount}).then(() => {
 			return stablecoinInstance.transfer(debtor, 1000*strike*scUnits, {from: defaultAccount})
 		}).then(() => {
-			return tokenInstance.approve(options.address, 1000*satUnits, {from: defaultAccount});
+			return tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(options.address, 1000*strike*scUnits, {from: defaultAccount});
+			return stablecoinInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return tokenInstance.approve(options.address, 1000*satUnits, {from: debtor});
+			return tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: debtor});
 		}).then(() => {
-			return stablecoinInstance.approve(options.address, 1000*strike*scUnits, {from: debtor});
+			return stablecoinInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: debtor});
 		}).then(() => {
 			return optionsInstance.depositFunds(900*satUnits, 1000*strike*scUnits, {from: defaultAccount});
 		}).then(() => {

@@ -29,48 +29,63 @@ var defaultAccountPosition = 0;
 var receiverAccountPosition = 0;
 
 contract('exchange', function(accounts) {
-	it('can post and take buy orders of calls', function(){
-		return 	oracle.deployed().then((i) => {
+
+	it('before each', async() => {
+		return oracle.new().then((i) => {
 			oracleInstance = i;
-			return dappToken.deployed();
+			return dappToken.new(0);
 		}).then((i) => {
 			tokenInstance = i;
-			return options.deployed();
-		}).then((i) => {
-			optionsInstance = i;
-			return exchange.deployed();
-		}).then((i) => {
-			exchangeInstance = i;
-			return stablecoin.deployed();
+			return stablecoin.new(0);
 		}).then((i) => {
 			stablecoinInstance = i;
-			return web3.eth.getAccounts();
-		}).then((accts) => {
-			accounts = accts;
-			originAccount = accounts[0]
-			defaultAccount = accounts[1];
-			receiverAccount = accounts[2];
-			return tokenInstance.satUnits();
-		}).then((res) => {
+			return options.new(oracleInstance.address, tokenInstance.address, stablecoinInstance.address);
+		}).then((i) => {
+			optionsInstance = i;
+			return exchange.new(tokenInstance.address, stablecoinInstance.address, optionsInstance.address);
+		}).then((i) => {
+			exchangeInstance = i;
+			return optionsInstance.setExchangeAddress(exchangeInstance.address);
+		});
+	});
+
+	it('can post and take buy orders of calls', function(){
+		originAccount = accounts[0]
+		defaultAccount = accounts[1];
+		receiverAccount = accounts[2];
+		return tokenInstance.satUnits().then((res) => {
 			satUnits = res.toNumber();
 			return stablecoinInstance.scUnits();
+		}).catch((err) => {
+			console.log("Hei du tar feil på linje sektien");
+			console.log(err.message);
+			assert.equal(false, true, "sektien");
 		}).then((res) => {
 			scUnits = res.toNumber();
 			return tokenInstance.transfer(defaultAccount, 21000000*satUnits, {from: originAccount});
+		}).catch((err) => {
+			console.log("Hei du tar feil på linje sektiåtte");
+			console.log(err.message);
+			console.log("Toekn address "+tokenInstance.address);
+			assert.equal(false, true, "sektiåtte");
 		}).then(() => {
 			return stablecoinInstance.transfer(defaultAccount, 21000000*scUnits, {from: originAccount});
+		}).catch((err) => {
+			console.log("Hei du tar feil på linje syttitre");
+			console.log(err.message);
+			assert.equal(false, true, "syttitre");
 		}).then(() => {
 			return tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount});
 		}).then(() => {
-			return tokenInstance.approve(exchange.address, 10*transferAmount*satUnits, {from: defaultAccount});
-		}).then(() => {
-			return tokenInstance.approve(exchange.address, 10*transferAmount*satUnits, {from: receiverAccount});
-		}).then(() => {
+			return tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: defaultAccount});
+		}).then((res) => {
+			return tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: receiverAccount});
+		}).then((res) => {
 			return stablecoinInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
+			return stablecoinInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
+			return stablecoinInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
@@ -90,7 +105,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
 			return exchangeInstance.linkedNodes(res);
-		}).catch((err) => {console.log(err); assert.equal(false, true, "error thorwn this is the catch block!");}).then((res) => {
+		}).then((res) => {
 			assert.notEqual(res.hash, defaultBytes32, "likedNodes[name] is not null");
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
@@ -170,7 +185,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
 			return exchangeInstance.linkedNodes(res);
-		}).catch((err) => {console.log(err); assert.equal(false, true, "error thorwn this is the catch block!");}).then((res) => {
+		}).then((res) => {
 			assert.notEqual(res.hash, defaultBytes32, "likedNodes[name] is not null");
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
@@ -639,18 +654,18 @@ contract('exchange', function(accounts) {
 		});
 	});
 
-	it('does not require excessive amount of collateral', function(){
+	it('does not require excessive amount of collateral for calls', function(){
 		newMaturity = 2*maturity;
 		return tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount}).then(() => {
-			return tokenInstance.approve(exchange.address, 10*transferAmount*satUnits, {from: defaultAccount});
+			return tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: defaultAccount});
 		}).then(() => {
-			return tokenInstance.approve(exchange.address, 10*transferAmount*satUnits, {from: receiverAccount});
+			return tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: receiverAccount});
 		}).then(() => {
 			return stablecoinInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
+			return stablecoinInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
+			return stablecoinInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		}).then(() => {
 		//------------------------------------------------------test with calls-------------------------------------
 			return exchangeInstance.depositFunds(price*amount, 0, {from: defaultAccount});
@@ -688,10 +703,12 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: defaultAccount});
-		}).then(() => {
+		});
+	});
+
+	it('does not require excessive amount of collateral for puts', function(){
 		//----------------------------------------------test with puts--------------------------------------------
-			return exchangeInstance.depositFunds(0, price*amount, {from: defaultAccount});
-		}).then(() => {
+		return exchangeInstance.depositFunds(0, price*amount, {from: defaultAccount}).then(() => {
 			return exchangeInstance.depositFunds(0, amount*strike*scUnits + Math.floor(price*amount/feeDenominator), {from: receiverAccount});
 		}).then(() => {
 			//fist defaultAccount buys from receiver account
@@ -725,9 +742,9 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, false, {from: defaultAccount});
-		//*/
 		});
 	});
+
 	it ('changes the fee', function(){
 		deployer = originAccount;
 		nonDeployer = defaultAccount;
@@ -765,9 +782,9 @@ contract('exchange', function(accounts) {
 			return stablecoinInstance.balanceOf(defaultAccount);
 		}).then((res) => {
 			scBal = res.toNumber();
-			return tokenInstance.approve(exchange.address, satBal, {from: defaultAccount});
+			return tokenInstance.approve(exchangeInstance.address, satBal, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, scBal, {from: defaultAccount});
+			return stablecoinInstance.approve(exchangeInstance.address, scBal, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.depositFunds(satBal, scBal, {from: defaultAccount});
 		}).then(() => {
@@ -777,9 +794,9 @@ contract('exchange', function(accounts) {
 			return stablecoinInstance.balanceOf(receiverAccount);
 		}).then((res) => {
 			scBal = res.toNumber();
-			return tokenInstance.approve(exchange.address, satBal, {from: receiverAccount});
+			return tokenInstance.approve(exchangeInstance.address, satBal, {from: receiverAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchange.address, scBal, {from: receiverAccount});
+			return stablecoinInstance.approve(exchangeInstance.address, scBal, {from: receiverAccount});
 		}).then((res) => {
 			return exchangeInstance.depositFunds(satBal, scBal, {from: receiverAccount});
 		}).then(() => {

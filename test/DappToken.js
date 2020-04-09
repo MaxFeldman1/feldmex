@@ -2,6 +2,14 @@ var DappToken = artifacts.require("./DappToken.sol");
 
 contract('DappToken', function(accounts) {
 	var btcs = 21000000;
+
+	it('before each', async() => {
+		return DappToken.new(0).then((i) => {
+			tokenInstance = i;
+			return;
+		});
+	});
+
 	it('initial supply == '+btcs, function(){
 		return DappToken.deployed().then((instance) => {
 			dappInstance = instance;
@@ -11,13 +19,10 @@ contract('DappToken', function(accounts) {
 		})
 	});
 	it('allows token transfer', function(){
-		return DappToken.deployed().then((instance) => {
-			dappInstance = instance;
-			transferAmount = 1000;
-			accountTo = accounts[1];
-			accountFrom = accounts[0];
-			return dappInstance.satUnits.call();
-		}).then((sats) => {
+		transferAmount = 1000;
+		accountTo = accounts[1];
+		accountFrom = accounts[0];
+		return dappInstance.satUnits.call().then((sats) => {
 			satUnits = sats.toNumber();
 			return dappInstance.balanceOf(accountTo);
 		}).then((balance) => {
