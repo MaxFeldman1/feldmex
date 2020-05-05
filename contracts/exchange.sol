@@ -448,15 +448,16 @@ contract exchange{
         //make sure the seller has sufficient collateral posted
         options optionsContract = options(optionsAddress);
         uint expectedAmt;
+        uint fee = offer.price*offer.amount/feeDenominator;
         if (offer.call){
             expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
-            require(claimedToken[_seller] >= expectedAmt);
-            claimedToken[_seller] -= expectedAmt;
+            require(offer.price * offer.amount - fee >= expectedAmt || claimedToken[_seller] >= expectedAmt - (offer.price * offer.amount - fee));
+            claimedToken[_seller] -= offer.price * offer.amount - fee  >= expectedAmt ? 0 : expectedAmt - offer.price * offer.amount + fee;
         }
         else{
             expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
-            require(claimedStable[_seller] >= expectedAmt);
-            claimedStable[_seller] -= expectedAmt;
+            require(offer.price * offer.amount - fee >= expectedAmt || claimedStable[_seller] >= expectedAmt - (offer.price * offer.amount - fee));
+            claimedStable[_seller] -= offer.price * offer.amount - fee  >= expectedAmt ? 0 : expectedAmt - offer.price * offer.amount + fee;
         }
 
         if (node.next != 0 && node.previous != 0){
@@ -481,20 +482,16 @@ contract exchange{
         if (offer.call){
             (bool safe, uint transferAmt) = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
             assert(safe);
-            uint fee = offer.price*offer.amount/feeDenominator;
             claimedToken[deployerAddress] += fee;
-            claimedToken[_seller] += offer.price * offer.amount - fee;
-            //redeem seller collateral that was not required
-            claimedToken[_seller] += expectedAmt-transferAmt;
+            //redeem difference between expectedAmt and transferAmt and any excess between option premium recieved and expectedAmt
+            claimedToken[_seller] += offer.price * offer.amount - fee  >= expectedAmt ? offer.price * offer.amount - fee - transferAmt : expectedAmt-transferAmt;
         }
         else{            
             (bool safe, uint transferAmt) = optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
             assert(safe);
-            uint fee = offer.price*offer.amount/feeDenominator;
             claimedStable[deployerAddress] += fee;
-            claimedStable[_seller] += offer.price * offer.amount - fee;
-            //redeem seller collateral that was not required
-            claimedStable[_seller] += expectedAmt - transferAmt;
+            //redeem difference between expectedAmt and transferAmt and any excess between option premium recieved and expectedAmt
+            claimedStable[_seller] += offer.price * offer.amount - fee  >= expectedAmt ? offer.price * offer.amount - fee - transferAmt : expectedAmt-transferAmt;
         }
         //clean storage
         delete linkedNodes[_name];
@@ -592,29 +589,30 @@ contract exchange{
                 offers[node.hash].amount -= _amount;
                 emit offerAccepted(node.name, _amount);
                 options optionsContract = options(optionsAddress);
+                uint fee = offer.price*_amount/feeDenominator;
                 if (_call){
                     uint expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(_amount), offer.strike);
-                    require(claimedToken[msg.sender] >= expectedAmt);
-                    claimedToken[msg.sender] -= expectedAmt;
+                    require(offer.price * _amount - fee >= expectedAmt || claimedToken[msg.sender] >= expectedAmt - (offer.price * _amount - fee));
+                    claimedToken[msg.sender] -= offer.price * _amount - fee  >= expectedAmt ? 0 : expectedAmt - offer.price * _amount + fee;
+
                     (bool safe, uint transferAmount) = optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     assert(safe);
                     //redeem the seller collateral that was not required
-                    uint fee = offer.price*_amount/feeDenominator;
                     claimedToken[deployerAddress] += fee;
-                    claimedToken[msg.sender] += offer.price * _amount - fee;
-                    claimedToken[msg.sender] += expectedAmt - transferAmount;
+                    //redeem difference between expectedAmt and transferAmt and any excess between option premium recieved and expectedAmt
+                    claimedToken[msg.sender] += offer.price * _amount - fee  >= expectedAmt ? offer.price * _amount - fee - transferAmount : expectedAmt-transferAmount;
                 }
                 else {
                     uint expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(_amount), offer.strike);
-                    require(claimedStable[msg.sender] >= expectedAmt);
-                    claimedStable[msg.sender] -= expectedAmt;
+                    require(offer.price * _amount - fee >= expectedAmt || claimedStable[msg.sender] >= expectedAmt - (offer.price * _amount - fee));
+                    claimedStable[msg.sender] -= offer.price * _amount - fee  >= expectedAmt ? 0 : expectedAmt - offer.price * _amount + fee;
+
                     (bool safe, uint transferAmount) = optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     assert(safe);
                     //redeem the seller collateral that was not required
-                    uint fee = offer.price * _amount/feeDenominator;
                     claimedStable[deployerAddress] += fee;
-                    claimedStable[msg.sender] += offer.price * _amount - fee;
-                    claimedStable[msg.sender] += expectedAmt - transferAmount;
+                    //redeem difference between expectedAmt and transferAmt and any excess between option premium recieved and expectedAmt
+                    claimedToken[msg.sender] += offer.price * _amount - fee  >= expectedAmt ? offer.price * _amount - fee - transferAmount : expectedAmt-transferAmount;
                 }
                 break;
             }
