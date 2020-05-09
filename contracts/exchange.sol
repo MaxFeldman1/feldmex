@@ -639,7 +639,7 @@ contract exchange{
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
         require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
-        while (_amount > 0 && node.name != 0 && claimedToken[msg.sender] >= offer.price && offer.price <= _limitPrice){
+        while (_amount > 0 && node.name != 0 && (_call ? claimedToken[msg.sender] : claimedStable[msg.sender]) >= offer.price && offer.price <= _limitPrice){
             if (offer.amount > _amount){
                 offers[node.hash].amount -= _amount;
                 emit offerAccepted(node.name, _amount);

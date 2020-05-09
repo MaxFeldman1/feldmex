@@ -396,7 +396,7 @@ contract options {
         uint cValue = 0;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             strike = strikes[_addr][_maturity][i];
-            if (strike == _strike) continue;
+            if (strike == _strike || callAmounts[_addr][_maturity][strike] == 0) continue;
             sum += callAmounts[_addr][_maturity][strike];
             liabilities += (callAmounts[_addr][_maturity][strike] < 0)? uint(-callAmounts[_addr][_maturity][strike]) : 0;
             cValue = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
@@ -433,7 +433,7 @@ contract options {
         if (minValue > cValue) minValue = cValue;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             strike = strikes[_addr][_maturity][i];
-            if (strike == _strike) continue;
+            if (strike == _strike || putAmounts[_addr][_maturity][strike] == 0) continue;
             sum += putAmounts[_addr][_maturity][strike];
             liabilities += strike * ((putAmounts[_addr][_maturity][strike] < 0)? uint(-putAmounts[_addr][_maturity][strike]) : 0);
             cValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);

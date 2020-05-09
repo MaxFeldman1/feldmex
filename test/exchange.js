@@ -656,6 +656,7 @@ contract('exchange', function(accounts) {
 
 	it('does not require excessive amount of collateral for calls', function(){
 		newMaturity = 2*maturity;
+		strike = 100;
 		return tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount}).then(() => {
 			return tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: defaultAccount});
 		}).then(() => {
@@ -672,21 +673,27 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return exchangeInstance.depositFunds(amount*satUnits + Math.floor(price*amount/feeDenominator), 0, {from: receiverAccount});
 		}).then(() => {
+			//Test market sells
 			//fist defaultAccount buys from receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, true, {from: receiverAccount});
-		}).then(() => {		
+		}).then(() => {
+			//price/satUnits == (strike-secondStrike)/strike
+			//secondStrike == strike - price*strike/sattUnits
+			secondStrike = strike - Math.floor(price*strike/satUnits);
+
 			//second defaultAccount sells back to receiver account
-			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, true, {from: receiverAccount});
+			return exchangeInstance.postOrder(newMaturity, secondStrike, price, amount, true, true, {from: receiverAccount});
 		}).then(() => {
-			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, true, {from: defaultAccount});
-		}).then(() => {
+			return exchangeInstance.marketSell(newMaturity, secondStrike, 0, amount, true, {from: defaultAccount});
+		}).then((res) => {
 			//default account has funds in exchange contract while receiver account has funds in the options smart contract
 			return exchangeInstance.withdrawAllFunds(true, {from: defaultAccount});
 		}).then(() => {
 			return optionsInstance.withdrawFunds({from: receiverAccount});
 		}).then(() => {
+			//Test market buys
 			/*
 				note that we need to deposit more collateral here because to post an order it must be fully collateralised
 			*/
@@ -708,24 +715,31 @@ contract('exchange', function(accounts) {
 
 	it('does not require excessive amount of collateral for puts', function(){
 		//----------------------------------------------test with puts--------------------------------------------
+		price+=strike*scUnits;
 		return exchangeInstance.depositFunds(0, price*amount, {from: defaultAccount}).then(() => {
 			return exchangeInstance.depositFunds(0, amount*strike*scUnits + Math.floor(price*amount/feeDenominator), {from: receiverAccount});
 		}).then(() => {
+			//Test market sell
 			//fist defaultAccount buys from receiver account
 			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, false, {from: receiverAccount});
-		}).then(() => {		
-			//second defaultAccount sells back to receiver account
-			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, false, {from: receiverAccount});
 		}).then(() => {
-			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, false, {from: defaultAccount});
+			//price/scunits == secondStrike-strike
+			//(price+strike*scUnits)/scUnits == secondStrike
+			secondStrike = Math.floor((price+strike*scUnits)/scUnits); 
+			//next defaultAccount sells back to receiver account
+			return exchangeInstance.postOrder(newMaturity, secondStrike, price, amount, true, false, {from: receiverAccount});
 		}).then(() => {
+			return exchangeInstance.marketSell(newMaturity, secondStrike, 0, amount, false, {from: defaultAccount});
+		}).then((res) => {
+			//console.log(res.tx);
 			//default account has funds in exchange contract while receiver account has funds in the options smart contract
 			return exchangeInstance.withdrawAllFunds(false, {from: defaultAccount});
 		}).then(() => {
 			return optionsInstance.withdrawFunds({from: receiverAccount});
 		}).then(() => {
+			//Test market buy
 			/*
 				note that we need to deposit more collateral here because to post an order it must be fully collateralised
 			*/
