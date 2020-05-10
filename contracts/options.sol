@@ -122,7 +122,7 @@ contract options {
         @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
     */
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
-        require(_debtor != _holder);
+        require(_debtor != _holder && _strike != 0);
         DappToken dt = DappToken(dappAddress);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
@@ -165,7 +165,7 @@ contract options {
         @return uint transferAmt: returns the amount of stablecoin that was transfered from the message sender to act as collateral for the debtor
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
-        require(_debtor != _holder);
+        require(_debtor != _holder && _strike != 0);
         stablecoin sc = stablecoin(stablecoinAddress);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
@@ -577,13 +577,14 @@ contract options {
     }
 
     function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        require(contains(_to, _maturity, _strike));
+        require(_strike != 0 && contains(_to, _maturity, _strike));
         emit Transfer(msg.sender, _to, _value, _maturity, _strike, _call);
         if (_call) return transferCall(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
         return transferPut(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
     }
 
     function approve(address _spender, uint256 _value, uint _maturity, uint _strike, bool _call) public returns(bool success){
+        require(_strike != 0);
         emit Approval(msg.sender, _spender, _value, _maturity, _strike, _call);
         if (_call) callAllowance[msg.sender][_spender][_maturity][_strike] = _value;
         else putAllowance[msg.sender][_spender][_maturity][_strike] = _value;
@@ -591,7 +592,7 @@ contract options {
     }
 
     function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        require(contains(_to, _maturity, _strike));
+        require(_strike != 0 && contains(_to, _maturity, _strike));
         require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
         emit Transfer(_from, _to, _value, _maturity, _strike, _call);
         if (_call) {

@@ -202,7 +202,7 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order
     */
     function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public {
-        require(_maturity != 0 && _price != 0);
+        require(_maturity != 0 && _price != 0 && _strike != 0);
         uint index;
         if (_buy && _call){
             require(claimedToken[msg.sender] >= _price*_amount);
@@ -287,7 +287,7 @@ contract exchange{
     */
     function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
         //make sure the offer and node corresponding to the name is in the correct list
-        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0);
+        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _strike != 0);
         uint index;
         if (_buy && _call){
             require(claimedToken[msg.sender] >= _price*_amount);
@@ -579,6 +579,7 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order 
     */
     function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
+        require(_strike != 0);
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
@@ -635,6 +636,7 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order 
     */
     function marketBuy(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
+        require(_strike != 0);
         uint8 index = (_call ? 1 : 3);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
