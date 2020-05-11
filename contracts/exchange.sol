@@ -193,6 +193,7 @@ contract exchange{
 
     /*
         @Description: creates an order and posts it in one of the 4 linked lists depending on if it is a buy or sell order and if it is for calls or puts
+            unless this is the first order of its kind functionality is outsourced to insertOrder
 
         @param unit _maturity: the timstamp at which the call or put is settled
         @param uint _strike: the settlement price of the the underlying asset at the maturity
@@ -203,73 +204,37 @@ contract exchange{
     */
     function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public {
         require(_maturity != 0 && _price != 0 && _strike != 0);
-        uint index;
-        if (_buy && _call){
+        uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
+        if (listHeads[_maturity][_strike][index] != 0) {
+            insertOrder(_maturity, _strike, _price, _amount, _buy, _call, listHeads[_maturity][_strike][index]);
+            return;
+        }
+        //only continue execution here if listHead[_maturity][_strike][index] == 0
+        if (index == 0){
             require(claimedToken[msg.sender] >= _price*_amount);
             claimedToken[msg.sender] -= _price * _amount;
-            index = 0;
         }
-        else if (!_buy && _call){
+        else if (index == 1){
             require(claimedToken[msg.sender] >= satUnits*_amount);
             claimedToken[msg.sender] -= satUnits * _amount;
-            index = 1;
         }
-        else if (_buy && !_call){
+        else if (index == 2){
             require(claimedStable[msg.sender] >= _price*_amount);
             claimedStable[msg.sender] -= _price * _amount;
-            index = 2;
         }
         else {
             require(claimedStable[msg.sender] >= scUnits*_amount*_strike);
             claimedStable[msg.sender] -= scUnits * _amount * _strike;
-            index = 3;
         }
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
         //get hashes
         (bytes32 hash, bytes32 name) = hasher(offer);
+        //place order in the mappings
         offers[hash] = offer;
-        //set current node to the head node
-        linkedNode memory currentNode = linkedNodes[listHeads[_maturity][_strike][index]];
-        if ((_buy && offers[currentNode.hash].price < _price) || (!_buy && (offers[currentNode.hash].price > _price || offers[currentNode.hash].price == 0))){
-            linkedNodes[name] = linkedNode(hash, name, currentNode.name, 0);
-            if (offers[currentNode.hash].price != 0){
-                linkedNodes[listHeads[_maturity][_strike][index]].previous = name;
-            }
-            listHeads[_maturity][_strike][index] = name;
-            emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
-            return;
-        }
-        linkedNode memory previousNode;
-        while (currentNode.name != 0){
-            previousNode = currentNode;
-            currentNode = linkedNodes[currentNode.next];
-            if ((_buy && offers[currentNode.hash].price < _price) || (!_buy && offers[currentNode.hash].price > _price)){
-                break;
-            }
-        }
-        //if previous node is null this is the head node
-        if (offers[previousNode.hash].price == 0){
-            linkedNodes[name] = linkedNode(hash, name, currentNode.name, 0);
-            linkedNodes[currentNode.name].next = name;
-            emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
-            return;
-        }
-        //if this is the last node
-        else if (currentNode.name == 0){
-            linkedNodes[name] = linkedNode(hash, name, 0, previousNode.name);
-            linkedNodes[currentNode.name].previous = name;
-            linkedNodes[previousNode.name].next = name;
-            emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
-            return;
-        }
-        //it falls somewhere in the middle of the chain
-        else{
-            linkedNodes[name] = linkedNode(hash, name, currentNode.name, previousNode.name);
-            linkedNodes[currentNode.name].previous = name;
-            linkedNodes[previousNode.name].next = name;
-            emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
-            return;
-        }
+        linkedNodes[name] = linkedNode(hash, name, 0, 0);
+        listHeads[_maturity][_strike][index] = name;
+        emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
+        return;
     }
 
     //allows for users to post Orders with less transaction fees by giving another order as refrence to find their orders position from
@@ -288,30 +253,26 @@ contract exchange{
     function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
         //make sure the offer and node corresponding to the name is in the correct list
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _strike != 0);
-        uint index;
-        if (_buy && _call){
+        uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
+        if (index == 0){
             require(claimedToken[msg.sender] >= _price*_amount);
             require(offers[linkedNodes[_name].hash].buy && offers[linkedNodes[_name].hash].call);
             claimedToken[msg.sender] -= _price * _amount;
-            index = 0;
         }
-        else if (!_buy && _call){
+        else if (index == 1){
             require(claimedToken[msg.sender] >= satUnits*_amount);
             require(!offers[linkedNodes[_name].hash].buy && offers[linkedNodes[_name].hash].call);
             claimedToken[msg.sender] -= satUnits * _amount;
-            index = 1;
         }
-        else if (_buy && !_call){
+        else if (index == 2){
             require(claimedStable[msg.sender] >= _price*_amount);
             require(offers[linkedNodes[_name].hash].buy && !offers[linkedNodes[_name].hash].call);
             claimedStable[msg.sender] -= _price * _amount;
-            index = 2;
         }
         else {
             require(claimedStable[msg.sender] >= scUnits*_amount*_strike);
             require(!offers[linkedNodes[_name].hash].buy && !offers[linkedNodes[_name].hash].call);
             claimedStable[msg.sender] -= scUnits * _amount * _strike;
-            index = 3;
         }
 
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
@@ -440,16 +401,16 @@ contract exchange{
         @return bool success: if an error occurs returns false if no error return true
     */
     function takeBuyOffer(address _seller, bytes32 _name) internal returns(bool success){
-
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
-        require(offer.buy && _seller != offer.offerer);
+        require(offer.buy);
         uint8 index = (offer.call? 0 : 2);
         //make sure the seller has sufficient collateral posted
         options optionsContract = options(optionsAddress);
-        uint expectedAmt;
+        uint expectedAmt = 0;
         uint fee = offer.price*offer.amount/feeDenominator;
-        if (offer.call){
+        if (_seller == offer.offerer) {}
+        else if (offer.call){
             expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
             require(offer.price * offer.amount - fee >= expectedAmt || claimedToken[_seller] >= expectedAmt - (offer.price * offer.amount - fee));
             claimedToken[_seller] -= offer.price * offer.amount - fee  >= expectedAmt ? 0 : expectedAmt - offer.price * offer.amount + fee;
@@ -510,10 +471,11 @@ contract exchange{
     function takeSellOffer(address _buyer, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
-        require(!offer.buy && _buyer != offer.offerer);
+        require(!offer.buy);
         uint8 index = (offer.call? 1 : 3);
         //make sure the seller has sufficient collateral posted
-        if (offer.call){
+        if (_buyer == offer.offerer) {}
+        else if (offer.call){
             require(claimedToken[_buyer] >= offer.price * offer.amount);
             claimedToken[_buyer] -= offer.price * offer.amount;
         }
@@ -583,8 +545,8 @@ contract exchange{
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
-        //require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
-        //in each iteration we mint one contract
+        require(listHeads[_maturity][_strike][index] != 0);
+        //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
             if (offer.amount > _amount){
                 offers[node.hash].amount -= _amount;
@@ -592,10 +554,12 @@ contract exchange{
                 options optionsContract = options(optionsAddress);
                 uint fee = offer.price*_amount/feeDenominator;
                 if (_call){
-                    uint expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(_amount), offer.strike);
-                    require(offer.price * _amount - fee >= expectedAmt || claimedToken[msg.sender] >= expectedAmt - (offer.price * _amount - fee));
-                    claimedToken[msg.sender] -= offer.price * _amount - fee  >= expectedAmt ? 0 : expectedAmt - offer.price * _amount + fee;
-
+                    uint expectedAmt = 0;
+                    if (msg.sender != offer.offerer) {
+                        expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(_amount), offer.strike);
+                        require(offer.price * _amount - fee >= expectedAmt || claimedToken[msg.sender] >= expectedAmt - (offer.price * _amount - fee));
+                        claimedToken[msg.sender] -= offer.price * _amount - fee  >= expectedAmt ? 0 : expectedAmt - offer.price * _amount + fee;
+                    }
                     (bool safe, uint transferAmount) = optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     assert(safe);
                     //redeem the seller collateral that was not required
@@ -604,10 +568,12 @@ contract exchange{
                     claimedToken[msg.sender] += offer.price * _amount - fee  >= expectedAmt ? offer.price * _amount - fee - transferAmount : expectedAmt-transferAmount;
                 }
                 else {
-                    uint expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(_amount), offer.strike);
-                    require(offer.price * _amount - fee >= expectedAmt || claimedStable[msg.sender] >= expectedAmt - (offer.price * _amount - fee));
-                    claimedStable[msg.sender] -= offer.price * _amount - fee  >= expectedAmt ? 0 : expectedAmt - offer.price * _amount + fee;
-
+                    uint expectedAmt = 0;
+                    if (msg.sender != offer.offerer){
+                        expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(_amount), offer.strike);
+                        require(offer.price * _amount - fee >= expectedAmt || claimedStable[msg.sender] >= expectedAmt - (offer.price * _amount - fee));
+                        claimedStable[msg.sender] -= offer.price * _amount - fee  >= expectedAmt ? 0 : expectedAmt - offer.price * _amount + fee;
+                    }
                     (bool safe, uint transferAmount) = optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     assert(safe);
                     //redeem the seller collateral that was not required
@@ -640,13 +606,14 @@ contract exchange{
         uint8 index = (_call ? 1 : 3);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
-        require(listHeads[_maturity][_strike][index] != 0 && msg.sender != offer.offerer);
+        require(listHeads[_maturity][_strike][index] != 0);
+        //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && (_call ? claimedToken[msg.sender] : claimedStable[msg.sender]) >= offer.price && offer.price <= _limitPrice){
             if (offer.amount > _amount){
                 offers[node.hash].amount -= _amount;
                 emit offerAccepted(node.name, _amount);
                 options optionsContract = options(optionsAddress);
-                if (_call){
+                if (_call && msg.sender != offer.offerer){
                     require(claimedToken[msg.sender] >= offer.price * _amount);
                     claimedToken[msg.sender] -= offer.price * _amount;
                     
@@ -657,8 +624,18 @@ contract exchange{
                     claimedToken[deployerAddress] += fee;
                     claimedToken[offer.offerer] += offer.price * _amount - fee;
                     claimedToken[offer.offerer] += (satUnits * _amount) - transferAmount;
-                }
-                else {
+                }//*
+                else if (_call && msg.sender == offer.offerer){
+                    uint fee = offer.price * _amount/feeDenominator;
+                    require(claimedToken[msg.sender] >= fee);
+                    claimedToken[msg.sender] -= fee;
+                    /*
+                        state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
+                        therefore we do not need to call options.mintCall
+                    */
+                    claimedToken[deployerAddress] += fee;
+                }//*/
+                else if (msg.sender != offer.offerer) { //!call && msg.sender != offer.offerer
                     require(claimedStable[msg.sender] >= offer.price * _amount);
                     claimedStable[msg.sender] -= offer.price * _amount;
                     uint limit = _amount*scUnits*offer.strike;
@@ -670,6 +647,16 @@ contract exchange{
                     claimedStable[offer.offerer] += offer.price * _amount - fee;
                     claimedStable[offer.offerer] += (scUnits * _amount * _strike) - transferAmount;
                 }
+                else { //!call && msg.sender == offer.offerer
+                    uint fee = offer.price * _amount/feeDenominator;
+                    require(claimedStable[msg.sender] >= fee);
+                    claimedStable[msg.sender] -= fee;
+                    /*
+                        state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintPut
+                        therefore we do not need to call options.mintPut
+                    */
+                    claimedStable[deployerAddress] += fee;
+                }//*/
                 break;
             }
             _amount-=offer.amount;

@@ -122,7 +122,8 @@ contract options {
         @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
     */
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
-        require(_debtor != _holder && _strike != 0);
+        if (_debtor == _holder) return (true, 0);
+        require(_strike != 0);
         DappToken dt = DappToken(dappAddress);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
@@ -165,7 +166,8 @@ contract options {
         @return uint transferAmt: returns the amount of stablecoin that was transfered from the message sender to act as collateral for the debtor
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
-        require(_debtor != _holder && _strike != 0);
+        if (_debtor == _holder) return (true, 0);
+        require(_strike != 0);
         stablecoin sc = stablecoin(stablecoinAddress);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
@@ -523,8 +525,7 @@ contract options {
 
     */
     function transferCall(address _from, address _to, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns(bool success, uint transferAmt){
-        require(_from != _to);
-        if (_amount == 0) return(true, 0);
+        if (_from == _to || _amount == 0) return (true, 0);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
@@ -550,8 +551,7 @@ contract options {
     }
 
     function transferPut(address _from, address _to, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns(bool success, uint transferAmt){
-        require(_from != _to);
-        if (_amount == 0) return(true, 0);
+        if (_from == _to || _amount == 0) return (true, 0);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
