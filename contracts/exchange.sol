@@ -203,7 +203,7 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order
     */
     function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public {
-        require(_maturity != 0 && _price != 0 && _strike != 0);
+        require(_maturity != 0 && _price != 0 && _price < (_call? satUnits: scUnits*_strike) && _strike != 0);
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         if (listHeads[_maturity][_strike][index] != 0) {
             insertOrder(_maturity, _strike, _price, _amount, _buy, _call, listHeads[_maturity][_strike][index]);
@@ -252,7 +252,7 @@ contract exchange{
     */
     function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
         //make sure the offer and node corresponding to the name is in the correct list
-        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _strike != 0);
+        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? satUnits: scUnits*_strike) && _strike != 0);
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         if (index == 0){
             require(claimedToken[msg.sender] >= _price*_amount);

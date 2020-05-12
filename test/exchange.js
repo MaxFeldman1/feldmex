@@ -702,7 +702,7 @@ contract('exchange', function(accounts) {
 
 	it('does not require excessive amount of collateral for puts', function(){
 		//----------------------------------------------test with puts--------------------------------------------
-		price+=strike*scUnits;
+		price = strike*scUnits - 1;
 		return exchangeInstance.depositFunds(0, price*amount, {from: defaultAccount}).then(() => {
 			return exchangeInstance.depositFunds(0, amount*strike*scUnits + Math.floor(price*amount/feeDenominator), {from: receiverAccount});
 		}).then(() => {
@@ -776,6 +776,7 @@ contract('exchange', function(accounts) {
 
 	it('prioritises older orders', function(){
 		strike = 3;
+		price = Math.floor(satUnits*0.05);
 		return tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount}).then(() => {
 			return stablecoinInstance.transfer(receiverAccount, strike*10*transferAmount*satUnits, {from: defaultAccount});
 		}).then(() => {
