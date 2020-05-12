@@ -56,24 +56,11 @@ contract('exchange', function(accounts) {
 		return tokenInstance.satUnits().then((res) => {
 			satUnits = res.toNumber();
 			return stablecoinInstance.scUnits();
-		}).catch((err) => {
-			console.log("Hei du tar feil på linje sektien");
-			console.log(err.message);
-			assert.equal(false, true, "sektien");
 		}).then((res) => {
 			scUnits = res.toNumber();
 			return tokenInstance.transfer(defaultAccount, 21000000*satUnits, {from: originAccount});
-		}).catch((err) => {
-			console.log("Hei du tar feil på linje sektiåtte");
-			console.log(err.message);
-			console.log("Toekn address "+tokenInstance.address);
-			assert.equal(false, true, "sektiåtte");
 		}).then(() => {
 			return stablecoinInstance.transfer(defaultAccount, 21000000*scUnits, {from: originAccount});
-		}).catch((err) => {
-			console.log("Hei du tar feil på linje syttitre");
-			console.log(err.message);
-			assert.equal(false, true, "syttitre");
 		}).then(() => {
 			return tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount});
 		}).then(() => {
@@ -732,8 +719,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.postOrder(newMaturity, secondStrike, price, amount, true, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(newMaturity, secondStrike, 0, amount, false, {from: defaultAccount});
-		}).then((res) => {
-			//console.log(res.tx);
+		}).then(() => {
 			//default account has funds in exchange contract while receiver account has funds in the options smart contract
 			return exchangeInstance.withdrawAllFunds(false, {from: defaultAccount});
 		}).then(() => {
@@ -763,6 +749,7 @@ contract('exchange', function(accounts) {
 		deployer = originAccount;
 		nonDeployer = defaultAccount;
 		return exchangeInstance.setFee(1000, {from: deployer}).then(() => {
+			feeDenominator = 1000;
 			return "OK";
 		}).catch(() => {
 			return "OOF";
@@ -770,6 +757,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res, "OK", "Successfully changed the fee");
 			return exchangeInstance.setFee(400, {from: deployer});
 		}).then(() => {
+			feeDenominator = 400;
 			return "OK";
 		}).catch(() => {
 			return "OOF";
@@ -777,6 +765,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res, "OOF", "Fee change was stopped because fee was too high");
 			return exchangeInstance.setFee(800, {from: nonDeployer});
 		}).then(() => {
+			feeDenominator = 800;
 			return "OK";
 		}).catch(() => {
 			return "OOF";
@@ -923,6 +912,75 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, 3, "last account is correct");
+		});
+	});
+
+	it('allow users to accept their own orders', function(){
+		maturity +=1;
+		price = Math.floor(satUnits*0.9);
+		//test taking long call offers
+		return exchangeInstance.viewClaimed(true, {from: defaultAccount}).then((res) => {
+			balance = res;
+			return exchangeInstance.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketSell(maturity, strike, price, amount-4, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(balance-res, price*4 + Math.floor(price*(amount-4)/feeDenominator), "fee charged on trades with self in marketSell of calls");
+			balance = res
+			return exchangeInstance.marketSell(maturity, strike, price, amount, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(res-balance, price*4 - Math.floor(price*(4)/feeDenominator), "fee charged on trades with self in takeSellOffer of calls");
+			balance = res;
+			//test taking short call offers
+			return exchangeInstance.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketBuy(maturity, strike, price, amount-4, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(balance-res, satUnits*4 + Math.floor(price*(amount-4)/feeDenominator), "fee charged on tades with self in marketBuy of calls");
+			balance = res;
+			return exchangeInstance.marketBuy(maturity, strike, price, amount, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(res-balance, satUnits*4 - Math.floor(price*(4)/feeDenominator), "fee charged on trades with self in takeBuyOffer of calls");
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
+		}).then((res) => {
+			balance = res;
+			//test taking long put offers
+			return exchangeInstance.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketSell(maturity, strike, price, amount-4, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(balance-res, price*4 + Math.floor(price*(amount-4)/feeDenominator), "fee charged on trades with self in marketSell of puts");
+			balance = res;
+			return exchangeInstance.marketSell(maturity, strike, price, amount, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});			
+		}).then((res) => {
+			assert.equal(res-balance, price*4 - Math.floor(price*4/feeDenominator), "fee charged on trades with self in takeSellOffer of puts");
+			balance = res;
+			//test taking short put offers
+			return exchangeInstance.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketBuy(maturity, strike, price, amount-4, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
+		}).then((res) => {
+			assert.equal(balance-res, scUnits*strike*4 + Math.floor(price*(amount-4)/feeDenominator), "fee charged on trades with self in marketBuy of puts");
+			balance = res;
+			return exchangeInstance.marketBuy(maturity, strike, price, amount, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});			
+		}).then((res) => {
+			assert.equal(res-balance, scUnits*strike*4 - Math.floor(price*4/feeDenominator), "fee charged on trades with self in takeBuyOffer of puts");
 		});
 	});
 });
