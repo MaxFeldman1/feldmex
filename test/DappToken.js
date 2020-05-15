@@ -24,6 +24,10 @@ contract('DappToken', function(accounts) {
 		accountFrom = accounts[0];
 		return dappInstance.satUnits.call().then((sats) => {
 			satUnits = sats.toNumber();
+			return dappInstance.transfer(accountTo, transferAmount*satUnits, {from: accountFrom});
+		}).then(() => {
+			accountFrom = accountTo;
+			accountTo = accounts[2];
 			return dappInstance.balanceOf(accountTo);
 		}).then((balance) => {
 			toStartBalance = balance;

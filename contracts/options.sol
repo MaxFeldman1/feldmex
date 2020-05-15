@@ -91,6 +91,20 @@ contract options {
 
 
     /*
+        maturities records the maturities at which all users hold positions
+        each maturity is deleted when the positions at the maturitiy are removed
+    */
+    //address => maturity
+    mapping(address => uint[]) maturities;
+
+    /*
+        because some users may have a large number of maturities the gas fee could get in the way of using the exchangee
+        therefore we offer the ability to disable the maturities functionality
+    */
+    //address => !maturitiesEnabled
+    mapping(address => bool) disableMaturities;
+
+    /*
         strikes maps each user to the strikes that they have traded calls or puts on for each maturity
     */
     //address => maturity => array of strikes
@@ -145,6 +159,11 @@ contract options {
         callAmounts[_holder][_maturity][_strike] += int(_amount);
         if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
         if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
+        //add to maturities
+        bool disable = !disableMaturities[_debtor];
+        containsMaturity(_debtor, _maturity, disable, false);
+        disable = !disableMaturities[_holder];
+        containsMaturity(_holder, _maturity, disable, false);
         return (true, transferAmt);
     }
 
@@ -189,6 +208,11 @@ contract options {
         putAmounts[_holder][_maturity][_strike] += int(_amount);
         if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
         if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
+        //add to maturities
+        bool disable = !disableMaturities[_debtor];
+        containsMaturity(_debtor, _maturity, disable, false);
+        disable = !disableMaturities[_holder];
+        containsMaturity(_holder, _maturity, disable, false);
         return (true, transferAmt);
     }
     
@@ -229,7 +253,9 @@ contract options {
             claimedStable[deployerAddress] += fee;
             claimedStable[msg.sender] += putValue - fee;
         }
-        return true;
+        if (!disableMaturities[msg.sender])
+            containsMaturity(msg.sender, _maturity, false, !disableMaturities[msg.sender]);
+       return true;
     }
 
     /*
@@ -282,6 +308,61 @@ contract options {
         return false;
     }
 
+    /*
+        @Description: used to tell if maturities[givenAddress] contains a given maturity
+
+        @param address _addr: the address in question
+        @param uint _maturity: the maturity in question
+        @param bool _push: if the maturity is not contained then it will be added to maturieies
+        @param bool _remove: if the maturity is contained then it will be removed
+
+        @return bool: returns true if _maturity is contained in maturities
+        @return uint: if bool returns true this is set to the index at which the maturitiy is contained
+    */
+    function containsMaturity(address _addr, uint _maturity, bool _push, bool _remove) internal returns(bool, uint){
+        if (!_push && !_remove) return (false, 0);
+        for (uint i = 0; i < maturities[_addr].length; i++){
+            if (maturities[_addr][i] == _maturity){
+                if (_remove){
+                    uint temp = maturities[_addr][maturities[_addr].length-1];
+                    maturities[_addr][i] = temp;
+                    delete maturities[_addr][i];
+                }
+                return (true, i);
+            }
+        }
+        if (_push) maturities[_addr].push(_maturity);
+        return (false, 0);
+    }
+
+
+    /*
+        @Description: when users move their positions on a maturity to 0 before they claim on the maturity that maturity is still left in the array
+            when users or their software see that there is a maturity that has no positions they may wish to remove it
+
+        @param uint _index: the index of the maturity to remove
+
+        @return bool sucess: If the maturity is removed sucessfully true will be returned
+    */
+    function removeMaturity(uint _index) public returns (bool success){
+        require(_index < maturities[msg.sender].length);
+        uint temp = maturities[msg.sender][maturities[msg.sender].length-1];
+        maturities[msg.sender][_index] = temp;
+        delete maturities[msg.sender][_index];
+        return true;
+    }
+
+    /*
+        @Description changes users value in the disableMaturities mapping to not its previous value
+            if changed to true delete maturities[msg.sender]
+
+        @return bool newValue: returns the value of idableMaturities[msg.sender] at end of execution
+    */
+    function enableDisableMaturities() public returns (bool newValue){
+        disableMaturities[msg.sender] = !disableMaturities[msg.sender];
+        if (disableMaturities[msg.sender]) delete maturities[msg.sender];
+        return disableMaturities[msg.sender];
+    }
 
     /*
         @Description: used to find the value of a given call postioin at maturity in terms of the underlying
@@ -579,6 +660,9 @@ contract options {
     function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
         require(_strike != 0 && contains(_to, _maturity, _strike));
         emit Transfer(msg.sender, _to, _value, _maturity, _strike, _call);
+        //add to maturities
+        bool disable = !disableMaturities[msg.sender];
+        containsMaturity(msg.sender, _maturity, disable, false);
         if (_call) return transferCall(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
         return transferPut(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
     }
@@ -586,6 +670,9 @@ contract options {
     function approve(address _spender, uint256 _value, uint _maturity, uint _strike, bool _call) public returns(bool success){
         require(_strike != 0);
         emit Approval(msg.sender, _spender, _value, _maturity, _strike, _call);
+        //add to maturities
+        bool disable = !disableMaturities[msg.sender];
+        containsMaturity(msg.sender, _maturity, disable, false); 
         if (_call) callAllowance[msg.sender][_spender][_maturity][_strike] = _value;
         else putAllowance[msg.sender][_spender][_maturity][_strike] = _value;
         return true;
@@ -595,6 +682,11 @@ contract options {
         require(_strike != 0 && contains(_to, _maturity, _strike));
         require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
         emit Transfer(_from, _to, _value, _maturity, _strike, _call);
+        //add to maturities
+        bool disable = !disableMaturities[_from];
+        containsMaturity(_from, _maturity, disable, false);
+        disable = !disableMaturities[_to];
+        containsMaturity(_to, _maturity, disable, false);
         if (_call) {
             callAllowance[_from][msg.sender][_maturity][_strike] -= _value;
             return transferCall(_from, _to, _maturity, _strike, _value, _maxTransfer);
@@ -621,6 +713,10 @@ contract options {
     function viewSatCollateral(uint _maturity) public view returns(uint){return satCollateral[msg.sender][_maturity];}
 
     function viewScCollateral(uint _maturity) public view returns(uint){return scCollateral[msg.sender][_maturity];}
+
+    function viewDisableMaturities() public view returns(bool){return disableMaturities[msg.sender];}
+
+    function viewMaturities() public view returns(uint[] memory){return maturities[msg.sender];}
 
     function viewStrikes(uint _maturity) public view returns(uint[] memory){return strikes[msg.sender][_maturity];}
 
