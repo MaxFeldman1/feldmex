@@ -325,13 +325,13 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			receiverAccountBalance = res.toNumber();
-			defaultAccountBalance -= strike*amount*scUnits;
+			defaultAccountBalance -= strike*amount*scUnits - price*amount;
 			return exchangeInstance.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
 		}).then(() => {
-			defaultAccountBalance -= strike*amount*scUnits;
+			defaultAccountBalance -= strike*amount*scUnits - (price-10000)*amount;
 			return exchangeInstance.postOrder(maturity, strike, price-10000, amount, false, false, {from: defaultAccount});
 		}).then(() => {
-			defaultAccountBalance -= strike*amount*scUnits;
+			defaultAccountBalance -= strike*amount*scUnits - (price-5000)*amount;
 			return exchangeInstance.postOrder(maturity, strike, price-5000, amount, false, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 3);
@@ -348,7 +348,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.price.toNumber(), price-10000, "the price in the list head order is correct");
 			assert.equal(res.buy, false, "the head order in the long puts linked list is classified as a sell order");
 			assert.equal(res.call, false, "the head order in the long puts linked list is classified as a put order");			
-			defaultAccountBalance += strike*amount*scUnits;
+			defaultAccountBalance += strike*amount*scUnits - (price-10000)*amount;
 			return exchangeInstance.cancelOrder(head, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 3);
@@ -384,8 +384,7 @@ contract('exchange', function(accounts) {
 			//return exchangeInstance.cancelOrder(head, {from: defaultAccount})
 			return optionsInstance.balanceOf(defaultAccount, maturity, strike, false);
 		}).then((res) => {
-			//aggregate impact of market orders on both accounts
-			defaultAccountBalance += amount*(price-5000) + (firstBuyAmount+1)*price;
+			//aggregate impact of market on receiverAccount
 			receiverAccountBalance -= amount*(price-5000) + (firstBuyAmount+1)*price;
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
@@ -905,13 +904,13 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
 		}).then((res) => {
-			assert.equal(balance-res, satUnits*4, "executes tades with self in marketBuy of calls");
+			assert.equal(balance-res, 4*(satUnits-price), "executes tades with self in marketBuy of calls");
 			balance = res;
 			return exchangeInstance.marketBuy(maturity, strike, price, amount, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.viewClaimed(true, {from: defaultAccount});
 		}).then((res) => {
-			assert.equal(res-balance, satUnits*4, "executes  trades with self in takeBuyOffer of calls");
+			assert.equal(res-balance, 4*(satUnits-price), "executes  trades with self in takeBuyOffer of calls");
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
 			balance = res;
@@ -937,13 +936,13 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
-			assert.equal(balance-res, scUnits*strike*4, "executes trades with self in marketBuy of puts");
+			assert.equal(balance-res, 4*(scUnits*strike-price), "executes trades with self in marketBuy of puts");
 			balance = res;
 			return exchangeInstance.marketBuy(maturity, strike, price, amount, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});			
 		}).then((res) => {
-			assert.equal(res-balance, scUnits*strike*4, "executes trades with self in takeBuyOffer of puts");
+			assert.equal(res-balance, 4*(scUnits*strike-price), "executes trades with self in takeBuyOffer of puts");
 		});
 	});
 });

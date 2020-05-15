@@ -199,16 +199,16 @@ contract exchange{
             claimedToken[msg.sender] -= _price * _amount;
         }
         else if (index == 1){
-            require(claimedToken[msg.sender] >= satUnits*_amount);
-            claimedToken[msg.sender] -= satUnits * _amount;
+            require(claimedToken[msg.sender] >= _amount * (satUnits - _price));
+            claimedToken[msg.sender] -= _amount * (satUnits - _price);
         }
         else if (index == 2){
             require(claimedStable[msg.sender] >= _price*_amount);
             claimedStable[msg.sender] -= _price * _amount;
         }
         else {
-            require(claimedStable[msg.sender] >= scUnits*_amount*_strike);
-            claimedStable[msg.sender] -= scUnits * _amount * _strike;
+            require(claimedStable[msg.sender] >= _amount * (scUnits * _strike - _price));
+            claimedStable[msg.sender] -= _amount * (scUnits * _strike - _price);
         }
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
         //get hashes
@@ -244,16 +244,16 @@ contract exchange{
             claimedToken[msg.sender] -= _price * _amount;
         }
         else if (index == 1){
-            require(claimedToken[msg.sender] >= satUnits*_amount);
-            claimedToken[msg.sender] -= satUnits * _amount;
+            require(claimedToken[msg.sender] >= _amount * (satUnits - _price));
+            claimedToken[msg.sender] -= _amount * (satUnits - _price);
         }
         else if (index == 2){
             require(claimedStable[msg.sender] >= _price*_amount);
             claimedStable[msg.sender] -= _price * _amount;
         }
         else {
-            require(claimedStable[msg.sender] >= scUnits*_amount*_strike);
-            claimedStable[msg.sender] -= scUnits * _amount * _strike;
+            require(claimedStable[msg.sender] >= _amount * (scUnits * _strike - _price));
+            claimedStable[msg.sender] -= _amount * (scUnits * _strike - _price);
         }
 
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
@@ -365,11 +365,11 @@ contract exchange{
         if (index == 0)
             claimedToken[msg.sender] += offer.price * offer.amount;
         else if (index == 1)
-            claimedToken[msg.sender] += satUnits * offer.amount;
+            claimedToken[msg.sender] += offer.amount * (satUnits - offer.price);
         else if (index == 2)
             claimedStable[msg.sender] += offer.price * offer.amount;
         else
-            claimedStable[msg.sender] += scUnits * offer.strike * offer.amount;
+            claimedStable[msg.sender] += offer.amount * (scUnits * offer.strike - offer.price);
     }
     
 
@@ -494,19 +494,24 @@ contract exchange{
         emit offerAccepted(_name, offer.amount);
         //now we make the trade happen
         options optionsContract = options(optionsAddress);
-        //give the seller the amount paid
-        if (offer.call){
+        //mint the option and distribute unused collateral
+        if (offer.offerer == _buyer){
+            /*
+                state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
+                therefore we do not need to call options.mintCall
+            */
+            if (offer.call) claimedToken[_buyer] += offer.amount * (satUnits - offer.price);
+            else claimedStable[_buyer] += offer.amount * (scUnits * offer.strike - offer.price); 
+        }
+        else if (offer.call){
             (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*satUnits);
             assert(safe);
-            if (offer.offerer != _buyer) claimedToken[offer.offerer] += offer.price * offer.amount;
             //redeem the seller collateral that was not required
             claimedToken[offer.offerer] += (satUnits * offer.amount) - transferAmount;
         }
         else{
-
             (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*scUnits*offer.strike);
             assert(safe);
-            if (offer.offerer != _buyer) claimedStable[offer.offerer] += offer.price * offer.amount;
             //redeem the seller collateral that was not required
             claimedStable[offer.offerer] += (scUnits * offer.amount * offer.strike) - transferAmount;
         }
@@ -606,40 +611,32 @@ contract exchange{
                 offers[node.hash].amount -= _amount;
                 emit offerAccepted(node.name, _amount);
                 options optionsContract = options(optionsAddress);
-                if (_call && msg.sender != offer.offerer){
+                if (offer.offerer == msg.sender){
+                    /*
+                        state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
+                        therefore we do not need to call options.mintCall
+                    */
+                    if (_call) claimedToken[msg.sender] += _amount * (satUnits - offer.price);
+                    else claimedStable[msg.sender] += _amount * (scUnits * offer.strike - offer.price); 
+                }
+                else if (_call){
                     require(claimedToken[msg.sender] >= offer.price * _amount);
                     claimedToken[msg.sender] -= offer.price * _amount;
                     
                     (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, _amount*satUnits);
                     assert(safe);
                     //redeem the seller collateral that was not required
-                    claimedToken[offer.offerer] += offer.price * _amount;
                     claimedToken[offer.offerer] += (satUnits * _amount) - transferAmount;
                 }//*
-                else if (_call && msg.sender == offer.offerer){
-                    claimedToken[msg.sender] += satUnits*_amount;
-                    /*
-                        state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                        therefore we do not need to call options.mintCall
-                    */
-                }//*/
-                else if (msg.sender != offer.offerer) { //!call && msg.sender != offer.offerer
+                else { //!call && msg.sender != offer.offerer
                     require(claimedStable[msg.sender] >= offer.price * _amount);
                     claimedStable[msg.sender] -= offer.price * _amount;
                     uint limit = _amount*scUnits*offer.strike;
                     (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
                     assert(safe);
                     //redeem the seller collateral that was not used
-                    claimedStable[offer.offerer] += offer.price * _amount;
                     claimedStable[offer.offerer] += (scUnits * _amount * _strike) - transferAmount;
                 }
-                else { //!call && msg.sender == offer.offerer
-                    claimedStable[msg.sender] += scUnits * _amount * _strike;
-                    /*
-                        state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintPut
-                        therefore we do not need to call options.mintPut
-                    */
-                }//*/
                 break;
             }
             _amount-=offer.amount;
