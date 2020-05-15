@@ -253,25 +253,22 @@ contract exchange{
     function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
         //make sure the offer and node corresponding to the name is in the correct list
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? satUnits: scUnits*_strike) && _strike != 0);
+        require(offers[linkedNodes[_name].hash].buy  == _buy && offers[linkedNodes[_name].hash].call == _call);
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         if (index == 0){
             require(claimedToken[msg.sender] >= _price*_amount);
-            require(offers[linkedNodes[_name].hash].buy && offers[linkedNodes[_name].hash].call);
             claimedToken[msg.sender] -= _price * _amount;
         }
         else if (index == 1){
             require(claimedToken[msg.sender] >= satUnits*_amount);
-            require(!offers[linkedNodes[_name].hash].buy && offers[linkedNodes[_name].hash].call);
             claimedToken[msg.sender] -= satUnits * _amount;
         }
         else if (index == 2){
             require(claimedStable[msg.sender] >= _price*_amount);
-            require(offers[linkedNodes[_name].hash].buy && !offers[linkedNodes[_name].hash].call);
             claimedStable[msg.sender] -= _price * _amount;
         }
         else {
             require(claimedStable[msg.sender] >= scUnits*_amount*_strike);
-            require(!offers[linkedNodes[_name].hash].buy && !offers[linkedNodes[_name].hash].call);
             claimedStable[msg.sender] -= scUnits * _amount * _strike;
         }
 
