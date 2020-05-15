@@ -21,7 +21,7 @@ contract options {
     //fee == (pricePaid)/feeDenominator
     uint public feeDenominator = 2**255;
     //variable occasionally used for testing purposes should not be present in production
-    uint public testing;
+    //uint public testing;
     
     /*
         @Description: assigns the addesses of external contracts

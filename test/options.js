@@ -15,6 +15,7 @@ var stablecoinInstance;
 var defaultAccount;
 var debtor;
 var holder;
+var feeDenominator = 0x4000000000000000000000000000000000000000000000000000000000000000;
 
 contract('options', function(accounts){
 
@@ -30,6 +31,8 @@ contract('options', function(accounts){
 			return options.new(oracleInstance.address, tokenInstance.address, stablecoinInstance.address);
 		}).then((i) => {
 			optionsInstance = i;
+			feeDenominator = 1000;
+			return optionsInstance.setFee(1000, {from: accounts[0]});
 		});
 	});
 
@@ -83,10 +86,16 @@ contract('options', function(accounts){
 	it('distributes funds correctly', function(){
 		return optionsInstance.viewClaimedTokens({from: debtor}).then((res) => {
 			payout = Math.floor(amount*satUnits*(finalSpot-strike)/finalSpot);
-			assert.equal(res.toNumber(), satUnits*amount - (payout+1), "debtor repaid correct amount");
+			debtorExpected = satUnits*amount - (payout+1);
+			//account for fee
+			fee =  Math.floor(debtorExpected/feeDenominator);
+			totalFees = fee;
+			assert.equal(res.toNumber(), debtorExpected - fee, "debtor repaid correct amount");
 			return optionsInstance.viewClaimedTokens({from: holder});
 		}).then((res) => {
-			assert.equal(res.toNumber(), payout, "holder compensated sufficiently")
+			fee = Math.floor(payout/feeDenominator);
+			totalFees += fee;
+			assert.equal(res.toNumber(), payout - fee, "holder compensated sufficiently")
 			return;
 		});
 	});
@@ -98,7 +107,8 @@ contract('options', function(accounts){
 		}).then(() => {
 			return tokenInstance.balanceOf(optionsInstance.address);
 		}).then((res) => {
-			assert.equal(res.toNumber() <= 2, true, "non excessive amount of funds left");
+			//we add 1 to total fees because we always subtract 1 from payout from sellers of calls
+			assert.equal(res.toNumber() == 1+totalFees, true, "non excessive amount of funds left");
 		});
 	});
 
@@ -125,10 +135,15 @@ contract('options', function(accounts){
 		}).then(() => {
 			return stablecoinInstance.balanceOf(debtor);
 		}).then((res) => {
-			assert.equal(res.toNumber(), amount*strike*scUnits-difference*scUnits*amount, "correct amount sent to debtor of the put contract");
+			debtorExpected = amount*strike*scUnits-difference*scUnits*amount;
+			//account for fee
+			debtorExpected -= Math.floor(debtorExpected/feeDenominator);
+			assert.equal(res.toNumber(), debtorExpected, "correct amount sent to debtor of the put contract");
 			return stablecoinInstance.balanceOf(holder);
 		}).then((res) => {
-			assert.equal(res.toNumber(), difference*scUnits*amount, "correct amount sent to the holder of the put contract");
+			holderExpected = difference*scUnits*amount;
+			holderExpected -= Math.floor(holderExpected/feeDenominator);
+			assert.equal(res.toNumber(), holderExpected, "correct amount sent to the holder of the put contract");
 			return;
 		});
 	});
@@ -233,7 +248,7 @@ contract('options', function(accounts){
 	it ('changes the fee', function(){
 		deployer = defaultAccount;
 		nonDeployer = reciverAccount;
-		return optionsInstance.setFee(1000, {from: deployer}).then(() => {
+		return optionsInstance.setFee(1500, {from: deployer}).then(() => {
 			return "OK";
 		}).catch(() => {
 			return "OOF";
