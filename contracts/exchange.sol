@@ -1,5 +1,5 @@
 pragma solidity ^0.5.12;
-import "./DappToken.sol";
+import "./UnderlyingAsset.sol";
 import "./options.sol";
 import "./stablecoin.sol";
 
@@ -74,7 +74,7 @@ contract exchange{
     mapping(bytes32 => Offer) public offers;
     
     //address of the contract of the underlying digital asset such as WBTC or WETH
-    address dappAddress;
+    address underlyingAssetAddress;
     //address of a digital asset that represents a unit of account such as DAI
     address stablecoinAddress;
     //address of the smart contract that handles the creation of calls and puts and thier subsequent redemption
@@ -91,17 +91,17 @@ contract exchange{
     /*  
         @Description: initialise globals and preform initial processes with the token and stablecoin contracts
 
-        @param address _dappAddress: address that shall be assigned to dappAddress
+        @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
         @param address _stablecoinAddress: address that shall be assigned to stablecoinAddress
         @param address _optionsAddress: address that shall be assigned to optionsAddress
     */
-    constructor (address _dappAddress, address _stablecoinAddress, address _optionsAddress) public{
-        dappAddress = _dappAddress;
+    constructor (address _underlyingAssetAddress, address _stablecoinAddress, address _optionsAddress) public{
+        underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
         stablecoinAddress = _stablecoinAddress;
-        DappToken dt = DappToken(dappAddress);
-        satUnits = dt.satUnits();
-        dt.approve(optionsAddress, 2**255);
+        UnderlyingAsset ua = UnderlyingAsset(_underlyingAssetAddress);
+        satUnits = ua.satUnits();
+        ua.approve(optionsAddress, 2**255);
         stablecoin sc = stablecoin(stablecoinAddress);
         scUnits = sc.scUnits();
         sc.approve(optionsAddress, 2**255);
@@ -119,8 +119,8 @@ contract exchange{
     */
     function depositFunds(uint _amount, uint _amountStable) public returns(bool success){
         if (_amount != 0){
-            DappToken dt = DappToken(dappAddress);
-            if (dt.transferFrom(msg.sender, address(this), _amount))
+            UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
+            if (ua.transferFrom(msg.sender, address(this), _amount))
                 claimedToken[msg.sender]+=_amount;
             else 
                 return false;
@@ -146,9 +146,9 @@ contract exchange{
         if (_token){
             uint val = claimedToken[msg.sender];
             require(val > 0);
-            DappToken dt = DappToken(dappAddress);
+            UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
             claimedToken[msg.sender] = 0;
-            return dt.transfer(msg.sender, val);
+            return ua.transfer(msg.sender, val);
         }
         else {
             uint val = claimedStable[msg.sender];

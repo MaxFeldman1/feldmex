@@ -1,13 +1,13 @@
 pragma solidity ^0.5.12;
 import "./oracle.sol";
-import "./DappToken.sol";
+import "./UnderlyingAsset.sol";
 import "./stablecoin.sol";
 
 contract options {
     //address of the contract of the price oracle for the underlying asset in terms of the stablecoin such as a price oracle for WBTC/DAI
     address oracleAddress;
     //address of the contract of the underlying digital asset such as WBTC or WETH
-    address dappAddress;
+    address underlyingAssetAddress;
     //address of a digital asset that represents a unit of account such as DAI
     address stablecoinAddress;
     //address of the exchange is allowed to see collateral requirements for all users
@@ -27,17 +27,17 @@ contract options {
         @Description: assigns the addesses of external contracts
 
         @param address _oracleAddress: address that shall be assigned to oracleAddress
-        @param address _dappAddress: address that shall be assigned to dappAddress
+        @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
         @param address _stablecoinAddress: address that shall be assigned to stablecoinAddress
     */
-    constructor (address _oracleAddress, address _dappAddress, address _stablecoinAddress) public {
+    constructor (address _oracleAddress, address _underlyingAssetAddress, address _stablecoinAddress) public {
         oracleAddress = _oracleAddress;
-        dappAddress = _dappAddress;
+        underlyingAssetAddress = _underlyingAssetAddress;
         stablecoinAddress = _stablecoinAddress;
         exchangeAddress = msg.sender;
         deployerAddress = msg.sender;
-        DappToken dt = DappToken(dappAddress);
-        satUnits = dt.satUnits();
+        UnderlyingAsset ua = UnderlyingAsset(_underlyingAssetAddress);
+        satUnits = ua.satUnits();
         stablecoin sc = stablecoin(stablecoinAddress);
         scUnits = sc.scUnits();
     }
@@ -124,7 +124,7 @@ contract options {
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
         require(_strike != 0);
-        DappToken dt = DappToken(dappAddress);
+        UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
@@ -133,7 +133,7 @@ contract options {
 
         transferAmt = debtorMinSats - satCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return(false, 0);
-        require(dt.transferFrom(msg.sender, address(this), transferAmt));
+        require(ua.transferFrom(msg.sender, address(this), transferAmt));
         satCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSats
         claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
         satCollateral[_holder][_maturity] = holderMinSats;
@@ -237,10 +237,10 @@ contract options {
             these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and stablecoins respectively
     */
     function withdrawFunds() public returns(bool success){
-        DappToken dt = DappToken(dappAddress);
+        UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
         uint funds = claimedTokens[msg.sender];
         claimedTokens[msg.sender] = 0;
-        assert(dt.transfer(msg.sender, funds));
+        assert(ua.transfer(msg.sender, funds));
         stablecoin sc = stablecoin(stablecoinAddress);
         funds = claimedStable[msg.sender];
         claimedStable[msg.sender] = 0;
@@ -254,8 +254,8 @@ contract options {
     */
     function depositFunds(uint _sats, uint _sc) public returns(bool success){
         if (_sats > 0){
-            DappToken dt = DappToken(dappAddress);
-            require(dt.transferFrom(msg.sender, address(this), _sats));
+            UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
+            require(ua.transferFrom(msg.sender, address(this), _sats));
             claimedTokens[msg.sender] += _sats;
         }
         if (_sc > 0){

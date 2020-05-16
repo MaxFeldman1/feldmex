@@ -1,5 +1,5 @@
 var oracle = artifacts.require("./oracle.sol");
-var dappToken = artifacts.require("./DappToken.sol");
+var underlyingAsset = artifacts.require("./UnderlyingAsset.sol");
 var options = artifacts.require("./options.sol");
 var exchange = artifacts.require("./exchange.sol");
 var stablecoin = artifacts.require("./stablecoin.sol");
@@ -32,7 +32,7 @@ contract('exchange', function(accounts) {
 	it('before each', async() => {
 		return oracle.new().then((i) => {
 			oracleInstance = i;
-			return dappToken.new(0);
+			return underlyingAsset.new(0);
 		}).then((i) => {
 			tokenInstance = i;
 			return stablecoin.new(0);

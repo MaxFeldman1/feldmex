@@ -1,9 +1,6 @@
 pragma solidity ^0.5.12;
 
-contract DappToken {
-    string  public name = "DApp Token";
-    string  public symbol = "DAPP";
-    string  public standard = "DApp Token v1.0";
+contract UnderlyingAsset {
     uint256 public satUnits = 1000000;
     uint256 public totalSupply;
 
