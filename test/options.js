@@ -1,7 +1,7 @@
 var oracle = artifacts.require("./oracle.sol");
 var underlyingAsset = artifacts.require("./UnderlyingAsset.sol");
 var options = artifacts.require("./options.sol");
-var stablecoin = artifacts.require("./stablecoin.sol");
+var strikeAsset = artifacts.require("./strikeAsset.sol");
 
 var strike = 100;
 var finalSpot = 198;
@@ -11,7 +11,7 @@ var scUnits;
 var oracleInstance;
 var tokenInstance;
 var optionsInstance;
-var stablecoinInstance;
+var strikeAssetInstance;
 var defaultAccount;
 var debtor;
 var holder;
@@ -25,10 +25,10 @@ contract('options', function(accounts){
 			return underlyingAsset.new(0);
 		}).then((i) => {
 			tokenInstance = i;
-			return stablecoin.new(0);
+			return strikeAsset.new(0);
 		}).then((i) => {
-			stablecoinInstance = i;
-			return options.new(oracleInstance.address, tokenInstance.address, stablecoinInstance.address);
+			strikeAssetInstance = i;
+			return options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address);
 		}).then((i) => {
 			optionsInstance = i;
 			feeDenominator = 1000;
@@ -42,12 +42,12 @@ contract('options', function(accounts){
 		reciverAccount = accounts[1];
 		return tokenInstance.satUnits().then((res) => {
 			satUnits = res.toNumber();
-			return stablecoinInstance.scUnits();
+			return strikeAssetInstance.scUnits();
 		}).then((res) => {
 			scUnits = res.toNumber()
 			return tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(optionsInstance.address, 1000*scUnits, {from: defaultAccount});
+			return strikeAssetInstance.approve(optionsInstance.address, 1000*scUnits, {from: defaultAccount});
 		}).then(() => {
 			return oracleInstance.set(finalSpot);
 		}).then(() => {
@@ -133,13 +133,13 @@ contract('options', function(accounts){
 			claimedSc = res.toNumber();
 			return optionsInstance.withdrawFunds({from: holder});
 		}).then(() => {
-			return stablecoinInstance.balanceOf(debtor);
+			return strikeAssetInstance.balanceOf(debtor);
 		}).then((res) => {
 			debtorExpected = amount*strike*scUnits-difference*scUnits*amount;
 			//account for fee
 			debtorExpected -= Math.floor(debtorExpected/feeDenominator);
 			assert.equal(res.toNumber(), debtorExpected, "correct amount sent to debtor of the put contract");
-			return stablecoinInstance.balanceOf(holder);
+			return strikeAssetInstance.balanceOf(holder);
 		}).then((res) => {
 			holderExpected = difference*scUnits*amount;
 			holderExpected -= Math.floor(holderExpected/feeDenominator);
@@ -168,15 +168,15 @@ contract('options', function(accounts){
 		maturity *= 2;
 		strike = 50;
 		return tokenInstance.transfer(debtor, 1000*satUnits, {from: defaultAccount}).then(() => {
-			return stablecoinInstance.transfer(debtor, 1000*strike*scUnits, {from: defaultAccount})
+			return strikeAssetInstance.transfer(debtor, 1000*strike*scUnits, {from: defaultAccount})
 		}).then(() => {
 			return tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: defaultAccount});
+			return strikeAssetInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
 			return tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: debtor});
 		}).then(() => {
-			return stablecoinInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: debtor});
+			return strikeAssetInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: debtor});
 		}).then(() => {
 			return optionsInstance.depositFunds(900*satUnits, 1000*strike*scUnits, {from: defaultAccount});
 		}).then(() => {

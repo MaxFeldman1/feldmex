@@ -2,7 +2,7 @@ var oracle = artifacts.require("./oracle.sol");
 var underlyingAsset = artifacts.require("./UnderlyingAsset.sol");
 var options = artifacts.require("./options.sol");
 var exchange = artifacts.require("./exchange.sol");
-var stablecoin = artifacts.require("./stablecoin.sol");
+var strikeAsset = artifacts.require("./strikeAsset.sol");
 
 const defaultBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
@@ -17,7 +17,7 @@ var scUnits;
 var oracleInstance;
 var tokenInstance;
 var optionsInstance;
-var stablecoinInstance;
+var strikeAssetInstance;
 var exchangeInstance;
 var defaultAccount;
 var receiverAccount;
@@ -35,13 +35,13 @@ contract('exchange', function(accounts) {
 			return underlyingAsset.new(0);
 		}).then((i) => {
 			tokenInstance = i;
-			return stablecoin.new(0);
+			return strikeAsset.new(0);
 		}).then((i) => {
-			stablecoinInstance = i;
-			return options.new(oracleInstance.address, tokenInstance.address, stablecoinInstance.address);
+			strikeAssetInstance = i;
+			return options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address);
 		}).then((i) => {
 			optionsInstance = i;
-			return exchange.new(tokenInstance.address, stablecoinInstance.address, optionsInstance.address);
+			return exchange.new(tokenInstance.address, strikeAssetInstance.address, optionsInstance.address);
 		}).then((i) => {
 			exchangeInstance = i;
 			return optionsInstance.setExchangeAddress(exchangeInstance.address);
@@ -54,12 +54,12 @@ contract('exchange', function(accounts) {
 		receiverAccount = accounts[2];
 		return tokenInstance.satUnits().then((res) => {
 			satUnits = res.toNumber();
-			return stablecoinInstance.scUnits();
+			return strikeAssetInstance.scUnits();
 		}).then((res) => {
 			scUnits = res.toNumber();
 			return tokenInstance.transfer(defaultAccount, 21000000*satUnits, {from: originAccount});
 		}).then(() => {
-			return stablecoinInstance.transfer(defaultAccount, 21000000*scUnits, {from: originAccount});
+			return strikeAssetInstance.transfer(defaultAccount, 21000000*scUnits, {from: originAccount});
 		}).then(() => {
 			return tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount});
 		}).then(() => {
@@ -67,11 +67,11 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			return tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: receiverAccount});
 		}).then((res) => {
-			return stablecoinInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
+			return strikeAssetInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
+			return strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
+			return strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
@@ -597,27 +597,27 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.viewClaimed(true, {from: receiverAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "funds correctly deducted when withdrawing funds");
-			//now test for the same for stablecoin
+			//now test for the same for strike asset
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
 			defStable = res.toNumber();
 			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			recStable = res.toNumber();
-			return stablecoinInstance.balanceOf(defaultAccount);
+			return strikeAssetInstance.balanceOf(defaultAccount);
 		}).then((res) => {
 			defBalance = res.toNumber();
-			return stablecoinInstance.balanceOf(receiverAccount);
+			return strikeAssetInstance.balanceOf(receiverAccount);
 		}).then((res) => {
 			recBalance = res.toNumber();
 			return exchangeInstance.withdrawAllFunds(false, {from: defaultAccount});
 		}).then((res) => {
 			return exchangeInstance.withdrawAllFunds(false, {from: receiverAccount});
 		}).then(() => {
-			return stablecoinInstance.balanceOf(defaultAccount);
+			return strikeAssetInstance.balanceOf(defaultAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber(), defStable+defBalance, "awarded correct amount");
-			return stablecoinInstance.balanceOf(receiverAccount);
+			return strikeAssetInstance.balanceOf(receiverAccount);
 		}).then((res) => {
 			assert.equal(res.toNumber(), recStable+recBalance, "awarded correct amount");
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
@@ -639,11 +639,11 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: receiverAccount});
 		}).then(() => {
-			return stablecoinInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
+			return strikeAssetInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
+			return strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
+			return strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		}).then(() => {
 		//------------------------------------------------------test with calls-------------------------------------
 			return exchangeInstance.depositFunds(price*amount, 0, {from: defaultAccount});
@@ -739,29 +739,29 @@ contract('exchange', function(accounts) {
 		strike = 3;
 		price = Math.floor(satUnits*0.05);
 		return tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount}).then(() => {
-			return stablecoinInstance.transfer(receiverAccount, strike*10*transferAmount*satUnits, {from: defaultAccount});
+			return strikeAssetInstance.transfer(receiverAccount, strike*10*transferAmount*satUnits, {from: defaultAccount});
 		}).then(() => {
 			return tokenInstance.balanceOf(defaultAccount);
 		}).then((res) => {
 			satBal = res.toNumber();
-			return stablecoinInstance.balanceOf(defaultAccount);
+			return strikeAssetInstance.balanceOf(defaultAccount);
 		}).then((res) => {
 			scBal = res.toNumber();
 			return tokenInstance.approve(exchangeInstance.address, satBal, {from: defaultAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchangeInstance.address, scBal, {from: defaultAccount});
+			return strikeAssetInstance.approve(exchangeInstance.address, scBal, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.depositFunds(satBal, scBal, {from: defaultAccount});
 		}).then(() => {
 			return tokenInstance.balanceOf(receiverAccount);
 		}).then((res) => {
 			satBal = res.toNumber();
-			return stablecoinInstance.balanceOf(receiverAccount);
+			return strikeAssetInstance.balanceOf(receiverAccount);
 		}).then((res) => {
 			scBal = res.toNumber();
 			return tokenInstance.approve(exchangeInstance.address, satBal, {from: receiverAccount});
 		}).then(() => {
-			return stablecoinInstance.approve(exchangeInstance.address, scBal, {from: receiverAccount});
+			return strikeAssetInstance.approve(exchangeInstance.address, scBal, {from: receiverAccount});
 		}).then((res) => {
 			return exchangeInstance.depositFunds(satBal, scBal, {from: receiverAccount});
 		}).then(() => {

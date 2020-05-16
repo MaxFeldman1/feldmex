@@ -1,6 +1,6 @@
 pragma solidity ^0.5.12;
 
-contract stablecoin {
+contract strikeAsset {
     uint256 public scUnits = 1000000;
     uint256 public totalSupply;
 

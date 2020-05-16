@@ -1,15 +1,15 @@
 pragma solidity ^0.5.12;
 import "./oracle.sol";
 import "./UnderlyingAsset.sol";
-import "./stablecoin.sol";
+import "./strikeAsset.sol";
 
 contract options {
-    //address of the contract of the price oracle for the underlying asset in terms of the stablecoin such as a price oracle for WBTC/DAI
+    //address of the contract of the price oracle for the underlying asset in terms of the strike asset such as a price oracle for WBTC/DAI
     address oracleAddress;
     //address of the contract of the underlying digital asset such as WBTC or WETH
     address underlyingAssetAddress;
     //address of a digital asset that represents a unit of account such as DAI
-    address stablecoinAddress;
+    address strikeAssetAddress;
     //address of the exchange is allowed to see collateral requirements for all users
     address exchangeAddress;
     //deployer can set the exchange address once
@@ -28,18 +28,18 @@ contract options {
 
         @param address _oracleAddress: address that shall be assigned to oracleAddress
         @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
-        @param address _stablecoinAddress: address that shall be assigned to stablecoinAddress
+        @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
     */
-    constructor (address _oracleAddress, address _underlyingAssetAddress, address _stablecoinAddress) public {
+    constructor (address _oracleAddress, address _underlyingAssetAddress, address _strikeAssetAddress) public {
         oracleAddress = _oracleAddress;
         underlyingAssetAddress = _underlyingAssetAddress;
-        stablecoinAddress = _stablecoinAddress;
+        strikeAssetAddress = _strikeAssetAddress;
         exchangeAddress = msg.sender;
         deployerAddress = msg.sender;
-        UnderlyingAsset ua = UnderlyingAsset(_underlyingAssetAddress);
+        UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
         satUnits = ua.satUnits();
-        stablecoin sc = stablecoin(stablecoinAddress);
-        scUnits = sc.scUnits();
+        strikeAsset sa = strikeAsset(strikeAssetAddress);
+        scUnits = sa.scUnits();
     }
     
     /*
@@ -73,7 +73,7 @@ contract options {
     mapping(address => mapping(uint => mapping(uint => int))) putAmounts;
 
     /*
-        claimedTokens and claimedStable refers to the amount of the underlying and stablecoin respectively that each user may withdraw
+        claimedTokens and claimedStable refers to the amount of the underlying and strike asset respectively that each user may withdraw
     */
     //denominated in satUnits
     mapping(address => uint) claimedTokens;
@@ -82,7 +82,7 @@ contract options {
 
     /*
         satCollateral maps each user to the amount of collateral in the underlying that they have locked at each maturuty for calls
-        scCollateral maps each user to the amount of collateral in stablecoin that they have locked at each maturity for puts
+        scCollateral maps each user to the amount of collateral in strike asset that they have locked at each maturity for puts
     */
     //address => maturity => amount (denominated in satUnits)
     mapping(address => mapping(uint => uint)) satCollateral;
@@ -98,7 +98,7 @@ contract options {
 
     /*
         satDeduction is the amount of underlying asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for calls
-        scDeduction is the amount of stablecoin collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for puts
+        scDeduction is the amount of strike asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for puts
     */
     //address => maturity => amount of collateral not required //denominated in satUnits
     mapping(address => mapping(uint => uint)) satDeduction;
@@ -113,7 +113,7 @@ contract options {
         @param address _debtor: the address that collateral posted here will be associated with and the for which the call will be considered a liability
         @param address _holder: the address that owns the right to the value of the option contract at the maturity
         @param uint _maturity: the evm and unix timestamp at which the call contract matures and settles
-        @param uint _strike: the spot price of the underlying in terms of the stablecoin at which this option contract settles at the maturity timestamp
+        @param uint _strike: the spot price of the underlying in terms of the strike asset at which this option contract settles at the maturity timestamp
         @param uint _amount: the amount of calls that the debtor is adding as short and the holder is adding as long
         @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in satUnits
             if this limit needs to be broken to mint the call the transaction will return (true, 0)
@@ -157,18 +157,18 @@ contract options {
         @param address _debtor: the address that collateral posted here will be associated with and the for which the put will be considered a liability
         @param address _holder: the address that owns the right to the value of the option contract at the maturity
         @param uint _maturity: the evm and unix timestamp at which the put contract matures and settles
-        @param uint _strike: the spot price of the underlying in terms of the stablecoin at which this option contract settles at the maturity timestamp
+        @param uint _strike: the spot price of the underlying in terms of the strike asset at which this option contract settles at the maturity timestamp
         @param uint _amount: the amount of puts that the debtor is adding as short and the holder is adding as long
         @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in scUnits
             if this limit needs to be broken to mint the put the transaction will return (false, 0)
 
         @return bool success: if an error occurs returns false if no error return true
-        @return uint transferAmt: returns the amount of stablecoin that was transfered from the message sender to act as collateral for the debtor
+        @return uint transferAmt: returns the amount of strike asset that was transfered from the message sender to act as collateral for the debtor
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
         require(_strike != 0);
-        stablecoin sc = stablecoin(stablecoinAddress);
+        strikeAsset sa = strikeAsset(strikeAssetAddress);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
@@ -177,7 +177,7 @@ contract options {
 
         transferAmt = debtorMinSc - scCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return (false, 0);
-        require(sc.transferFrom(msg.sender,  address(this), transferAmt));
+        require(sa.transferFrom(msg.sender,  address(this), transferAmt));
         scCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSc
         claimedStable[_holder] += scCollateral[_holder][_maturity] - holderMinSc;
         scCollateral[_holder][_maturity] = holderMinSc;
@@ -234,23 +234,23 @@ contract options {
 
     /*
         @Descripton: allows for users to withdraw funds that are not locked up as collateral
-            these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and stablecoins respectively
+            these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
     */
     function withdrawFunds() public returns(bool success){
         UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
         uint funds = claimedTokens[msg.sender];
         claimedTokens[msg.sender] = 0;
         assert(ua.transfer(msg.sender, funds));
-        stablecoin sc = stablecoin(stablecoinAddress);
+        strikeAsset sa = strikeAsset(strikeAssetAddress);
         funds = claimedStable[msg.sender];
         claimedStable[msg.sender] = 0;
-        assert(sc.transfer(msg.sender, funds));
+        assert(sa.transfer(msg.sender, funds));
         return true;
     }
 
     /*
         @Description: allows for users to deposit funds that are not tided up as collateral
-            these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and stablecoins respectively
+            these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
     */
     function depositFunds(uint _sats, uint _sc) public returns(bool success){
         if (_sats > 0){
@@ -259,8 +259,8 @@ contract options {
             claimedTokens[msg.sender] += _sats;
         }
         if (_sc > 0){
-            stablecoin sc = stablecoin(stablecoinAddress);
-            require(sc.transferFrom(msg.sender, address(this), _sc));
+            strikeAsset sa = strikeAsset(strikeAssetAddress);
+            require(sa.transferFrom(msg.sender, address(this), _sc));
             claimedStable[msg.sender] += _sc;
         }
         return true;
@@ -317,7 +317,7 @@ contract options {
         @param uint _strike: the strike prive of the put contract in terms of the underlying versus stablecoie
         @param uint _prive: the spot price at which to find the value of the position in terms of the underlying versus stablecoie
 
-        @return uint: the value of the position in terms of the stablecoin
+        @return uint: the value of the position in terms of the strike asset
     */
     function scValueOf(int _amount, uint _strike, uint _price)internal view returns(uint){
         uint payout = 0;
@@ -365,7 +365,7 @@ contract options {
         @param int _amount: the amount of the extra position that is to be calculated alongside the positions of the address
         @param uint _strike: the strike price of the position that is to be calculated alongside the positions of the address
 
-        @return uint: the total value of all positons at the spot price combined as well as the value of the added position denominated in stablecoin
+        @return uint: the total value of all positons at the spot price combined as well as the value of the added position denominated in strike asset
     */
     function totalScValueOf(address _addr, uint _maturity, uint _price, int _amount, uint _strike)internal view returns(uint){
         uint value = scValueOf(_amount, _strike, _price);
@@ -421,7 +421,7 @@ contract options {
         @param int _amount: the amount of the added position
         @param uint _strike: the strike price of the added position
 
-        @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in stablecoin
+        @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in strike asset
         @return uint: negative value denominated in scUnits of all short put postions at a spot price of 0
     */
     function minSc(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minCollateral, uint liabilities){

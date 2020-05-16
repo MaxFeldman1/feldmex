@@ -1,14 +1,14 @@
 pragma solidity ^0.5.12;
 import "./UnderlyingAsset.sol";
 import "./options.sol";
-import "./stablecoin.sol";
+import "./strikeAsset.sol";
 
 
 contract exchange{
     //denominated in Underlying Token satUnits
     mapping(address => uint) claimedToken;
     
-    //denominated in the unit of account scUnits
+    //denominated in the strike asset scUnits
     mapping(address => uint) claimedStable;
 
     //------------functions to view balances----------------
@@ -76,7 +76,7 @@ contract exchange{
     //address of the contract of the underlying digital asset such as WBTC or WETH
     address underlyingAssetAddress;
     //address of a digital asset that represents a unit of account such as DAI
-    address stablecoinAddress;
+    address strikeAssetAddress;
     //address of the smart contract that handles the creation of calls and puts and thier subsequent redemption
     address optionsAddress;
     //incrementing identifier for each order that garunties unique hashes for all identifiers
@@ -89,31 +89,29 @@ contract exchange{
     //uint public testing;
     
     /*  
-        @Description: initialise globals and preform initial processes with the token and stablecoin contracts
+        @Description: initialise globals and preform initial processes with the underlying asset and strike asset contracts
 
         @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
-        @param address _stablecoinAddress: address that shall be assigned to stablecoinAddress
+        @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
         @param address _optionsAddress: address that shall be assigned to optionsAddress
     */
-    constructor (address _underlyingAssetAddress, address _stablecoinAddress, address _optionsAddress) public{
+    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress) public{
         underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
-        stablecoinAddress = _stablecoinAddress;
-        UnderlyingAsset ua = UnderlyingAsset(_underlyingAssetAddress);
+        strikeAssetAddress = _strikeAssetAddress;
+        UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
         satUnits = ua.satUnits();
         ua.approve(optionsAddress, 2**255);
-        stablecoin sc = stablecoin(stablecoinAddress);
-        scUnits = sc.scUnits();
-        sc.approve(optionsAddress, 2**255);
+        strikeAsset sa = strikeAsset(strikeAssetAddress);
+        scUnits = sa.scUnits();
+        sa.approve(optionsAddress, 2**255);
     }
     
     /*
         @Description: deposit funds in this contract, funds tracked by the claimedToken and claimedStable mappings
 
         @param uint _amount: the amount of the token to be deposited
-        @param boolean _fullUnit: if true _amount is full units of the token if false _amount is the samllest unit of the token
-        @param uint _amountStable: the amount of the stablecoin to be deposited
-        @param boolean _fullUnitStable: if true _amountStable is full units of the stablecoin if false _amountStable is the smallest unit of the stablecoin
+        @param uint _amountStable: the amount of the strike asset to be deposited
 
         @return bool success: if an error occurs returns false if no error return true
     */
@@ -126,8 +124,8 @@ contract exchange{
                 return false;
         }
         if (_amountStable != 0){
-            stablecoin sc = stablecoin(stablecoinAddress);
-            if (sc.transferFrom(msg.sender, address(this), _amountStable))
+            strikeAsset sa = strikeAsset(strikeAssetAddress);
+            if (sa.transferFrom(msg.sender, address(this), _amountStable))
                 claimedStable[msg.sender]+=_amountStable;
             else 
                 return false;
@@ -138,7 +136,7 @@ contract exchange{
     /*
         @Description: send back all funds tracked in the claimedToken and claimedStable mappings of the caller to the callers address
 
-        @param bool _token: if true withdraw the tokens recorded in claimedToken if false withdraw the stablecoins stored in claimedStable
+        @param bool _token: if true withdraw the tokens recorded in claimedToken if false withdraw the strike asset stored in claimedStable
 
         @return bool success: if an error occurs returns false if no error return true
     */
@@ -153,9 +151,9 @@ contract exchange{
         else {
             uint val = claimedStable[msg.sender];
             require(val > 0);
-            stablecoin sc = stablecoin(stablecoinAddress);
+            strikeAsset sa = strikeAsset(strikeAssetAddress);
             claimedStable[msg.sender] = 0;
-            return sc.transfer(msg.sender, val);
+            return sa.transfer(msg.sender, val);
         }
 
     }
