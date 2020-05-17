@@ -1,22 +1,22 @@
 const oracle = artifacts.require("oracle");
-const DappToken = artifacts.require("DappToken");
+const underlyingAsset = artifacts.require("UnderlyingAsset");
 const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
-const stablecoin = artifacts.require("stablecoin");
+const strikeAsset = artifacts.require("strikeAsset");
 
 module.exports = function(deployer) {
   deployer.deploy(oracle).then(() => {
-  	return deployer.deploy(DappToken, 0);
+  	return deployer.deploy(underlyingAsset, 0);
   }).then(() => {
-  	return deployer.deploy(stablecoin, 0);
+  	return deployer.deploy(strikeAsset, 0);
   }).then(() => {
-  	return deployer.deploy(options, oracle.address, DappToken.address, stablecoin.address);
-  }).then(() => {
-  	return deployer.deploy(exchange, DappToken.address, stablecoin.address, options.address);
+  	return deployer.deploy(options, oracle.address, underlyingAsset.address, strikeAsset.address);
+  }).then((instance) => {
+    optionsInstance = instance;
+  	return deployer.deploy(exchange, underlyingAsset.address, strikeAsset.address, options.address);
   }).then(() => {
   	return options.deployed();
-  }).then((instance) => {
-  	optionsInstance = instance;
+  }).then(() => {
   	return optionsInstance.setExchangeAddress(exchange.address);
   });
 };
