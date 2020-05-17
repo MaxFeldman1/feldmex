@@ -1,7 +1,6 @@
 pragma solidity ^0.5.12;
 import "./oracle.sol";
-import "./UnderlyingAsset.sol";
-import "./strikeAsset.sol";
+import "./ERC20.sol";
 
 contract options {
     //address of the contract of the price oracle for the underlying asset in terms of the strike asset such as a price oracle for WBTC/DAI
@@ -36,9 +35,9 @@ contract options {
         strikeAssetAddress = _strikeAssetAddress;
         exchangeAddress = msg.sender;
         deployerAddress = msg.sender;
-        UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
+        ERC20 ua = ERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
-        strikeAsset sa = strikeAsset(strikeAssetAddress);
+        ERC20 sa = ERC20(strikeAssetAddress);
         scUnits = 10 ** uint(sa.decimals());
     }
     
@@ -124,7 +123,7 @@ contract options {
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
         require(_strike != 0);
-        UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
+        ERC20 ua = ERC20(underlyingAssetAddress);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
@@ -168,7 +167,7 @@ contract options {
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
         require(_strike != 0);
-        strikeAsset sa = strikeAsset(strikeAssetAddress);
+        ERC20 sa = ERC20(strikeAssetAddress);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
@@ -237,11 +236,11 @@ contract options {
             these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
     */
     function withdrawFunds() public returns(bool success){
-        UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
+        ERC20 ua = ERC20(underlyingAssetAddress);
         uint funds = claimedTokens[msg.sender];
         claimedTokens[msg.sender] = 0;
         assert(ua.transfer(msg.sender, funds));
-        strikeAsset sa = strikeAsset(strikeAssetAddress);
+        ERC20 sa = ERC20(strikeAssetAddress);
         funds = claimedStable[msg.sender];
         claimedStable[msg.sender] = 0;
         assert(sa.transfer(msg.sender, funds));
@@ -254,12 +253,12 @@ contract options {
     */
     function depositFunds(uint _sats, uint _sc) public returns(bool success){
         if (_sats > 0){
-            UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
+            ERC20 ua = ERC20(underlyingAssetAddress);
             require(ua.transferFrom(msg.sender, address(this), _sats));
             claimedTokens[msg.sender] += _sats;
         }
         if (_sc > 0){
-            strikeAsset sa = strikeAsset(strikeAssetAddress);
+            ERC20 sa = ERC20(strikeAssetAddress);
             require(sa.transferFrom(msg.sender, address(this), _sc));
             claimedStable[msg.sender] += _sc;
         }

@@ -1,7 +1,6 @@
 pragma solidity ^0.5.12;
-import "./UnderlyingAsset.sol";
+import "./ERC20.sol";
 import "./options.sol";
-import "./strikeAsset.sol";
 
 
 contract exchange{
@@ -99,10 +98,10 @@ contract exchange{
         underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
-        UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
+        ERC20 ua = ERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
-        strikeAsset sa = strikeAsset(strikeAssetAddress);
+        ERC20 sa = ERC20(strikeAssetAddress);
         scUnits = 10 ** uint(sa.decimals());
         sa.approve(optionsAddress, 2**255);
     }
@@ -117,14 +116,14 @@ contract exchange{
     */
     function depositFunds(uint _amount, uint _amountStable) public returns(bool success){
         if (_amount != 0){
-            UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
+            ERC20 ua = ERC20(underlyingAssetAddress);
             if (ua.transferFrom(msg.sender, address(this), _amount))
                 claimedToken[msg.sender]+=_amount;
             else 
                 return false;
         }
         if (_amountStable != 0){
-            strikeAsset sa = strikeAsset(strikeAssetAddress);
+            ERC20 sa = ERC20(strikeAssetAddress);
             if (sa.transferFrom(msg.sender, address(this), _amountStable))
                 claimedStable[msg.sender]+=_amountStable;
             else 
@@ -144,14 +143,14 @@ contract exchange{
         if (_token){
             uint val = claimedToken[msg.sender];
             require(val > 0);
-            UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
+            ERC20 ua = ERC20(underlyingAssetAddress);
             claimedToken[msg.sender] = 0;
             return ua.transfer(msg.sender, val);
         }
         else {
             uint val = claimedStable[msg.sender];
             require(val > 0);
-            strikeAsset sa = strikeAsset(strikeAssetAddress);
+            ERC20 sa = ERC20(strikeAssetAddress);
             claimedStable[msg.sender] = 0;
             return sa.transfer(msg.sender, val);
         }
