@@ -40,11 +40,11 @@ contract('options', function(accounts){
 	it ('mints, exercizes call options', function(){
 		defaultAccount = accounts[0];
 		reciverAccount = accounts[1];
-		return tokenInstance.satUnits().then((res) => {
-			satUnits = res.toNumber();
-			return strikeAssetInstance.scUnits();
+		return tokenInstance.decimals().then((res) => {
+			satUnits = Math.pow(10, res);
+			return strikeAssetInstance.decimals();
 		}).then((res) => {
-			scUnits = res.toNumber()
+			scUnits = Math.pow(10, res);
 			return tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
 			return strikeAssetInstance.approve(optionsInstance.address, 1000*scUnits, {from: defaultAccount});

@@ -100,10 +100,10 @@ contract exchange{
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
         UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
-        satUnits = ua.satUnits();
+        satUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
         strikeAsset sa = strikeAsset(strikeAssetAddress);
-        scUnits = sa.scUnits();
+        scUnits = 10 ** uint(sa.decimals());
         sa.approve(optionsAddress, 2**255);
     }
     

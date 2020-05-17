@@ -1,8 +1,10 @@
 pragma solidity ^0.5.12;
 
 contract UnderlyingAsset {
-    uint256 public satUnits = 1000000;
+    uint8 public decimals = 6;
     uint256 public totalSupply;
+    //satUnits == 10 ** decimals
+    uint satUnits = 1000000;
 
     event Transfer(
         address indexed _from,

@@ -1,8 +1,10 @@
 pragma solidity ^0.5.12;
 
 contract strikeAsset {
-    uint256 public scUnits = 1000000;
+    uint8 public decimals = 6;
     uint256 public totalSupply;
+    //scUnits == 10 ** decimals
+    uint scUnits = 1000000;
 
     event Transfer(
         address indexed _from,

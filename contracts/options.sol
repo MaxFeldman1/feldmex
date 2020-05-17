@@ -37,9 +37,9 @@ contract options {
         exchangeAddress = msg.sender;
         deployerAddress = msg.sender;
         UnderlyingAsset ua = UnderlyingAsset(underlyingAssetAddress);
-        satUnits = ua.satUnits();
+        satUnits = 10 ** uint(ua.decimals());
         strikeAsset sa = strikeAsset(strikeAssetAddress);
-        scUnits = sa.scUnits();
+        scUnits = 10 ** uint(sa.decimals());
     }
     
     /*

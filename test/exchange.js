@@ -52,11 +52,11 @@ contract('exchange', function(accounts) {
 		originAccount = accounts[0]
 		defaultAccount = accounts[1];
 		receiverAccount = accounts[2];
-		return tokenInstance.satUnits().then((res) => {
-			satUnits = res.toNumber();
-			return strikeAssetInstance.scUnits();
+		return tokenInstance.decimals().then((res) => {
+			satUnits = Math.pow(10, res);
+			return strikeAssetInstance.decimals();
 		}).then((res) => {
-			scUnits = res.toNumber();
+			scUnits = Math.pow(10, res);
 			return tokenInstance.transfer(defaultAccount, 21000000*satUnits, {from: originAccount});
 		}).then(() => {
 			return strikeAssetInstance.transfer(defaultAccount, 21000000*scUnits, {from: originAccount});

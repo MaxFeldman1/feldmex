@@ -19,8 +19,8 @@ contract('UnderlyingAsset', function(accounts) {
 		transferAmount = 1000;
 		accountTo = accounts[1];
 		accountFrom = accounts[0];
-		return tokenInstance.satUnits.call().then((sats) => {
-			satUnits = sats.toNumber();
+		return tokenInstance.decimals().then((res) => {
+			satUnits = Math.pow(10, res);
 			return tokenInstance.balanceOf(accountTo);
 		}).then((balance) => {
 			toStartBalance = balance;
