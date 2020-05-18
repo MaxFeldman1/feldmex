@@ -16,6 +16,9 @@ var defaultAccount;
 var debtor;
 var holder;
 var feeDenominator = 0x4000000000000000000000000000000000000000000000000000000000000000;
+var inflator;
+var inflatorObj = {};
+var setWithInflator;
 
 contract('options', function(accounts){
 
@@ -31,6 +34,16 @@ contract('options', function(accounts){
 			return options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address);
 		}).then((i) => {
 			optionsInstance = i;
+			inflatorObj = {};
+			//setWithInflator sets spot and adjusts for the inflator
+			setWithInflator = (_spot) => {return oracleInstance.set(_spot * inflator);};
+			inflatorObj.mintCall = (debtor, holder, maturity, strike, amount, limit, params) => {return optionsInstance.mintCall(debtor, holder, maturity, strike*inflator, amount, limit, params);};
+			inflatorObj.mintPut = (debtor, holder, maturity, strike, amount, limit, params) => {return optionsInstance.mintPut(debtor, holder, maturity, strike*inflator, amount, limit, params);};
+			inflatorObj.addStrike = (strike, maturity, params) => {return optionsInstance.addStrike(strike*inflator, maturity, params);};
+			inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
+			inflatorObj.transfer = (to, value, maturity, strike, maxTransfer, callPut, params) => {return optionsInstance.transfer(to, value, maturity, strike*inflator, maxTransfer, callPut, params);};
+			inflatorObj.transferFrom = (from, to, value, maturity, strike, maxTransfer, callPut, params) => {return optionsInstance.transferFrom(from, to, value, maturity, strike*inflator, maxTransfer, callPut, params);};
+			inflatorObj.approve = (spender, value, maturity, strike, callPut, params) => {return optionsInstance.approve(spender, value, maturity, strike*inflator, callPut, params);};
 			feeDenominator = 1000;
 			return optionsInstance.setFee(1000, {from: accounts[0]});
 		});
@@ -45,11 +58,14 @@ contract('options', function(accounts){
 			return strikeAssetInstance.decimals();
 		}).then((res) => {
 			scUnits = Math.pow(10, res);
+			return optionsInstance.inflator()
+		}).then((res) => {
+			inflator = res.toNumber();			
 			return tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: defaultAccount});
 		}).then(() => {
 			return strikeAssetInstance.approve(optionsInstance.address, 1000*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return oracleInstance.set(finalSpot);
+			return setWithInflator(finalSpot);
 		}).then(() => {
 			return web3.eth.getBlock('latest');
 		}).then((res) => {
@@ -58,15 +74,15 @@ contract('options', function(accounts){
 			maturity = res.timestamp;
 			return new Promise(resolve => setTimeout(resolve, 2000));
 		}).then((res) => {
-			return optionsInstance.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
+			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
 		}).then(() => {
 			return optionsInstance.viewStrikes(maturity, {from: debtor});
 		}).then((res) => {
-			assert.equal(res[0].toNumber(), strike, "the correct strike is added");
-			return optionsInstance.balanceOf(debtor, maturity, strike, true);
+			assert.equal(res[0].toNumber(), strike*inflator, "the correct strike is added");
+			return inflatorObj.balanceOf(debtor, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), -amount, "debtor holds negative amount of contracts");
-			return optionsInstance.balanceOf(holder, maturity, strike, true);
+			return inflatorObj.balanceOf(holder, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), amount, "holder holds positive amount of contracts");
 		}).then(() => {
@@ -74,10 +90,10 @@ contract('options', function(accounts){
 		}).then(() => {
 			return optionsInstance.claim(maturity, {from: holder});
 		}).then(() => {
-			return optionsInstance.balanceOf(debtor, maturity, strike, true);
+			return inflatorObj.balanceOf(debtor, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "debtor's contracts have been exerciced");
-			return optionsInstance.balanceOf(holder, maturity, strike, true);
+			return inflatorObj.balanceOf(holder, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "holder's contracts have been exerciced");
 		});
@@ -114,11 +130,11 @@ contract('options', function(accounts){
 
 	it('mints and exercizes put options', function() {
 		difference = 30;
-		return oracleInstance.set(strike-difference).then(() => {
+		return setWithInflator(strike-difference).then(() => {
 			return web3.eth.getBlock('latest');
 		}).then((res) => {
 			maturity = res.timestamp+1;
-			return optionsInstance.mintPut(debtor, holder, maturity, strike, amount, strike*scUnits*amount, {from: defaultAccount});
+			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, strike*amount*scUnits, {from: defaultAccount});
 		}).then(() => {
 			return new Promise(resolve => setTimeout(resolve, 2000));
 		}).then(() => {
@@ -135,13 +151,13 @@ contract('options', function(accounts){
 		}).then(() => {
 			return strikeAssetInstance.balanceOf(debtor);
 		}).then((res) => {
-			debtorExpected = amount*strike*scUnits-difference*scUnits*amount;
-			//account for fee
+			debtorExpected = amount*scUnits*(strike-difference);
+			//account for the fee
 			debtorExpected -= Math.floor(debtorExpected/feeDenominator);
 			assert.equal(res.toNumber(), debtorExpected, "correct amount sent to debtor of the put contract");
 			return strikeAssetInstance.balanceOf(holder);
 		}).then((res) => {
-			holderExpected = difference*scUnits*amount;
+			holderExpected = difference*amount*scUnits;
 			holderExpected -= Math.floor(holderExpected/feeDenominator);
 			assert.equal(res.toNumber(), holderExpected, "correct amount sent to the holder of the put contract");
 			return;
@@ -184,14 +200,14 @@ contract('options', function(accounts){
 		}).then(() => {
 			amount = 10;
 			//debtor must accept transfers on a strike before recieving them
-			return optionsInstance.addStrike(strike, maturity, {from: debtor});
+			return inflatorObj.addStrike(strike, maturity, {from: debtor});
 		}).then(() => {
-			return optionsInstance.transfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});
+			return inflatorObj.transfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});
 		}).then(() => {
-			return optionsInstance.balanceOf(debtor, maturity, strike, true);
+			return inflatorObj.balanceOf(debtor, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), amount, "correct amount for the debtor");
-			return optionsInstance.balanceOf(defaultAccount, maturity, strike, true);
+			return inflatorObj.balanceOf(defaultAccount, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), -amount, "correct amount for the defaultAccount");
 			return optionsInstance.viewSatCollateral(maturity, {from: defaultAccount});
@@ -206,26 +222,26 @@ contract('options', function(accounts){
 			return optionsInstance.viewSatDeduction(maturity, {from: debtor});
 		}).then((res) => {
 			assert.equal(res.toNumber(), 0, "correct sat deduction for "+debtor);
-			return optionsInstance.transfer(debtor, amount, maturity, strike, amount*strike*scUnits, false, {from: defaultAccount});
+			return inflatorObj.transfer(debtor, amount, maturity, strike, amount*strike*scUnits, false, {from: defaultAccount});
 		}).then(() => {
 			newStrike = strike+10;
-			return optionsInstance.approve(defaultAccount, amount, maturity, newStrike, false, {from: debtor});
+			return inflatorObj.approve(defaultAccount, amount, maturity, newStrike, false, {from: debtor});
 		}).then(() => {
 			//defaultAccount must accept transfers on a strike before recieving them
-			return optionsInstance.addStrike(newStrike, maturity, {from: defaultAccount});
+			return inflatorObj.addStrike(newStrike, maturity, {from: defaultAccount});
 		}).then(() => {
-			return optionsInstance.transferFrom(debtor, defaultAccount, amount, maturity, newStrike, amount*newStrike*scUnits, false, {from: defaultAccount});
+			return inflatorObj.transferFrom(debtor, defaultAccount, amount, maturity, newStrike, amount*newStrike*scUnits, false, {from: defaultAccount});
 		}).then(() => {
-			return optionsInstance.balanceOf(debtor, maturity, strike, false);
+			return inflatorObj.balanceOf(debtor, maturity, strike, false);
 		}).then((res) => {
 			assert.equal(res.toNumber(), amount, "correct put balance at strike "+strike+" for "+debtor);
-			return optionsInstance.balanceOf(debtor, maturity, newStrike, false);
+			return inflatorObj.balanceOf(debtor, maturity, newStrike, false);
 		}).then((res) => {
 			assert.equal(res.toNumber(), -amount, "correct put balance at strike "+newStrike+" for "+debtor);
-			return optionsInstance.balanceOf(defaultAccount, maturity, strike, false);
+			return inflatorObj.balanceOf(defaultAccount, maturity, strike, false);
 		}).then((res) => {
 			assert.equal(res.toNumber(), -amount, "correct put balance at strike "+strike+" for "+defaultAccount);
-			return optionsInstance.balanceOf(defaultAccount, maturity, newStrike, false);
+			return inflatorObj.balanceOf(defaultAccount, maturity, newStrike, false);
 		}).then((res) => {
 			assert.equal(res.toNumber(), amount, "correct put balance at strike "+newStrike+" for "+defaultAccount);
 			return optionsInstance.viewScCollateral(maturity, {from: defaultAccount});

@@ -184,7 +184,7 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order
     */
     function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public {
-        require(_maturity != 0 && _price != 0 && _price < (_call? satUnits: scUnits*_strike) && _strike != 0);
+        require(_maturity != 0 && _price != 0 && _price < (_call? satUnits: _strike) && _strike != 0);
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         if (listHeads[_maturity][_strike][index] != 0) {
             insertOrder(_maturity, _strike, _price, _amount, _buy, _call, listHeads[_maturity][_strike][index]);
@@ -204,8 +204,17 @@ contract exchange{
             claimedStable[msg.sender] -= _price * _amount;
         }
         else {
-            require(claimedStable[msg.sender] >= _amount * (scUnits * _strike - _price));
-            claimedStable[msg.sender] -= _amount * (scUnits * _strike - _price);
+            /*
+                because:
+                    inflator == scUnits && _strike == inflator * nonInflatedStrike
+                therefore:
+                    _amount * (scUnits * nonInflatedStrike - price) ==
+                    _amount * (scUnits * (_strike /inflator) - price) ==
+                    _amount * (_strike - price)
+                
+            */
+            require(claimedStable[msg.sender] >= _amount * (_strike - _price));
+            claimedStable[msg.sender] -= _amount * (_strike - _price);
         }
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
         //get hashes
@@ -233,7 +242,7 @@ contract exchange{
     */
     function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
         //make sure the offer and node corresponding to the name is in the correct list
-        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? satUnits: scUnits*_strike) && _strike != 0);
+        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? satUnits: _strike) && _strike != 0);
         require(offers[linkedNodes[_name].hash].buy  == _buy && offers[linkedNodes[_name].hash].call == _call);
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         if (index == 0){
@@ -249,8 +258,8 @@ contract exchange{
             claimedStable[msg.sender] -= _price * _amount;
         }
         else {
-            require(claimedStable[msg.sender] >= _amount * (scUnits * _strike - _price));
-            claimedStable[msg.sender] -= _amount * (scUnits * _strike - _price);
+            require(claimedStable[msg.sender] >= _amount * (_strike - _price));
+            claimedStable[msg.sender] -= _amount * (_strike - _price);
         }
 
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
@@ -366,7 +375,7 @@ contract exchange{
         else if (index == 2)
             claimedStable[msg.sender] += offer.price * offer.amount;
         else
-            claimedStable[msg.sender] += offer.amount * (scUnits * offer.strike - offer.price);
+            claimedStable[msg.sender] += offer.amount * (offer.strike - offer.price);
     }
     
 
@@ -498,7 +507,7 @@ contract exchange{
                 therefore we do not need to call options.mintCall
             */
             if (offer.call) claimedToken[_buyer] += offer.amount * (satUnits - offer.price);
-            else claimedStable[_buyer] += offer.amount * (scUnits * offer.strike - offer.price); 
+            else claimedStable[_buyer] += offer.amount * (offer.strike - offer.price); 
         }
         else if (offer.call){
             (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*satUnits);
@@ -507,10 +516,10 @@ contract exchange{
             claimedToken[offer.offerer] += (satUnits * offer.amount) - transferAmount;
         }
         else{
-            (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*scUnits*offer.strike);
+            (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*offer.strike);
             assert(safe);
             //redeem the seller collateral that was not required
-            claimedStable[offer.offerer] += (scUnits * offer.amount * offer.strike) - transferAmount;
+            claimedStable[offer.offerer] += (offer.amount * offer.strike) - transferAmount;
         }
         //clean storage
         delete linkedNodes[_name];
@@ -614,7 +623,7 @@ contract exchange{
                         therefore we do not need to call options.mintCall
                     */
                     if (_call) claimedToken[msg.sender] += _amount * (satUnits - offer.price);
-                    else claimedStable[msg.sender] += _amount * (scUnits * offer.strike - offer.price); 
+                    else claimedStable[msg.sender] += _amount * (offer.strike - offer.price); 
                 }
                 else if (_call){
                     require(claimedToken[msg.sender] >= offer.price * _amount);
@@ -628,11 +637,11 @@ contract exchange{
                 else { //!call && msg.sender != offer.offerer
                     require(claimedStable[msg.sender] >= offer.price * _amount);
                     claimedStable[msg.sender] -= offer.price * _amount;
-                    uint limit = _amount*scUnits*offer.strike;
+                    uint limit = _amount*offer.strike;
                     (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
                     assert(safe);
                     //redeem the seller collateral that was not used
-                    claimedStable[offer.offerer] += (scUnits * _amount * _strike) - transferAmount;
+                    claimedStable[offer.offerer] += (_amount * _strike) - transferAmount;
                 }
                 break;
             }

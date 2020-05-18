@@ -17,6 +17,11 @@ contract options {
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint scUnits;
+    /*
+        number by which the oracle multiplies all spot prices
+        also used to inflate strike prices here
+    */
+    uint public inflator;
     //fee == (pricePaid)/feeDenominator
     uint public feeDenominator = 2**255;
     //variable occasionally used for testing purposes should not be present in production
@@ -35,6 +40,8 @@ contract options {
         strikeAssetAddress = _strikeAssetAddress;
         exchangeAddress = msg.sender;
         deployerAddress = msg.sender;
+        oracle orc = oracle(oracleAddress);
+        inflator = orc.inflator();
         ERC20 ua = ERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
         ERC20 sa = ERC20(strikeAssetAddress);
@@ -215,6 +222,8 @@ contract options {
             callValue += satValueOf(callAmount, strike, spot);
             putValue += scValueOf(putAmount, strike, spot);
         }
+        //satValueOf is inflated by _price parameter and scValueOf thus only divide out spot from callValue not putValue
+        callValue /= spot;
         delete strikes[msg.sender][_maturity];
         if (callValue > satDeduction[msg.sender][_maturity]){
             callValue -= satDeduction[msg.sender][_maturity];
@@ -288,21 +297,23 @@ contract options {
         @param int _amount: the net long/short position
             positive == long; negative == short
         @param uint _strike: the strike prive of the call contract in terms of the underlying versus stablecoie
-        @param uint _prive: the spot price at which to find the value of the position in terms of the underlying versus stablecoie
+        @param uint _price: the spot price at which to find the value of the position in terms of the underlying versus stablecoie
 
-        @return uint: the value of the position in terms of the underlying
+        @return uint: the value of the position in terms of the underlying multiplied by the price
+            inflate value by multiplying by price and divide out after doing calculations with the returned value to maintain accuracy
     */
     function satValueOf(int _amount, uint _strike, uint _price)internal view returns(uint){
         uint payout = 0;
         if (_amount != 0){
             if (_price > _strike){
-                payout = (uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price - (_strike)))/_price;
+                //inflator is canceld out of numerator and denominator
+                payout = (uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price - (_strike)));
             }
             if (_amount > 0){
                 return payout;
             }
             else {
-                return uint(-_amount)*satUnits - (payout + 1);
+                return uint(-_amount)*satUnits*_price - payout;
             }
         } 
         return 0;
@@ -318,17 +329,19 @@ contract options {
 
         @return uint: the value of the position in terms of the strike asset
     */
-    function scValueOf(int _amount, uint _strike, uint _price)internal view returns(uint){
+    function scValueOf(int _amount, uint _strike, uint _price)internal pure returns(uint){
         uint payout = 0;
         if (_amount != 0){
             if (_price < _strike){
-                payout = (_strike - _price)*scUnits*uint(_amount > 0 ? _amount : -_amount);
+                //inflator must be divided out thus remove *satUnits
+                payout = (_strike - _price)*uint(_amount > 0 ? _amount : -_amount);
             }
             if (_amount > 0){
                 return payout;
             }
             else {
-                return uint(-_amount)*scUnits*_strike - payout;
+                //inflator must be divided out thus remove *satUnits
+                return uint(-_amount)*_strike - payout;
             }
         }
         return 0;
@@ -351,7 +364,7 @@ contract options {
         for(uint i = 0; i < strikes[_addr][_maturity].length; i++){
             value+=satValueOf(callAmounts[_addr][_maturity][strikes[_addr][_maturity][i]], strikes[_addr][_maturity][i], _price);
         }
-        return value;
+        return value/_price;
     }
 
     /*
@@ -440,7 +453,8 @@ contract options {
             cValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
             if (minValue > cValue) minValue = cValue;
         }
-        liabilities*=scUnits;
+        //note that every time we add another liability we multiply by the strike thus the inflator must be divided out when we are done
+        //liabilities*=scUnits;
         if (minValue > liabilities) return (0, liabilities);
         return ((liabilities) - minValue, liabilities);
     }

@@ -227,12 +227,15 @@ contract('exchange', function(accounts) {
 			return optionsInstance.viewClaimedTokens({from: receiverAccount});
 		}).then((res) => {
 			recTotal += res.toNumber();			
-			assert.equal(recTotal, 10*transferAmount*satUnits, "recieverAccount has the correct balance");
+			assert.equal(recTotal, 10*transferAmount*satUnits, "receiverAccount has the correct balance");
 			return;
 		});
 	});
 
 	it('can post and take buy orders of puts', function(){
+		//price must be lower than strike
+		strike = Math.floor(scUnits*0.7);
+		price = strike - Math.floor(strike/2);
 		return exchangeInstance.viewClaimed(false, {from: defaultAccount}).then((res) => {
 			receiverAccountPosition = 0;
 			defaultAccountPosition = 0;
@@ -305,7 +308,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.amount, amount-firstSellAmount-1, "the amount in the orders after three orders is still correct");
-			receiverAccountBalance -= (amount+firstSellAmount+1)*strike*scUnits -(amount*(price+5000)+(1+firstSellAmount)*price);
+			receiverAccountBalance -= (amount+firstSellAmount+1)*strike -(amount*(price+5000)+(1+firstSellAmount)*price);
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
 			assert.equal(res.toNumber(), defaultAccountBalance, "default account balance is correct");
@@ -325,13 +328,13 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
 			receiverAccountBalance = res.toNumber();
-			defaultAccountBalance -= strike*amount*scUnits - price*amount;
+			defaultAccountBalance -= strike*amount - price*amount;
 			return exchangeInstance.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
 		}).then(() => {
-			defaultAccountBalance -= strike*amount*scUnits - (price-10000)*amount;
+			defaultAccountBalance -= strike*amount - (price-10000)*amount;
 			return exchangeInstance.postOrder(maturity, strike, price-10000, amount, false, false, {from: defaultAccount});
 		}).then(() => {
-			defaultAccountBalance -= strike*amount*scUnits - (price-5000)*amount;
+			defaultAccountBalance -= strike*amount - (price-5000)*amount;
 			return exchangeInstance.postOrder(maturity, strike, price-5000, amount, false, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 3);
@@ -348,7 +351,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.price.toNumber(), price-10000, "the price in the list head order is correct");
 			assert.equal(res.buy, false, "the head order in the long puts linked list is classified as a sell order");
 			assert.equal(res.call, false, "the head order in the long puts linked list is classified as a put order");			
-			defaultAccountBalance += strike*amount*scUnits - (price-10000)*amount;
+			defaultAccountBalance += strike*amount - (price-10000)*amount;
 			return exchangeInstance.cancelOrder(head, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 3);
@@ -392,8 +395,8 @@ contract('exchange', function(accounts) {
 			return optionsInstance.viewClaimedStable({from: defaultAccount});
 		}).then((res) => {
 			defaultTotal += res.toNumber();
-			//add (halfPutAmount*strike*scUnits) to make up for the amount that was bought and then sold as we subtracted it out when puts were sold
-			defaultAccountBalance += (halfPutAmount*strike*scUnits);
+			//add (halfPutAmount*strike) to make up for the amount that was bought and then sold as we subtracted it out when puts were sold
+			defaultAccountBalance += (halfPutAmount*strike);
 			assert.equal(defaultTotal, defaultAccountBalance, "defaultAccount has the correct balance");
 			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
 		}).then((res) => {
@@ -463,7 +466,7 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.price.toNumber(), price+5000, "The price of the node is correct");
 			//now test for put sells
-			strike = 1;
+			maturity += 1;
 			return exchangeInstance.postOrder(altMaturity, strike, price, amount, false, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.postOrder(altMaturity, strike, price+10, amount, false, false, {from: defaultAccount});
@@ -646,7 +649,7 @@ contract('exchange', function(accounts) {
 			return strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		}).then(() => {
 		//------------------------------------------------------test with calls-------------------------------------
-			return exchangeInstance.depositFunds(price*amount, 0, {from: defaultAccount});
+			return exchangeInstance.depositFunds(price*amount + 1, 0, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.depositFunds(amount*satUnits, 0, {from: receiverAccount});
 		}).then(() => {
@@ -664,7 +667,10 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.postOrder(newMaturity, secondStrike, price, amount, true, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(newMaturity, secondStrike, 0, amount, true, {from: defaultAccount});
-		}).then((res) => {
+		}).catch(async (err) => {
+			await (new Promise(resolve => setTimeout(resolve, 20000)));
+			throw err;
+		}).then(() => {
 			//default account has funds in exchange contract while receiver account has funds in the options smart contract
 			return exchangeInstance.withdrawAllFunds(true, {from: defaultAccount});
 		}).then(() => {
@@ -692,7 +698,7 @@ contract('exchange', function(accounts) {
 
 	it('does not require excessive amount of collateral for puts', function(){
 		//----------------------------------------------test with puts--------------------------------------------
-		price = strike*scUnits - 1;
+		price = strike - 1;
 		return exchangeInstance.depositFunds(0, price*amount, {from: defaultAccount}).then(() => {
 			return exchangeInstance.depositFunds(0, amount*strike*scUnits, {from: receiverAccount});
 		}).then(() => {
@@ -820,6 +826,8 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.amount, 3, "last account is correct");
 			//test for index 2 puts buys
+			//strike must be greater than price
+			price = Math.floor(strike/2);
 			return exchangeInstance.postOrder(maturity, strike, price, 1, true, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.postOrder(maturity, strike, price, 2, true, false, {from: defaultAccount});
@@ -914,6 +922,8 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
 			balance = res;
+			//for puts strike must be greater than price
+			price = Math.floor(0.9*strike);
 			//test taking long put offers
 			return exchangeInstance.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
 		}).then(() => {
@@ -936,13 +946,13 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
 		}).then((res) => {
-			assert.equal(balance-res, 4*(scUnits*strike-price), "executes trades with self in marketBuy of puts");
+			assert.equal(balance-res, 4*(strike-price), "executes trades with self in marketBuy of puts");
 			balance = res;
 			return exchangeInstance.marketBuy(maturity, strike, price, amount, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});			
 		}).then((res) => {
-			assert.equal(res-balance, 4*(scUnits*strike-price), "executes trades with self in takeBuyOffer of puts");
+			assert.equal(res-balance, 4*(strike-price), "executes trades with self in takeBuyOffer of puts");
 		});
 	});
 });

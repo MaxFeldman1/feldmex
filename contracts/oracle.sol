@@ -14,6 +14,13 @@ contract oracle{
 
     uint mostRecent;
 
+    /*
+        adds extra accuracy to spot price
+        any contract interacting with this oracle shold divide out the inflator after calculatioins
+        inflator shall be equal to scUnits *the amount of subUnits in one full unit of strikeAsset*
+    */
+    uint public inflator = 1000000;
+
     constructor() public {
         startHeight = block.number;
         mostRecent = startHeight;
