@@ -3,12 +3,13 @@ pragma solidity ^0.5.12;
 contract oracle{
     uint btceth;
 
-    //height => price
-    mapping(uint => uint) public spots;
+    //lists all block heights at which spot is collected
+    uint[] heights;
     //height => timestamp
     mapping(uint => uint) public timestamps;
     //timestamp => price
     mapping(uint => uint) public tsToSpot;
+
 
     uint startHeight;
 
@@ -24,11 +25,12 @@ contract oracle{
     constructor() public {
         startHeight = block.number;
         mostRecent = startHeight;
+        heights.push(block.number);
     }
 
     function set(uint _btceth) public {
+        if (heights[heights.length-1] != block.number) heights.push(block.number);
         btceth = _btceth;
-        spots[block.number] = btceth;
         timestamps[block.number] = block.timestamp;
         tsToSpot[block.timestamp] = btceth;
         mostRecent = startHeight;
@@ -38,11 +40,11 @@ contract oracle{
         return btceth;
     }
     
-    function getUint(uint height) public view returns(uint){
-        while (height > startHeight){
-            if (spots[height] > 0)
-                return spots[height];
-            height--;
+    function getUint(uint _height) public view returns(uint){
+        while (_height > startHeight){
+            if (tsToSpot[timestamps[_height]] > 0)
+                return tsToSpot[timestamps[_height]];
+            _height--;
         }
         return 0;
     }
@@ -67,26 +69,40 @@ contract oracle{
         }
         return (0, _height);
     }
-    //timestamp to spot
-    function getAtTime(uint _time) public view returns (uint){
-        if (_time >= block.timestamp) return btceth;
-        uint height = block.number;
+
+    function getAtTime(uint _time) public view returns (uint) {
+
+        if (_time >= timestamps[heights[heights.length-1]]) return btceth;
+        if (_time < timestamps[heights[0]] || heights.length < 3) return 0;
         if (tsToSpot[_time] != 0) return tsToSpot[_time];
-        (uint startTime, uint startHeightInner) = timestampAheadHeight(startHeight);
-        if (_time < startTime) return 0;
-        uint step = (height-startHeightInner)>>2;
-        for (uint i = startHeightInner+(step<<1); ; ){
-            (uint bTime, uint bHeight) = timestampBehindHeight(i);
-            if (bTime < _time){
-                (uint aTime, uint aHeight) = timestampAheadHeight(i+1);
-                if (aTime > _time || aTime == 0) return tsToSpot[bTime];
-                i = (i+step)>aHeight+1 ? i+step : aHeight+1;
-            }
-            else {
-                i = (i-step)<bHeight-1 ? i-step : bHeight-1;
-            }
+        uint size = heights.length;
+        uint step = size>>2;
+        for (uint i = size>>1; ;){
+            uint currentTs = timestamps[heights[i]];
+            uint prevTs = i < 1 ? 0 : timestamps[heights[i-1]];
+            uint nextTs = i+1 < heights.length ? timestamps[heights[i+1]]: timestamps[heights[heights.length-1]];
+            /*
+                p => prevTs
+                c => currentTs
+                n => nextTs
+                Target => _time
+                    On each iteration find where Target is in relation to others
+                p, c, n, Target => increace i
+                p, c, Target, n => c
+                p, Target, c, n => p
+                Target, p, c, n => decreace i
+            */
+            if (_time > nextTs)
+                i = (i+step) < heights.length ? i+step : heights.length-1;                
+            else if (_time > currentTs)
+                return tsToSpot[currentTs];
+            else if (_time > prevTs)
+                return tsToSpot[prevTs];
+            else
+                i = i > step ? i-step : 0;
             step = (step>>1) > 0? step>>1: 1;
         }
+
     }
 
     function height() public view returns(uint){

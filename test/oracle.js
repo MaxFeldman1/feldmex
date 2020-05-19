@@ -85,10 +85,13 @@ contract('oracle', function(accounts){
 			assert.equal(res, 6, "correct spot");
 			return web3.eth.getBlock(height-2);
 		}).then((res) => {
-			newTime = res.timestamp;
+			newTime = res.timestamp+1;
+			return orcInstance.getAtTime(newTime);
+		}).then((res) => {
+			assert.equal(res.toNumber()/inflator, 1, "correct spot");
 			return web3.eth.getBlock(blockSet5);
 		}).then((res) => {
-			newTime = res.timestamp;
+			newTime = res.timestamp+1;
 			return orcInstance.getAtTime(newTime);
 		}).then((res) => {
 			res /= inflator;
