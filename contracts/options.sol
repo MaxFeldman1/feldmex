@@ -129,7 +129,7 @@ contract options {
     */
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
-        require(_strike != 0);
+        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
         ERC20 ua = ERC20(underlyingAssetAddress);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
@@ -149,8 +149,6 @@ contract options {
 
         callAmounts[_debtor][_maturity][_strike] -= int(_amount);
         callAmounts[_holder][_maturity][_strike] += int(_amount);
-        if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
-        if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
         return (true, transferAmt);
     }
 
@@ -173,7 +171,7 @@ contract options {
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
-        require(_strike != 0);
+        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
         ERC20 sa = ERC20(strikeAssetAddress);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
@@ -193,8 +191,6 @@ contract options {
 
         putAmounts[_debtor][_maturity][_strike] -= int(_amount);
         putAmounts[_holder][_maturity][_strike] += int(_amount);
-        if (!contains(_debtor, _maturity, _strike)) strikes[_debtor][_maturity].push(_strike);
-        if (!contains(_holder, _maturity, _strike)) strikes[_holder][_maturity].push(_strike);
         return (true, transferAmt);
     }
     
@@ -283,7 +279,7 @@ contract options {
 
         @return bool: returns true if strike[_addr][_maturity] contains _strike otherwise returns false
     */
-    function contains(address _addr, uint _maturity, uint _strike)internal view returns(bool){
+    function contains(address _addr, uint _maturity, uint _strike)public view returns(bool){
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             if (strikes[_addr][_maturity][i] == _strike) return true;
         }
@@ -484,17 +480,54 @@ contract options {
 
     /*
         @Description: The function was created for positions at a strike to be inclueded in calculation of collateral requirements for a user
-            This is used instead of adding strikes automatically when funds are transfered to an address by the transfer or transferFrom functions
+            User calls this instead of smart contract adding strikes automatically when funds are transfered to an address by the transfer or transferFrom functions
             because it prevents a malicious actor from overloading a user with many different strikes thus making it impossible to claim funds because of the gas limit
 
-        @param uint _strike: this is the strike that will be added.
         @param uint _maturity: this is the maturity at which the strike will be added if it is not already recorded at this maturity
+        @param uint _strike: this is the strike that will be added.
 
         @return bool: returns true if the strike is sucessfully added and false if the strike was already recorded at the maturity
     */
-    function addStrike(uint _strike, uint _maturity) public returns(bool){
-        if (!contains(msg.sender, _maturity, _strike)) strikes[msg.sender][_maturity].push(_strike);
+    function addStrike(uint _maturity, uint _strike) public returns(bool contained){
+        (contained,) = containsStrike(msg.sender, _maturity, _strike, true, false);
     }
+
+    /*
+    function removeStrike(uint _maturity, uint _index) public returns(bool success){
+        require(strikes[msg.sender][_maturity].length > _index);
+        uint temp = strikes[msg.sender][_maturity][strikes[_addr][_maturity].length-1];
+        strikes[msg.sender][_maturity][_index] = temp;
+        delete strikes[msg.sender][_maturity][strikes[_addr][_maturity].length-1];
+    }
+    */
+
+    /*
+        @Description: used to tell if strikes[givenAddress][givenMaturiy] contains a given strike
+
+        @param address _addr: the address in question
+        @param uint _maturity: the maturity in question
+        @param uint _strike: the strike in question
+        @param bool _push: if the strike is not contained then it will be added to strikes
+        @param bool _remove: if the strike is contained then it will be removed
+
+        @return bool: returns true if _maturity is contained in maturities
+        @return uint: if bool returns true this is set to the index at which the maturitiy is contained
+    */
+    function containsStrike(address _addr, uint _maturity, uint _strike, bool _push, bool _remove) internal returns(bool contained, uint index){
+        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
+            if (strikes[_addr][_maturity][i] == _strike){
+                if (_remove){
+                    uint temp = strikes[_addr][_maturity][strikes[_addr][_maturity].length-1];
+                    strikes[_addr][_maturity][i] = temp;
+                    delete strikes[_addr][_maturity][strikes[_addr][_maturity].length-1];
+                }
+                return (true, i);
+            }
+        }
+        if (_push) strikes[_addr][_maturity].push(_strike);
+        return (false, 0);
+    }
+
 
     //------------------------------------------------------------------------------------E-R-C---2-0---I-m-p-l-e-m-e-n-t-a-t-i-o-n---------------------------
     
@@ -559,7 +592,7 @@ contract options {
         callAmounts[_from][_maturity][_strike] -= int(_amount);
         callAmounts[_to][_maturity][_strike] += int(_amount);
         
-        if (!contains(_from, _maturity, _strike)) strikes[_from][_maturity].push(_strike);
+        containsStrike(_from, _maturity, _strike, true, false);
         return (true, transferAmt);
     }
 
@@ -585,12 +618,13 @@ contract options {
         putAmounts[_from][_maturity][_strike] -= int(_amount);
         putAmounts[_to][_maturity][_strike] += int(_amount);
         
-        if (!contains(_from, _maturity, _strike)) strikes[_from][_maturity].push(_strike);
+        containsStrike(_from, _maturity, _strike, true, false);
         return (true, transferAmt);
     }
 
     function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        require(_strike != 0 && contains(_to, _maturity, _strike));
+        (bool contained,) = containsStrike(_to, _maturity, _strike, false, false);
+        require(_strike != 0 && contained);
         emit Transfer(msg.sender, _to, _value, _maturity, _strike, _call);
         if (_call) return transferCall(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
         return transferPut(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
@@ -605,7 +639,8 @@ contract options {
     }
 
     function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        require(_strike != 0 && contains(_to, _maturity, _strike));
+        (bool contained,) = containsStrike(_to, _maturity, _strike, false, false);
+        require(_strike != 0 && contained);
         require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
         emit Transfer(_from, _to, _value, _maturity, _strike, _call);
         if (_call) {

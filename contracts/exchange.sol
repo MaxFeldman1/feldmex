@@ -185,6 +185,7 @@ contract exchange{
     */
     function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public {
         require(_maturity != 0 && _price != 0 && _price < (_call? satUnits: _strike) && _strike != 0);
+        require((options(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         if (listHeads[_maturity][_strike][index] != 0) {
             insertOrder(_maturity, _strike, _price, _amount, _buy, _call, listHeads[_maturity][_strike][index]);
@@ -244,6 +245,7 @@ contract exchange{
         //make sure the offer and node corresponding to the name is in the correct list
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? satUnits: _strike) && _strike != 0);
         require(offers[linkedNodes[_name].hash].buy  == _buy && offers[linkedNodes[_name].hash].call == _call);
+        require((options(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         if (index == 0){
             require(claimedToken[msg.sender] >= _price*_amount);
@@ -539,6 +541,7 @@ contract exchange{
     */
     function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
         require(_strike != 0);
+        require((options(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
@@ -607,6 +610,7 @@ contract exchange{
     */
     function marketBuy(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public {
         require(_strike != 0);
+        require((options(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_call ? 1 : 3);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];

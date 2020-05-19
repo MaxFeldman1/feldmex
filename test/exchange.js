@@ -23,6 +23,8 @@ var defaultAccount;
 var receiverAccount;
 var defaultAccountBalance;
 var receiverAccountBalance;
+var strikes = {};
+var mintHandler = {};
 
 var defaultAccountPosition = 0;
 var receiverAccountPosition = 0;
@@ -41,6 +43,36 @@ contract('exchange', function(accounts) {
 			return options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address);
 		}).then((i) => {
 			optionsInstance = i;
+			mintHandler.postOrder = (maturity, strike, price, amount, buy, call, params) => {
+				if (typeof(strikes[maturity]) === 'undefined'){
+					strikes[maturity] = {};
+				}
+				if (typeof(strikes[maturity][strike]) === 'undefined'){
+					strikes[maturity][strike] = true;
+					return optionsInstance.addStrike(maturity, strike, {from: accounts[1]}).then(() => {
+						return optionsInstance.addStrike(maturity, strike, {from: accounts[2]});
+					}).then(() => {
+						return exchangeInstance.postOrder(maturity, strike, price, amount, buy, call, params);
+					});
+				}
+				return exchangeInstance.postOrder(maturity, strike, price, amount, buy, call, params);
+			};
+
+			mintHandler.insertOrder = (maturity, strike, price, amount, buy, call, name, params) => {
+				if (typeof(strikes[maturity]) === 'undefined'){
+					strikes[maturity] = {};
+				}
+				if (typeof(strikes[maturity][strike]) === 'undefined'){
+					strikes[maturity][strike] = true;
+					return optionsInstance.addStrike(maturity, strike, {from: accounts[1]}).then(() => {
+						return optionsInstance.addStrike(maturity, strike, {from: accounts[2]});
+					}).then(() => {
+						return exchangeInstance.insertOrder(maturity, strike, price, amount, buy, call, name, params);
+					});
+				}
+				return exchangeInstance.insertOrder(maturity, strike, price, amount, buy, call, name, params);
+			};
+
 			return exchange.new(tokenInstance.address, strikeAssetInstance.address, optionsInstance.address);
 		}).then((i) => {
 			exchangeInstance = i;
@@ -86,7 +118,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.toNumber(), 10*satUnits*transferAmount, "correct amount of collateral claimed for " + receiverAccount);
 			receiverAccountBalance = res.toNumber();
 			defaultAccountBalance -= amount*price;
-			return exchangeInstance.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
@@ -101,7 +133,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.price, price, "the price of the option contract is correct");
 			assert.equal(res.amount, amount, "the amount of the option contract is correct");
 			defaultAccountBalance -= (price-10000)*amount;
-			return exchangeInstance.postOrder(maturity, strike, price-10000, amount, true, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price-10000, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			firstSellAmount = 5;
 			receiverAccountPosition -= firstSellAmount;
@@ -135,7 +167,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
 			assert.equal(res, defaultBytes32, "after orderbook has been emptied there are no orders");
-			return exchangeInstance.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
@@ -162,7 +194,7 @@ contract('exchange', function(accounts) {
 		return exchangeInstance.viewClaimed(true, {from: defaultAccount}).then((res) => {
 			return exchangeInstance.viewClaimed(true, {from: receiverAccount});
 		}).then((res) => {
-			return exchangeInstance.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});			
+			return mintHandler.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});			
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
@@ -176,7 +208,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.strike.toNumber(), strike, "the strike of the option contract is correct");
 			assert.equal(res.price.toNumber(), price, "the price of the option contract is correct");
 			assert.equal(res.amount.toNumber(), amount, "the amount of the option contract is correct");
-			return exchangeInstance.postOrder(maturity, strike, price-10000, amount, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price-10000, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			firstBuyAmount = 5;
 			return exchangeInstance.marketBuy(maturity, strike, price+100000, firstBuyAmount, true, {from: receiverAccount});
@@ -202,7 +234,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
 			assert.equal(res, defaultBytes32, "after orderbook has been emptied there are no orders");
-			return exchangeInstance.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
@@ -244,13 +276,13 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			receiverAccountBalance = res.toNumber();
 			defaultAccountBalance -= price*amount;
-			return exchangeInstance.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
 		}).then(() => {
 			defaultAccountBalance -= (price+10000)*amount;
-			return exchangeInstance.postOrder(maturity, strike, price+10000, amount, true, false, {from: defaultAccount})
+			return mintHandler.postOrder(maturity, strike, price+10000, amount, true, false, {from: defaultAccount})
 		}).then(() => {
 			defaultAccountBalance -= (price+5000)*amount;
-			return exchangeInstance.postOrder(maturity, strike, price+5000, amount, true, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price+5000, amount, true, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 2);
 		}).then((res) => {
@@ -329,13 +361,13 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			receiverAccountBalance = res.toNumber();
 			defaultAccountBalance -= strike*amount - price*amount;
-			return exchangeInstance.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
 		}).then(() => {
 			defaultAccountBalance -= strike*amount - (price-10000)*amount;
-			return exchangeInstance.postOrder(maturity, strike, price-10000, amount, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price-10000, amount, false, false, {from: defaultAccount});
 		}).then(() => {
 			defaultAccountBalance -= strike*amount - (price-5000)*amount;
-			return exchangeInstance.postOrder(maturity, strike, price-5000, amount, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price-5000, amount, false, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 3);
 		}).then((res) => {
@@ -407,13 +439,13 @@ contract('exchange', function(accounts) {
 	it('inserts orders', function(){
 		altMaturity = maturity+5;
 		//we start wtith call buys
-		return exchangeInstance.postOrder(altMaturity, strike, price, amount, true, true, {from: defaultAccount}).then(() => {
-			return exchangeInstance.postOrder(altMaturity, strike, price+10000, amount, true, true, {from: defaultAccount});
+		return mintHandler.postOrder(altMaturity, strike, price, amount, true, true, {from: defaultAccount}).then(() => {
+			return mintHandler.postOrder(altMaturity, strike, price+10000, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(altMaturity, strike, 0);
 		}).then((res) => {
 			prevHead = res;
-			return exchangeInstance.insertOrder(altMaturity, strike, price+20000, amount, true, true, prevHead, {from: defaultAccount});
+			return mintHandler.insertOrder(altMaturity, strike, price+20000, amount, true, true, prevHead, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(altMaturity, strike, 0);
 		}).then((res) => {
@@ -440,9 +472,9 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.next, defaultBytes32, "The last node in the list has no next node");
 			assert.equal(res.previous, prevHead, "The previous of the last node is correct");
-			return exchangeInstance.insertOrder(altMaturity, strike, price+5000, amount, true, true, thirdAddNode, {from: defaultAccount});
+			return mintHandler.insertOrder(altMaturity, strike, price+5000, amount, true, true, thirdAddNode, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.insertOrder(altMaturity, strike, price-5000, amount, true, true, thirdAddNode, {from: defaultAccount});
+			return mintHandler.insertOrder(altMaturity, strike, price-5000, amount, true, true, thirdAddNode, {from: defaultAccount});
 		}).then(() => {
 			//now the second to last node in the list
 			return exchangeInstance.linkedNodes(thirdAddNode);
@@ -467,16 +499,16 @@ contract('exchange', function(accounts) {
 			assert.equal(res.price.toNumber(), price+5000, "The price of the node is correct");
 			//now test for put sells
 			maturity += 1;
-			return exchangeInstance.postOrder(altMaturity, strike, price, amount, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(altMaturity, strike, price, amount, false, false, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(altMaturity, strike, price+10, amount, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(altMaturity, strike, price+10, amount, false, false, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(altMaturity, strike, price+20, amount, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(altMaturity, strike, price+20, amount, false, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(altMaturity, strike, 3);
 		}).then((res) => {
 			head = res;
-			return exchangeInstance.insertOrder(altMaturity, strike, price+15, amount, false, false, head, {from: defaultAccount});
+			return mintHandler.insertOrder(altMaturity, strike, price+15, amount, false, false, head, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.linkedNodes(head);
 		}).then((res) => {
@@ -486,7 +518,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.price.toNumber(), price, "correct Price first");		
 			return exchangeInstance.linkedNodes(node.next);
 		}).then((res) => {
-			return exchangeInstance.insertOrder(altMaturity, strike, price+5, amount, false, false, res.next, {from: defaultAccount});
+			return mintHandler.insertOrder(altMaturity, strike, price+5, amount, false, false, res.next, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(altMaturity, strike, 3);
 		}).then((res) => {
@@ -521,7 +553,7 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.offers(res.hash);
 		}).then((res) => {
 			assert.equal(res.price.toNumber(), price+20, "correct price on the fifth order in list");
-			return exchangeInstance.insertOrder(altMaturity, strike, price+30, amount, false, false, name, {from: defaultAccount})
+			return mintHandler.insertOrder(altMaturity, strike, price+30, amount, false, false, name, {from: defaultAccount})
 		}).then(() => {
 			return exchangeInstance.linkedNodes(name);
 		}).then((res) => {
@@ -535,12 +567,12 @@ contract('exchange', function(accounts) {
 
 	it('conducts limit orders', function(){
 		otherMaturity = maturity*2;
-		return exchangeInstance.postOrder(otherMaturity, strike, price, amount, true, true, {from: defaultAccount}).then(() => {
-			return exchangeInstance.postOrder(otherMaturity, strike, price-10000, amount, true, true, {from: defaultAccount});
+		return mintHandler.postOrder(otherMaturity, strike, price, amount, true, true, {from: defaultAccount}).then(() => {
+			return mintHandler.postOrder(otherMaturity, strike, price-10000, amount, true, true, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(otherMaturity, strike, price+10000, amount, true, true, {from: defaultAccount});
+			return mintHandler.postOrder(otherMaturity, strike, price+10000, amount, true, true, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(otherMaturity, strike, price-5000, amount, true, true, {from: defaultAccount});
+			return mintHandler.postOrder(otherMaturity, strike, price-5000, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(otherMaturity, strike, price-5000, amount*5, true, {from: receiverAccount});
 		}).then(() => {
@@ -552,13 +584,13 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.price, price-10000, "the limit price stopped further selling at prices lower than the limit price");
 			//now we will test the same for posting Sell orders and making market Buy orders
-			return exchangeInstance.postOrder(otherMaturity, strike, price, amount, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(otherMaturity, strike, price, amount, false, true, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(otherMaturity, strike, price-10000, amount, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(otherMaturity, strike, price-10000, amount, false, true, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(otherMaturity, strike, price+10000, amount, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(otherMaturity, strike, price+10000, amount, false, true, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(otherMaturity, strike, price-5000, amount, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(otherMaturity, strike, price-5000, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketBuy(otherMaturity, strike, price, amount*5, true, {from: receiverAccount});
 		}).then(() => {
@@ -655,7 +687,7 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			//Test market sells
 			//fist defaultAccount buys from receiver account
-			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, true, {from: defaultAccount});
+			return mintHandler.postOrder(newMaturity, strike, price, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, true, {from: receiverAccount});
 		}).then(() => {
@@ -664,12 +696,9 @@ contract('exchange', function(accounts) {
 			secondStrike = strike - Math.floor(price*strike/satUnits);
 
 			//second defaultAccount sells back to receiver account
-			return exchangeInstance.postOrder(newMaturity, secondStrike, price, amount, true, true, {from: receiverAccount});
+			return mintHandler.postOrder(newMaturity, secondStrike, price, amount, true, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(newMaturity, secondStrike, 0, amount, true, {from: defaultAccount});
-		}).catch(async (err) => {
-			await (new Promise(resolve => setTimeout(resolve, 20000)));
-			throw err;
 		}).then(() => {
 			//default account has funds in exchange contract while receiver account has funds in the options smart contract
 			return exchangeInstance.withdrawAllFunds(true, {from: defaultAccount});
@@ -685,12 +714,12 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.depositFunds(amount*(price+satUnits), 0, {from: receiverAccount});
 		}).then(() => {
 			//fist defaultAccount sells to receiver account
-			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(newMaturity, strike, price, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: receiverAccount});
 		}).then(() => {		
 			//second defaultAccount sells back to receiver account
-			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, true, {from: receiverAccount});
+			return mintHandler.postOrder(newMaturity, strike, price, amount, false, true, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: defaultAccount});
 		});
@@ -704,7 +733,7 @@ contract('exchange', function(accounts) {
 		}).then(() => {
 			//Test market sell
 			//fist defaultAccount buys from receiver account
-			return exchangeInstance.postOrder(newMaturity, strike, price, amount, true, false, {from: defaultAccount});
+			return mintHandler.postOrder(newMaturity, strike, price, amount, true, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(newMaturity, strike, 0, amount, false, {from: receiverAccount});
 		}).then(() => {
@@ -712,7 +741,7 @@ contract('exchange', function(accounts) {
 			//(price+strike*scUnits)/scUnits == secondStrike
 			secondStrike = Math.floor((price+strike*scUnits)/scUnits); 
 			//next defaultAccount sells back to receiver account
-			return exchangeInstance.postOrder(newMaturity, secondStrike, price, amount, true, false, {from: receiverAccount});
+			return mintHandler.postOrder(newMaturity, secondStrike, price, amount, true, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(newMaturity, secondStrike, 0, amount, false, {from: defaultAccount});
 		}).then(() => {
@@ -730,12 +759,12 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.depositFunds(0, amount*(price+scUnits*strike), {from: receiverAccount});
 		}).then(() => {
 			//fist defaultAccount sells to receiver account
-			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(newMaturity, strike, price, amount, false, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, false, {from: receiverAccount});
 		}).then(() => {		
 			//second defaultAccount sells back to receiver account
-			return exchangeInstance.postOrder(newMaturity, strike, price, amount, false, false, {from: receiverAccount});
+			return mintHandler.postOrder(newMaturity, strike, price, amount, false, false, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, false, {from: defaultAccount});
 		});
@@ -772,14 +801,14 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.depositFunds(satBal, scBal, {from: receiverAccount});
 		}).then(() => {
 			//test for index 0 calls buys
-			return exchangeInstance.postOrder(maturity, strike, price, 1, true, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, 1, true, true, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(maturity, strike, price, 2, true, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, 2, true, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 0);
 		}).then((res) => {
 			head = res
-			return exchangeInstance.insertOrder(maturity, strike, price, 3, true, true, head, {from: receiverAccount});
+			return mintHandler.insertOrder(maturity, strike, price, 3, true, true, head, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.linkedNodes(head);
 		}).then((res) => {
@@ -799,14 +828,14 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.amount, 3, "last account is correct");
 			//test for index 1 calls sells
-			return exchangeInstance.postOrder(maturity, strike, price, 1, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, 1, false, true, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(maturity, strike, price, 2, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, 2, false, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 1);
 		}).then((res) => {
 			head = res
-			return exchangeInstance.insertOrder(maturity, strike, price, 3, false, true, head, {from: receiverAccount});
+			return mintHandler.insertOrder(maturity, strike, price, 3, false, true, head, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.linkedNodes(head);
 		}).then((res) => {
@@ -828,14 +857,14 @@ contract('exchange', function(accounts) {
 			//test for index 2 puts buys
 			//strike must be greater than price
 			price = Math.floor(strike/2);
-			return exchangeInstance.postOrder(maturity, strike, price, 1, true, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, 1, true, false, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(maturity, strike, price, 2, true, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, 2, true, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 2);
 		}).then((res) => {
 			head = res
-			return exchangeInstance.insertOrder(maturity, strike, price, 3, true, false, head, {from: receiverAccount});
+			return mintHandler.insertOrder(maturity, strike, price, 3, true, false, head, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.linkedNodes(head);
 		}).then((res) => {
@@ -855,9 +884,9 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			assert.equal(res.amount, 3, "last account is correct");
 			//test for index 3 puts sells
-			return exchangeInstance.postOrder(maturity, strike, price, 1, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, 1, false, false, {from: defaultAccount});
 		}).then(() => {
-			return exchangeInstance.postOrder(maturity, strike, price, 2, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, 2, false, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.listHeads(maturity, strike, 3);
 		}).then((res) => {
@@ -866,7 +895,7 @@ contract('exchange', function(accounts) {
 		}).then((res) => {
 			next = res.next;
 			headNode = res;
-			return exchangeInstance.insertOrder(maturity, strike, price, 3, false, false, next, {from: receiverAccount});
+			return mintHandler.insertOrder(maturity, strike, price, 3, false, false, next, {from: receiverAccount});
 		}).then(() => {
 			return exchangeInstance.offers(headNode.hash);
 		}).then((res) => {
@@ -891,7 +920,7 @@ contract('exchange', function(accounts) {
 		//test taking long call offers
 		return exchangeInstance.viewClaimed(true, {from: defaultAccount}).then((res) => {
 			balance = res;
-			return exchangeInstance.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(maturity, strike, price, amount-4, true, {from: defaultAccount});
 		}).then(() => {
@@ -906,7 +935,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res-balance, price*4, "executes trades with self in takeSellOffer of calls");
 			balance = res;
 			//test taking short call offers
-			return exchangeInstance.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketBuy(maturity, strike, price, amount-4, true, {from: defaultAccount});
 		}).then(() => {
@@ -925,7 +954,7 @@ contract('exchange', function(accounts) {
 			//for puts strike must be greater than price
 			price = Math.floor(0.9*strike);
 			//test taking long put offers
-			return exchangeInstance.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketSell(maturity, strike, price, amount-4, false, {from: defaultAccount});
 		}).then(() => {
@@ -940,7 +969,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res-balance, price*4, "executes trades with self in takeSellOffer of puts");
 			balance = res;
 			//test taking short put offers
-			return exchangeInstance.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
+			return mintHandler.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
 		}).then(() => {
 			return exchangeInstance.marketBuy(maturity, strike, price, amount-4, false, {from: defaultAccount});
 		}).then(() => {
@@ -953,6 +982,80 @@ contract('exchange', function(accounts) {
 			return exchangeInstance.viewClaimed(false, {from: defaultAccount});			
 		}).then((res) => {
 			assert.equal(res-balance, 4*(strike-price), "executes trades with self in takeBuyOffer of puts");
+		});
+	});
+
+	it('requires strike to be added before placing order', function(){
+		return exchangeInstance.viewClaimed(true, {from: defaultAccount}).then((res) => {
+			//please note the number I compare to below is liely an over estimate of the requirements for this test
+			assert.equal(res.toNumber() > amount*satUnits*4, true, "balance is great enough to do this test");
+			return exchangeInstance.viewClaimed(false, {from: defaultAccount});
+		}).then((res) => {
+			//please note the number I compare to below is liely an over estimate of the requirements for this test
+			assert.equal(res.toNumber() > amount*scUnits*strike*4, true, "balance is great enough to do this test");
+			return exchangeInstance.viewClaimed(true, {from: receiverAccount});
+		}).then((res) => {
+			//please note the number I compare to below is liely an over estimate of the requirements for this test
+			assert.equal(res.toNumber() > amount*satUnits*4, true, "balance is great enough to do this test");
+			return exchangeInstance.viewClaimed(false, {from: receiverAccount});
+		}).then((res) => {
+			//please note the number I compare to below is liely an over estimate of the requirements for this test
+			assert.equal(res.toNumber() > amount*scUnits*strike*4, true, "balance is great enough to do this test");
+		}).catch(() => {
+			throw Error("missed checkpoint");
+		}).then(() => {
+			//get new maturity strike combo
+			maturity += 1;
+			//attempt to place orders and insert them without adding maturity strike maturity combo with options smart contract
+			return exchangeInstance.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+		}).then(() => {
+			return "OK";
+		}).catch((err) => {
+			if (err.message === "missed checkpoint") throw err;
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", "can't postOrder without first adding maturity strike combo on options smart contract");
+			return optionsInstance.addStrike(maturity, strike, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.listHeads(maturity, strike, 0);
+		}).then((res) => {
+			name = res;
+			//attempt to add insertOrder with account that has not added maturity strike combo
+			return exchangeInstance.insertOrder(maturity, strike, price, amount, true, true, name, {from: receiverAccount});
+		}).then(() => {
+			return "OK";
+		}).catch((err) => {
+			if (err.message === "missed checkpoint") throw err;
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", "can't insertOrder without first adding maturity strike combo on options smart contract");
+			//attempt to marketSell without adding maturity strike combo
+			return exchangeInstance.marketSell(maturity, strike, price, amount, true, {from: receiverAccount});
+		}).then(() => {
+			return "OK";
+		}).catch((err) => {
+			if (err.message === "missed checkpoint") throw err;
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", "can't marketSell without first adding maturity strike combo on options smart contract");
+			return exchangeInstance.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
+		}).then(() => {
+			return exchangeInstance.marketBuy(maturity, strike, price, amount, false, {from: receiverAccount});
+		}).then((rec) => {
+			console.log(rec.tx);
+			return optionsInstance.viewStrikes(maturity, {from: receiverAccount});
+		}).then((res) => {
+			console.log(strike);
+			console.log(res);
+			console.log(res.indexOf(strike));
+			return "OK";
+		}).catch((err) => {
+			if (err.message === "missed checkpoint") throw err;
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", "can't marketBuy without first adding maturity strike combo on options smart contract");
 		});
 	});
 });

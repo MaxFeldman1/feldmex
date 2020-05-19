@@ -39,7 +39,7 @@ contract('options', function(accounts){
 			setWithInflator = (_spot) => {return oracleInstance.set(_spot * inflator);};
 			inflatorObj.mintCall = (debtor, holder, maturity, strike, amount, limit, params) => {return optionsInstance.mintCall(debtor, holder, maturity, strike*inflator, amount, limit, params);};
 			inflatorObj.mintPut = (debtor, holder, maturity, strike, amount, limit, params) => {return optionsInstance.mintPut(debtor, holder, maturity, strike*inflator, amount, limit, params);};
-			inflatorObj.addStrike = (strike, maturity, params) => {return optionsInstance.addStrike(strike*inflator, maturity, params);};
+			inflatorObj.addStrike = (maturity, strike, params) => {return optionsInstance.addStrike(maturity, strike*inflator, params);};
 			inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
 			inflatorObj.transfer = (to, value, maturity, strike, maxTransfer, callPut, params) => {return optionsInstance.transfer(to, value, maturity, strike*inflator, maxTransfer, callPut, params);};
 			inflatorObj.transferFrom = (from, to, value, maturity, strike, maxTransfer, callPut, params) => {return optionsInstance.transferFrom(from, to, value, maturity, strike*inflator, maxTransfer, callPut, params);};
@@ -73,12 +73,17 @@ contract('options', function(accounts){
 			holder = accounts[2];
 			maturity = res.timestamp;
 			return new Promise(resolve => setTimeout(resolve, 2000));
-		}).then((res) => {
-			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
+		}).then(() => {
+			//add strikes to allow for minting of options
+			return inflatorObj.addStrike(maturity, strike, {from: debtor});
+		}).then(() => {
+			return inflatorObj.addStrike(maturity, strike, {from: holder});
 		}).then(() => {
 			return optionsInstance.viewStrikes(maturity, {from: debtor});
 		}).then((res) => {
 			assert.equal(res[0].toNumber(), strike*inflator, "the correct strike is added");
+			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
+		}).then(() => {
 			return inflatorObj.balanceOf(debtor, maturity, strike, true);
 		}).then((res) => {
 			assert.equal(res.toNumber(), -amount, "debtor holds negative amount of contracts");
@@ -134,6 +139,11 @@ contract('options', function(accounts){
 			return web3.eth.getBlock('latest');
 		}).then((res) => {
 			maturity = res.timestamp+1;
+			//add strikes to allow for minting of options
+			return inflatorObj.addStrike(maturity, strike, {from: debtor});
+		}).then(() => {
+			return inflatorObj.addStrike(maturity, strike, {from: holder});
+		}).then(() => {
 			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, strike*amount*scUnits, {from: defaultAccount});
 		}).then(() => {
 			return new Promise(resolve => setTimeout(resolve, 2000));
@@ -200,7 +210,7 @@ contract('options', function(accounts){
 		}).then(() => {
 			amount = 10;
 			//debtor must accept transfers on a strike before recieving them
-			return inflatorObj.addStrike(strike, maturity, {from: debtor});
+			return inflatorObj.addStrike(maturity, strike, {from: debtor});
 		}).then(() => {
 			return inflatorObj.transfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});
 		}).then(() => {
@@ -228,7 +238,7 @@ contract('options', function(accounts){
 			return inflatorObj.approve(defaultAccount, amount, maturity, newStrike, false, {from: debtor});
 		}).then(() => {
 			//defaultAccount must accept transfers on a strike before recieving them
-			return inflatorObj.addStrike(newStrike, maturity, {from: defaultAccount});
+			return inflatorObj.addStrike(maturity, newStrike, {from: defaultAccount});
 		}).then(() => {
 			return inflatorObj.transferFrom(debtor, defaultAccount, amount, maturity, newStrike, amount*newStrike*scUnits, false, {from: defaultAccount});
 		}).then(() => {
@@ -261,7 +271,7 @@ contract('options', function(accounts){
 		//default --- long 50 short 60 ---- liabilities 60 minSc 10 minVal 50
 	});
 
-	it ('changes the fee', function(){
+	it('changes the fee', function(){
 		deployer = defaultAccount;
 		nonDeployer = reciverAccount;
 		return optionsInstance.setFee(1500, {from: deployer}).then(() => {
@@ -284,6 +294,65 @@ contract('options', function(accounts){
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OOF", "Fee change was stopped because the sender was not the deployer");
+		});
+	});
+
+	it('requires strike to be added before minting contract', function(){
+		//get new maturity strike combination that has not been added
+		maturity += 1;
+		//test for calls with neither adding the maturity strike combo
+		return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", 'could not mint call without adding the maturity strike combo for either account');
+			//test for puts with neither adding the maturity strike combo
+			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, scUnits*amount*strike, {from: defaultAccount});
+		}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", 'could not mint put without adding the maturity strike combo for either account');
+			return optionsInstance.addStrike(maturity, strike, {from: debtor});
+		}).then(() => {
+			//test for calls with only debtor adding the maturity strike combo
+			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
+		}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", 'could not mint call without adding maturity strike combo for holder account');
+			//test for puts with only debtor adding the maturity strike combo
+			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, scUnits*amount*strike, {from: defaultAccount});			
+		}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", 'could not mint put without adding maturity strike combo for holder account');
+			maturity +=1;
+			//test for calls with only holder adding the maturity strike combo
+			return optionsInstance.addStrike(maturity, strike, {from: holder});			
+		}).then(() => {
+			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});			
+		}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", 'could not mint call without adding maturity strike combo for debtor account');
+			//test for puts with only debtor adding the maturity strike combo
+			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, scUnits*amount*strike, {from: defaultAccount});			
+		}).then(() => {
+			return "OK";
+		}).catch(() => {
+			return "OOF";
+		}).then((res) => {
+			assert.equal(res, "OOF", 'could not mint put without adding maturity strike combo for debtor account');
+			//if there were a problem with minting calls or puts after adding the strikes for both users it would have shown up earlier
 		});
 	});
 });
