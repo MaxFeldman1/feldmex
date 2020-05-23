@@ -239,17 +239,20 @@ contract options {
     /*
         @Descripton: allows for users to withdraw funds that are not locked up as collateral
             these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
+
+        @return uint underlyingAsset: the amount of the underlying asset that has been withdrawn
+        @return uint strikeAsset: the amount of the strike asset that has been withdrawn
     */
-    function withdrawFunds() public returns(bool success){
+    function withdrawFunds() public returns(uint underlyingAsset, uint strikeAsset){
         ERC20 ua = ERC20(underlyingAssetAddress);
-        uint funds = claimedTokens[msg.sender];
+        underlyingAsset = claimedTokens[msg.sender];
         claimedTokens[msg.sender] = 0;
-        assert(ua.transfer(msg.sender, funds));
+        assert(ua.transfer(msg.sender, underlyingAsset));
         ERC20 sa = ERC20(strikeAssetAddress);
-        funds = claimedStable[msg.sender];
+        strikeAsset = claimedStable[msg.sender];
         claimedStable[msg.sender] = 0;
-        assert(sa.transfer(msg.sender, funds));
-        return true;
+        assert(sa.transfer(msg.sender, strikeAsset));
+        return (underlyingAsset, strikeAsset);
     }
 
     /*

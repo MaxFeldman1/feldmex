@@ -296,8 +296,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.strike.toNumber(), strike, "the strike in the list head order is correct");
 			assert.equal(res.maturity.toNumber(), maturity, "the maturity in the list head order is correct");
 			assert.equal(res.price.toNumber(), price+10000, "the price in the list head order is correct");
-			assert.equal(res.buy, true, "the head order in the long puts linked list is classified as a buy order")
-			assert.equal(res.call, false, "the head order in the long puts linked list is classified as a put order")			
+			assert.equal(res.index, 2, "the head order in the long puts linked list has the correct index");
 			return exchangeInstance.linkedNodes(next);
 		}).then((res) => {
 			next = res.next;
@@ -381,8 +380,7 @@ contract('exchange', function(accounts) {
 			assert.equal(res.strike.toNumber(), strike, "the strike in the list head order is correct");
 			assert.equal(res.maturity.toNumber(), maturity, "the maturity in the list head order is correct");
 			assert.equal(res.price.toNumber(), price-10000, "the price in the list head order is correct");
-			assert.equal(res.buy, false, "the head order in the long puts linked list is classified as a sell order");
-			assert.equal(res.call, false, "the head order in the long puts linked list is classified as a put order");			
+			assert.equal(res.index, 3, "the head order in the short puts linked list has the correct index");
 			defaultAccountBalance += strike*amount - (price-10000)*amount;
 			return exchangeInstance.cancelOrder(head, {from: defaultAccount});
 		}).then(() => {

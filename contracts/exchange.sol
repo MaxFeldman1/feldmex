@@ -32,8 +32,13 @@ contract exchange{
         uint strike;
         uint price;
         uint amount;
-        bool buy;
-        bool call;
+        /*
+            long call => index: 0
+            short call => index: 1
+            long put => index: 2
+            short put => index: 3
+        */
+        uint8 index;
     }
     
     event offerPosted(
@@ -42,7 +47,7 @@ contract exchange{
         uint strike,
         uint price,
         uint amount,
-        uint index
+        uint8 index
     );
 
     event offerCalceled(
@@ -166,7 +171,7 @@ contract exchange{
         @return bytes32 _name: key in linkedNodes mapping
     */
     function hasher(Offer memory _offer) internal returns(bytes32 _hash, bytes32 _name){
-        bytes32 ret1 =  keccak256(abi.encodePacked(_offer.maturity, _offer.strike, _offer.price, _offer.offerer, _offer.buy, _offer.call, totalOrders));
+        bytes32 ret1 =  keccak256(abi.encodePacked(_offer.maturity, _offer.strike, _offer.price, _offer.offerer, _offer.index, totalOrders));
         totalOrders++;
         return (ret1, keccak256(abi.encodePacked(ret1, now, totalOrders)));
     }
@@ -217,7 +222,7 @@ contract exchange{
             require(claimedStable[msg.sender] >= _amount * (_strike - _price));
             claimedStable[msg.sender] -= _amount * (_strike - _price);
         }
-        Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
+        Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, index);
         //get hashes
         (bytes32 hash, bytes32 name) = hasher(offer);
         //place order in the mappings
@@ -244,9 +249,9 @@ contract exchange{
     function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
         //make sure the offer and node corresponding to the name is in the correct list
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? satUnits: _strike) && _strike != 0);
-        require(offers[linkedNodes[_name].hash].buy  == _buy && offers[linkedNodes[_name].hash].call == _call);
-        require((options(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
+        require(offers[linkedNodes[_name].hash].index == index);
+        require((options(optionsAddress)).contains(msg.sender, _maturity, _strike));
         if (index == 0){
             require(claimedToken[msg.sender] >= _price*_amount);
             claimedToken[msg.sender] -= _price * _amount;
@@ -264,7 +269,7 @@ contract exchange{
             claimedStable[msg.sender] -= _amount * (_strike - _price);
         }
 
-        Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, _buy, _call);
+        Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, index);
         //get hashes
         (bytes32 hash, bytes32 name) = hasher(offer);
         //if we need to traverse down the list further away from the list head
@@ -340,15 +345,7 @@ contract exchange{
         linkedNode memory node = linkedNodes[_name];
         require(msg.sender == offers[node.hash].offerer);
         Offer memory offer = offers[node.hash];
-        uint index;
-        if (offer.buy && offer.call)
-            index = 0;
-        else if (!offer.buy && offer.call)
-            index = 1;
-        else if (offer.buy)
-            index = 2;
-        else
-            index = 3;
+        //uint8 index = (offer.buy? 0 : 1) + (offer.call? 0 : 2);
         //if this node is somewhere in the middle of the list
         if (node.next != 0 && node.previous != 0){
             linkedNodes[node.next].previous = node.previous;
@@ -356,7 +353,7 @@ contract exchange{
         }
         //this is the only offer for the maturity and strike
         else if (node.next == 0 && node.previous == 0){
-            delete listHeads[offers[node.hash].maturity][offers[node.hash].strike][index];
+            delete listHeads[offers[node.hash].maturity][offers[node.hash].strike][offer.index];
         }
         //last node
         else if (node.next == 0){
@@ -365,16 +362,16 @@ contract exchange{
         //head node
         else{
             linkedNodes[node.next].previous = 0;
-            listHeads[offers[node.hash].maturity][offers[node.hash].strike][index] = node.next;
+            listHeads[offers[node.hash].maturity][offers[node.hash].strike][offer.index] = node.next;
         }
         emit offerCalceled(_name);
         delete linkedNodes[_name];
         delete offers[node.hash];
-        if (index == 0)
+        if (offer.index == 0)
             claimedToken[msg.sender] += offer.price * offer.amount;
-        else if (index == 1)
+        else if (offer.index == 1)
             claimedToken[msg.sender] += offer.amount * (satUnits - offer.price);
-        else if (index == 2)
+        else if (offer.index == 2)
             claimedStable[msg.sender] += offer.price * offer.amount;
         else
             claimedStable[msg.sender] += offer.amount * (offer.strike - offer.price);
@@ -392,15 +389,15 @@ contract exchange{
     function takeBuyOffer(address _seller, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
-        require(offer.buy);
-        uint8 index = (offer.call? 0 : 2);
+        require(offer.index%2 == 0);
+        //uint8 index = (offer.call? 0 : 2);
         //make sure the seller has sufficient collateral posted
         options optionsContract = options(optionsAddress);
         uint expectedAmt = 0;
         if (_seller == offer.offerer) {
-            require((offer.call ? claimedToken[_seller] : claimedStable[_seller]) >= expectedAmt);
+            require((offer.index<2 ? claimedToken[_seller] : claimedStable[_seller]) >= expectedAmt);
         }
-        else if (offer.call){
+        else if (offer.index < 2){
             expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(offer.amount), offer.strike);
             require(offer.price * offer.amount >= expectedAmt || claimedToken[_seller] >= expectedAmt - (offer.price * offer.amount));
             claimedToken[_seller] -= offer.price * offer.amount  >= expectedAmt ? 0 : expectedAmt - offer.price * offer.amount;
@@ -417,7 +414,7 @@ contract exchange{
         }
         //this is the only offer for the maturity and strike
         else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.strike][index];
+            delete listHeads[offer.maturity][offer.strike][offer.index];
         }
         //last node
         else if (node.next == 0){
@@ -426,11 +423,11 @@ contract exchange{
         //head node
         else{
             linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.strike][index] = node.next;
+            listHeads[offer.maturity][offer.strike][offer.index] = node.next;
         }
         emit offerAccepted(_name, offer.amount);
         //now we make the trade happen
-        if (offer.call){
+        if (offer.index < 2){
             (bool safe, uint transferAmt) = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
             assert(safe);
             //redeem difference between expectedAmt and transferAmt and any excess between option premium recieved and expectedAmt
@@ -469,11 +466,11 @@ contract exchange{
     function takeSellOffer(address _buyer, bytes32 _name) internal returns(bool success){
         linkedNode memory node = linkedNodes[_name];
         Offer memory offer = offers[node.hash];
-        require(!offer.buy);
-        uint8 index = (offer.call? 1 : 3);
+        require(offer.index%2==1);
+        //uint8 index = (offer.call? 1 : 3);
         //make sure the seller has sufficient collateral posted
         if (_buyer == offer.offerer) {}
-        else if (offer.call){
+        else if (offer.index < 2){
             require(claimedToken[_buyer] >= offer.price * offer.amount);
             claimedToken[_buyer] -= offer.price * offer.amount;
         }
@@ -488,7 +485,7 @@ contract exchange{
         }
         //this is the only offer for the maturity and strike
         else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.strike][index];
+            delete listHeads[offer.maturity][offer.strike][offer.index];
         }
         //last node
         else if (node.next == 0){
@@ -497,7 +494,7 @@ contract exchange{
         //head node
         else{
             linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.strike][index] = node.next;
+            listHeads[offer.maturity][offer.strike][offer.index] = node.next;
         }
         emit offerAccepted(_name, offer.amount);
         //now we make the trade happen
@@ -508,10 +505,10 @@ contract exchange{
                 state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                 therefore we do not need to call options.mintCall
             */
-            if (offer.call) claimedToken[_buyer] += offer.amount * (satUnits - offer.price);
+            if (offer.index < 2) claimedToken[_buyer] += offer.amount * (satUnits - offer.price);
             else claimedStable[_buyer] += offer.amount * (offer.strike - offer.price); 
         }
-        else if (offer.call){
+        else if (offer.index < 2){
             (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*satUnits);
             assert(safe);
             //redeem the seller collateral that was not required
