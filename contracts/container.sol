@@ -9,13 +9,20 @@ import "./eHelper.sol";
 contract container is ERC20 {
 	address owner;
 	
+	//smart contract that records prices, records (priceOfUnderlyingAsset)/(priceOfStrikeAsset)
 	oracle public oracleContract;
+	//smart contract that handles settlement of calls and puts
 	options public optionsContract;
+	//smart contract on which options may be traded
 	exchange public exchangeContract;
+	//smart contract of the asset in the numerator of oracle price
 	ERC20 public underlyingAssetContract;
+	//smart contract of the asset in the denominator of oracle price
 	ERC20 public strikeAssetContract;
 
+	//address of the smart contract that helps deploy optionsContract
 	address oHelperAddress;
+	//address of the smart contract that helps deploy exchangeContract
 	address eHelperAddress;
 
 	/*
@@ -28,24 +35,53 @@ contract container is ERC20 {
 	*/
 	uint8 public progress;
 
+	//timestamp of last time this smart contract called optionContract.withdrawFunds()
 	uint public lastWithdraw;
 
+	/*
+		every time lastWithdraw is updated another value is pushed to contractBalanceUnderlying as contractBalanceStrike
+		thus the length of contractBalanceUnderlying and contractBalanceStrike are always the same
+
+		lastClaim represents the last index of the contractBalance arrays for each address at the most recent time that claim(said address) was called
+	*/
+	//lastClaim represents the last index of the contractBalance arrays for each address at the most recent time that claim(said address) was called
 	mapping(address => uint) lastClaim;
+	//holds the total amount of underlying asset that this contract has generated in fees
 	uint[] public contractBalanceUnderlying;
+	//holds the total amount of strike asset that this contract has genereated in fees
 	uint[] public contractBalanceStrike;
 
+	//each address's balance of claimed underlying asset funds that have yet to be withdrawn
 	mapping(address => uint) balanceUnderlying;
+	//allows users to see their value in the mapping balanceUnderlying
 	function viewUnderlyingAssetBalance() public view returns (uint) {return balanceUnderlying[msg.sender];}
+	//each address's balance of claimed strike asset funds that have yet to be withdrawn
 	mapping(address => uint) balanceStrike;
+	//allows users to see their value in the mapping balanceStrike	
 	function viewStrikeAssetBalance() public view returns (uint) {return balanceStrike[msg.sender];}
 
-	//ERC20 implementation
+
+	//total amount of smallest denomination units of coin in this smart contract
 	uint public totalSupply;
+	//10 ** decimals == the number of sub units in a whole coin
 	uint8 public decimals;
+	//each user's balance of coins
 	mapping(address => uint) public balanceOf;
+	//the amount of funds each address has allowed other addresses to spend on the first address's behalf
+	//holderOfFunds => spender => amountOfFundsAllowed
 	mapping(address => mapping(address => uint)) public allowance;
 
 	//---------------contract setup-----------------
+	/*
+		@Description: Assigns inital values and credits the owner of this contract with all coins
+
+		@param address _underlyingAssetAddress: the address of the ERC0 contract of the underlying asset
+		@param address _strikeAssetAddress: the address of the ERC20 contract of the strike asset
+		@param address _oHelperAddress: the address of the oHelper contract that helps with deployment of the options contract
+		@param address _eHelperAddress: the address of the eHelper contract that helps with deployment of the exchange contract
+		@param uint _totalCoins: the number of full coins to be included in the total supply
+		@param uint _decimals: the number of digits to which each full unit of coin is divisible
+	*/
 	constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _oHelperAddress, address _eHelperAddress, uint _totalCoins, uint8 _decimals) public {
 		if (_totalCoins == 0) _totalCoins = 1000000;
 		if (_decimals == 0) _decimals = 4;
@@ -63,6 +99,12 @@ contract container is ERC20 {
 		contractBalanceStrike.push(0);
 	}
 
+	/*
+		@Description: calls oHelper contract to deploy options contract and assigns said contract to the optionsContract variable
+			may only be called when progress == 0
+
+		@return bool success: true if function executes sucessfully
+	*/
 	function depOptions() public returns (bool success){
 		require(msg.sender == owner && progress == 0);
 		(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(underlyingAssetContract), address(strikeAssetContract)));
@@ -72,6 +114,12 @@ contract container is ERC20 {
 		return true;
 	}
 
+	/*
+		@Description: calls eHelper contract to deploy exchange contract and assigns said contract to the exchangeContract variable
+			may only be called when progress == 1
+
+		@return bool success: true if function executes sucessfully
+	*/
 	function depExchange() public returns (bool success){
 		require(msg.sender == owner && progress == 1);
 		(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(underlyingAssetContract), address(strikeAssetContract), address(optionsContract)));
@@ -83,6 +131,11 @@ contract container is ERC20 {
 	}
 	//----------------end contract setup------------
 
+	/*
+		@Description: the owner may call this function to set the fee denominator in the options smart contract
+
+		@param uint _feeDenominator: the value to pass to optionsContract.setFee
+	*/
 	function setFee(uint _feeDeonominator) public {
 		require(msg.sender == owner);
 		optionsContract.setFee(_feeDeonominator);
@@ -92,6 +145,9 @@ contract container is ERC20 {
 	/*
 		@Description: Calls options.withdrawFunds() from this contract afterwards users may claim their own portion of the funds
 			may be called once a day
+
+		@return uint underlyingAsset: the amount of underlying asset that has been credited to this contract
+		@return uint strikeAsset: the amount of strike asset that has  been credited to this contract
 	*/
 	function contractClaim() public returns (uint underlyingAsset, uint strikeAsset) {
 		require(lastWithdraw < block.timestamp - 86400);
@@ -110,7 +166,9 @@ contract container is ERC20 {
 	}
 
 	/*
-		@Description: allows token holders to claim their portion of the cashflow
+		@Description: claims an address's portion of cashflow
+
+		@param address _addr: the address for which to claim cashflow
 	*/
 	function claim(address _addr) internal {
 		uint mostRecent = lastClaim[_addr];
@@ -140,7 +198,6 @@ contract container is ERC20 {
     }
 
 
-	//ERC20 implementation
     event Transfer(
         address indexed _from,
         address indexed _to,
@@ -153,6 +210,14 @@ contract container is ERC20 {
         uint256 _value
     );
 
+    /*
+		@Description: transfer a specified amount of coins from the sender to a specified
+
+		@param address _to: the address to which to send coins
+		@param address _value: the amount of sub units of coins to send
+
+		@return bool success: true if function executes sucessfully
+    */
     function transfer(address _to, uint256 _value) public returns (bool success) {
         require(balanceOf[msg.sender] >= _value);
 
@@ -167,6 +232,14 @@ contract container is ERC20 {
         return true;
     }
 
+    /*
+		@Description: approve another address to spend coins on the function caller's behalf
+
+		@param address _spender: the address to approve
+		@param uint256 _value: the amount of sub units of coins to allow to be spent
+
+		@return bool success: true if function executes sucessfully
+    */
     function approve(address _spender, uint256 _value) public returns (bool success) {
         allowance[msg.sender][_spender] = _value;
 
@@ -175,6 +248,16 @@ contract container is ERC20 {
         return true;
     }
 
+
+    /*
+		@Description: transfer funds from one address to another given that the from address has approved the caller of this function to spend a sufficient amount
+
+		@param address _from: the address from which to send the funds
+		@param address _to: the address to which to send the funds
+		@param uint256 _value: the amount of sub units of coins to allow to be spent
+
+		@return bool success: true if function executes sucessfully
+    */
     function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
         require(_value <= balanceOf[_from]);
         require(_value <= allowance[_from][msg.sender]);
