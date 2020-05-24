@@ -5,9 +5,9 @@ import "./options.sol";
 import "./exchange.sol";
 import "./oHelper.sol";
 import "./eHelper.sol";
+import "./Ownable.sol";
 
-contract container is ERC20 {
-	address owner;
+contract container is ERC20, Ownable {
 	
 	//smart contract that records prices, records (priceOfUnderlyingAsset)/(priceOfStrikeAsset)
 	oracle public oracleContract;
@@ -105,10 +105,10 @@ contract container is ERC20 {
 
 		@return bool success: true if function executes sucessfully
 	*/
-	function depOptions() public returns (bool success){
-		require(msg.sender == owner && progress == 0);
+	function depOptions() onlyOwner public returns (bool success){
+		require(progress == 0, "progress must == 0");
 		(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(underlyingAssetContract), address(strikeAssetContract)));
-		require(success);
+		require(success, "could not sucessfully deploy options contract");
 		optionsContract = options(oHelper(oHelperAddress).optionsAddress());
 		progress = 1;
 		return true;
@@ -120,10 +120,10 @@ contract container is ERC20 {
 
 		@return bool success: true if function executes sucessfully
 	*/
-	function depExchange() public returns (bool success){
-		require(msg.sender == owner && progress == 1);
+	function depExchange() onlyOwner public returns (bool success){
+		require(progress == 1, "progress must == 1");
 		(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(underlyingAssetContract), address(strikeAssetContract), address(optionsContract)));
-		require(success);
+		require(success, "could not sucessfully deploy exchange contract");
 		exchangeContract = exchange(eHelper(eHelperAddress).exchangeAddress());
 		optionsContract.setExchangeAddress(address(exchangeContract));
 		progress = 2;
@@ -136,8 +136,7 @@ contract container is ERC20 {
 
 		@param uint _feeDenominator: the value to pass to optionsContract.setFee
 	*/
-	function setFee(uint _feeDeonominator) public {
-		require(msg.sender == owner);
+	function setFee(uint _feeDeonominator) onlyOwner public {
 		optionsContract.setFee(_feeDeonominator);
 	}
 
@@ -150,7 +149,7 @@ contract container is ERC20 {
 		@return uint strikeAsset: the amount of strike asset that has  been credited to this contract
 	*/
 	function contractClaim() public returns (uint underlyingAsset, uint strikeAsset) {
-		require(lastWithdraw < block.timestamp - 86400);
+		require(lastWithdraw < block.timestamp - 86400, "this function can only be called once every 24 hours");
 		lastWithdraw = block.timestamp;
 		(underlyingAsset, strikeAsset) = optionsContract.withdrawFunds();
 		contractBalanceUnderlying.push(contractBalanceUnderlying[contractBalanceUnderlying.length-1] + underlyingAsset);
@@ -219,7 +218,7 @@ contract container is ERC20 {
 		@return bool success: true if function executes sucessfully
     */
     function transfer(address _to, uint256 _value) public returns (bool success) {
-        require(balanceOf[msg.sender] >= _value);
+        require(balanceOf[msg.sender] >= _value, "balanceOf[msg.sender] is too low");
 
         claim(msg.sender);
         claim(_to);
@@ -259,8 +258,8 @@ contract container is ERC20 {
 		@return bool success: true if function executes sucessfully
     */
     function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
-        require(_value <= balanceOf[_from]);
-        require(_value <= allowance[_from][msg.sender]);
+        require(_value <= balanceOf[_from], "balanceOf[_from] is too low");
+        require(_value <= allowance[_from][msg.sender], "allowance[_from][msg.sender] is too low");
 
         claim(_from);
         claim(_to);
