@@ -69,6 +69,12 @@ contract options {
         feeDenominator = _feeDeonominator;
     }
 
+    function setOwner(address _addr) public {
+        require(msg.sender == deployerAddress);
+        if (deployerAddress == exchangeAddress) exchangeAddress = _addr;
+        deployerAddress = _addr;
+    }
+
     /*
         callAmounts and putAmounts store the net position of each type of calls and puts respectively for each user at each matirity and strike
     */
