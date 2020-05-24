@@ -1,8 +1,9 @@
 pragma solidity ^0.5.12;
 import "./oracle.sol";
 import "./ERC20.sol";
+import "./Ownable.sol";
 
-contract options {
+contract options is Ownable {
     //address of the contract of the price oracle for the underlying asset in terms of the strike asset such as a price oracle for WBTC/DAI
     address oracleAddress;
     //address of the contract of the underlying digital asset such as WBTC or WETH
@@ -11,8 +12,6 @@ contract options {
     address strikeAssetAddress;
     //address of the exchange is allowed to see collateral requirements for all users
     address exchangeAddress;
-    //deployer can set the exchange address once
-    address deployerAddress;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
@@ -39,7 +38,6 @@ contract options {
         underlyingAssetAddress = _underlyingAssetAddress;
         strikeAssetAddress = _strikeAssetAddress;
         exchangeAddress = msg.sender;
-        deployerAddress = msg.sender;
         oracle orc = oracle(oracleAddress);
         inflator = orc.inflator();
         ERC20 ua = ERC20(underlyingAssetAddress);
@@ -53,8 +51,8 @@ contract options {
 
         @param address _exchangeAddress: this is the address that will be assigned to this contracts exchangeAddress variable
     */
-    function setExchangeAddress(address _exchangeAddress) public {
-        require(exchangeAddress == deployerAddress && msg.sender == deployerAddress);
+    function setExchangeAddress(address _exchangeAddress) onlyOwner public {
+        require(exchangeAddress == owner, "can only set exchange address once");
         exchangeAddress = _exchangeAddress;
     }
 
@@ -64,15 +62,18 @@ contract options {
         @param uint _feeDenominator: the value which will be the denominator in the fee on all transactions
             fee == (amount*priceOfOption)/feeDenominator
     */
-    function setFee(uint _feeDeonominator) public {
-        require(msg.sender == deployerAddress && _feeDeonominator >= 500);
+    function setFee(uint _feeDeonominator) onlyOwner public {
+        require(_feeDeonominator >= 500, "feeDenominator must be >= 500");
         feeDenominator = _feeDeonominator;
     }
 
-    function setOwner(address _addr) public {
-        require(msg.sender == deployerAddress);
-        if (deployerAddress == exchangeAddress) exchangeAddress = _addr;
-        deployerAddress = _addr;
+    /*
+        @Description: transfers ownership of contract
+            if exchangeAddress has not been set it is also set to _addr such that it is known that the exchange address has not been set when it == owner
+    */
+    function transferOwnership(address _newOwner) onlyOwner public {
+        if (owner == exchangeAddress) exchangeAddress = _newOwner;
+        super.transferOwnership(_newOwner);
     }
 
     /*
@@ -135,7 +136,7 @@ contract options {
     */
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
-        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
+        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike), "ensure strike != 0 && both _debtor and _holder have added said strike");
         ERC20 ua = ERC20(underlyingAssetAddress);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
@@ -145,7 +146,7 @@ contract options {
 
         transferAmt = debtorMinSats - satCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return(false, 0);
-        require(ua.transferFrom(msg.sender, address(this), transferAmt));
+        require(ua.transferFrom(msg.sender, address(this), transferAmt), "transaction failed");
         satCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSats
         claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
         satCollateral[_holder][_maturity] = holderMinSats;
@@ -177,7 +178,7 @@ contract options {
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
-        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
+        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike), "ensure strike != 0 && both _debtor and _holder have added said strike");
         ERC20 sa = ERC20(strikeAssetAddress);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
@@ -187,7 +188,7 @@ contract options {
 
         transferAmt = debtorMinSc - scCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return (false, 0);
-        require(sa.transferFrom(msg.sender,  address(this), transferAmt));
+        require(sa.transferFrom(msg.sender,  address(this), transferAmt), "transaction failed");
         scCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSc
         claimedStable[_holder] += scCollateral[_holder][_maturity] - holderMinSc;
         scCollateral[_holder][_maturity] = holderMinSc;
@@ -208,7 +209,7 @@ contract options {
         @return bool success: if an error occurs returns false if no error return true
     */
     function claim(uint _maturity) public returns(bool success){
-        require(_maturity < block.timestamp);
+        require(_maturity < block.timestamp, "can only claim after maturity has passed");
         //get info from the oracle
         oracle orc = oracle(oracleAddress);
         uint spot = orc.getAtTime(_maturity);
@@ -230,13 +231,13 @@ contract options {
         if (callValue > satDeduction[msg.sender][_maturity]){
             callValue -= satDeduction[msg.sender][_maturity];
             uint fee = callValue/feeDenominator;
-            claimedTokens[deployerAddress] += fee;
+            claimedTokens[owner] += fee;
             claimedTokens[msg.sender] += callValue - fee;
         }
         if (putValue > scDeduction[msg.sender][_maturity]){
             putValue -= scDeduction[msg.sender][_maturity];
             uint fee = putValue/feeDenominator;
-            claimedStable[deployerAddress] += fee;
+            claimedStable[owner] += fee;
             claimedStable[msg.sender] += putValue - fee;
         }
         return true;
@@ -268,12 +269,12 @@ contract options {
     function depositFunds(uint _sats, uint _sc) public returns(bool success){
         if (_sats > 0){
             ERC20 ua = ERC20(underlyingAssetAddress);
-            require(ua.transferFrom(msg.sender, address(this), _sats));
+            require(ua.transferFrom(msg.sender, address(this), _sats), "transaction failed");
             claimedTokens[msg.sender] += _sats;
         }
         if (_sc > 0){
             ERC20 sa = ERC20(strikeAssetAddress);
-            require(sa.transferFrom(msg.sender, address(this), _sc));
+            require(sa.transferFrom(msg.sender, address(this), _sc), "transaction failed");
             claimedStable[msg.sender] += _sc;
         }
         return true;
@@ -477,7 +478,7 @@ contract options {
         @return uint: the amount of satUnits or scUnits that must be sent as collateral for the order described to go through
     */
     function transferAmount(bool _token, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint){
-        require(msg.sender == _addr || msg.sender == exchangeAddress);
+        require(msg.sender == _addr || msg.sender == exchangeAddress, "transferAmount can only be called where msg.sender == _addr");
         if (_amount >= 0) return 0;
         if (_token){
             (uint minCollateral, ) = minSats(_addr, _maturity, _amount, _strike);
@@ -501,14 +502,6 @@ contract options {
         (contained,) = containsStrike(msg.sender, _maturity, _strike, true, false);
     }
 
-    /*
-    function removeStrike(uint _maturity, uint _index) public returns(bool success){
-        require(strikes[msg.sender][_maturity].length > _index);
-        uint temp = strikes[msg.sender][_maturity][strikes[_addr][_maturity].length-1];
-        strikes[msg.sender][_maturity][_index] = temp;
-        delete strikes[msg.sender][_maturity][strikes[_addr][_maturity].length-1];
-    }
-    */
 
     /*
         @Description: used to tell if strikes[givenAddress][givenMaturiy] contains a given strike
@@ -632,15 +625,14 @@ contract options {
     }
 
     function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        (bool contained,) = containsStrike(_to, _maturity, _strike, false, false);
-        require(_strike != 0 && contained);
+        require(_strike != 0 && contains(_to, _maturity, _strike), "ensure strike != 0 && _to has added said strike");
         emit Transfer(msg.sender, _to, _value, _maturity, _strike, _call);
         if (_call) return transferCall(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
         return transferPut(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
     }
 
     function approve(address _spender, uint256 _value, uint _maturity, uint _strike, bool _call) public returns(bool success){
-        require(_strike != 0);
+        require(_strike != 0, "ensure strike != 0");
         emit Approval(msg.sender, _spender, _value, _maturity, _strike, _call);
         if (_call) callAllowance[msg.sender][_spender][_maturity][_strike] = _value;
         else putAllowance[msg.sender][_spender][_maturity][_strike] = _value;
@@ -648,9 +640,8 @@ contract options {
     }
 
     function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        (bool contained,) = containsStrike(_to, _maturity, _strike, false, false);
-        require(_strike != 0 && contained);
-        require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
+        require(_strike != 0 && contains(_to, _maturity, _strike), "ensure strike != 0 && _to has added said strike");
+        require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]), "sufficient amount has not been approved");
         emit Transfer(_from, _to, _value, _maturity, _strike, _call);
         if (_call) {
             callAllowance[_from][msg.sender][_maturity][_strike] -= _value;

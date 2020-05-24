@@ -2,7 +2,9 @@ pragma solidity ^0.5.12;
 import "./ERC20.sol";
 import "./options.sol";
 
-
+/*
+    Due to contract size limitations we cannot add error strings in require statements in this contract
+*/
 contract exchange{
     //denominated in Underlying Token satUnits
     mapping(address => uint) claimedToken;

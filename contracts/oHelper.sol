@@ -13,14 +13,14 @@ contract oHelper {
 	}
 
 	function setOwner(address _addr) public {
-		require(msg.sender == owner);
+		require(msg.sender == owner, "only owner");
 		owner = _addr;
 	}
 
 	function deploy(address _oracleAddress, address _underlyingAssetAddress, address _strikeAssetAddress) public {
-		require(owner == msg.sender);
+		require(owner == msg.sender, "only owner");
 		optionsAddress = address(new options(_oracleAddress, _underlyingAssetAddress, _strikeAssetAddress));
-		options(optionsAddress).setOwner(owner);
+		options(optionsAddress).transferOwnership(owner);
 	}
 
 }

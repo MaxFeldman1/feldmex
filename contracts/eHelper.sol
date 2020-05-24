@@ -1,7 +1,11 @@
 pragma solidity ^0.5.12;
 import "./exchange.sol";
 
-//allows us to deploy the options smart contract without going over gas limit
+/*
+	This contract allows us to deploy the options smart contract without going over gas limit
+
+    Due to contract size limitations we cannot add error strings in require statements in this contract
+*/
 contract eHelper {
 	address owner;
 
