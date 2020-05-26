@@ -233,4 +233,70 @@ contract('container', function(accounts){
 		});
 	});
 
+
+	it('grants fee immunity', () => {
+		strike = 10;
+		spot = strike+10;
+		//strike*=satUnits;
+		//spot*=satUnits;
+		return oracleInstance.set(spot).then(() => {
+			return web3.eth.getBlock('latest');
+		}).then((res) => {
+			maturity = res.timestamp;
+			maxTransfer = satUnits*amount;
+			//wait one second to allow for maturity to pass
+			return new Promise(resolve => setTimeout(resolve, 1000));
+		}).then(() => {
+			return tokenInstance.approve(optionsInstance.address, maxTransfer, {from: deployerAccount});
+		}).then(() => {
+			return tokenInstance.balanceOf(deployerAccount);
+		}).then((res) => {
+			assert.equal(res.toNumber() >= maxTransfer, true, "balance is large enough");
+			optionsInstance.addStrike(maturity, strike, {from: deployerAccount});
+			optionsInstance.addStrike(maturity, strike, {from: accounts[1]});
+			return optionsInstance.mintCall(deployerAccount, accounts[1], maturity, strike, amount, maxTransfer, {from: deployerAccount});
+		}).then(() => {
+			feeDenominator = 1000;
+			return containerInstance.setFee(1000, {from: deployerAccount});
+		}).then(() => {
+			return optionsInstance.viewClaimedTokens({from: accounts[1]});
+		}).then((res) => {
+			prevBalance = res.toNumber();
+			return containerInstance.changeFeeStatus(accounts[1], {from: deployerAccount});
+		}).then(() => {
+			return optionsInstance.feeImmunity(accounts[1]);
+		}).then((res) => {
+			assert.equal(res, true, "fee immunity granted to receiver account");
+			return optionsInstance.claim(maturity, {from: accounts[1]});
+		}).then(() => {
+			return optionsInstance.viewClaimedTokens({from: accounts[1]});
+		}).then((res) => {
+			//note that there is no fee present when calculating balance
+			assert.equal(res.toNumber(), prevBalance + Math.floor(satUnits*amount*(spot-strike)/spot), "No fee charged on first account's call to options.claim");
+			return containerInstance.changeFeeStatus(accounts[1], {from: deployerAccount});
+		}).then(() => {
+			return optionsInstance.feeImmunity(accounts[1]);			
+		}).then((res) => {
+			assert.equal(res, false, "fee immunity revoked for receiver account");
+			maturity++;
+			maxTransfer = amount*strike;
+			return new Promise(resolve => setTimeout(resolve, 1000));
+		}).then(() => {
+			return strikeAssetInstance.approve(optionsInstance.address, maxTransfer, {from: deployerAccount});
+		}).then(() => {
+			optionsInstance.addStrike(maturity, strike, {from: deployerAccount});
+			optionsInstance.addStrike(maturity, strike, {from: accounts[1]});
+			return optionsInstance.mintPut(accounts[1], deployerAccount, maturity, strike, amount, maxTransfer, {from: deployerAccount});
+		}).then((res) => {
+			return optionsInstance.viewClaimedStable({from: accounts[1]});
+		}).then((res) => {
+			prevBalance = res.toNumber();
+			//option expired worthless first account gets back all collateral
+			return optionsInstance.claim(maturity, {from: accounts[1]});
+		}).then(() => {
+			return optionsInstance.viewClaimedStable({from: accounts[1]});
+		}).then((res) => {
+			assert.equal(res.toNumber(), prevBalance+maxTransfer-Math.floor(maxTransfer/feeDenominator), "fee is now charged again");
+		});
+	});
 });

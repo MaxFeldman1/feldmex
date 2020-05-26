@@ -17,6 +17,7 @@ var debtor;
 var holder;
 var feeDenominator = 0x4000000000000000000000000000000000000000000000000000000000000000;
 var inflator;
+var strikes = {};
 var inflatorObj = {};
 var setWithInflator;
 
@@ -37,9 +38,19 @@ contract('options', function(accounts){
 			inflatorObj = {};
 			//setWithInflator sets spot and adjusts for the inflator
 			setWithInflator = (_spot) => {return oracleInstance.set(_spot * inflator);};
-			inflatorObj.mintCall = (debtor, holder, maturity, strike, amount, limit, params) => {return optionsInstance.mintCall(debtor, holder, maturity, strike*inflator, amount, limit, params);};
-			inflatorObj.mintPut = (debtor, holder, maturity, strike, amount, limit, params) => {return optionsInstance.mintPut(debtor, holder, maturity, strike*inflator, amount, limit, params);};
 			inflatorObj.addStrike = (maturity, strike, params) => {return optionsInstance.addStrike(maturity, strike*inflator, params);};
+			inflatorObj.mintCall = (debtor, holder, maturity, strike, amount, limit, params) => {
+				inflatorObj.addStrike(maturity, strike, {from: debtor});
+				return inflatorObj.addStrike(maturity, strike, {from: holder}).then(() => {
+					return optionsInstance.mintCall(debtor, holder, maturity, strike*inflator, amount, limit, params);
+				});
+			};
+			inflatorObj.mintPut = (debtor, holder, maturity, strike, amount, limit, params) => {
+				inflatorObj.addStrike(maturity, strike, {from: debtor});
+				return inflatorObj.addStrike(maturity, strike, {from: holder}).then(() => {
+					return optionsInstance.mintPut(debtor, holder, maturity, strike*inflator, amount, limit, params);
+				});
+			};
 			inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
 			inflatorObj.transfer = (to, value, maturity, strike, maxTransfer, callPut, params) => {return optionsInstance.transfer(to, value, maturity, strike*inflator, maxTransfer, callPut, params);};
 			inflatorObj.transferFrom = (from, to, value, maturity, strike, maxTransfer, callPut, params) => {return optionsInstance.transferFrom(from, to, value, maturity, strike*inflator, maxTransfer, callPut, params);};
@@ -353,6 +364,65 @@ contract('options', function(accounts){
 		}).then((res) => {
 			assert.equal(res, "OOF", 'could not mint put without adding maturity strike combo for debtor account');
 			//if there were a problem with minting calls or puts after adding the strikes for both users it would have shown up earlier
+		});
+	});
+
+	it('approves and exempts addresses from fees', function(){
+		spot = strike+10;
+		return setWithInflator(spot).then(() => {
+			return web3.eth.getBlock('latest');
+		}).then((res) => {
+			maturity = res.timestamp;
+			maxTransfer = satUnits*amount;
+			//wait one second to allow for maturity to pass
+			return new Promise(resolve => setTimeout(resolve, 1000));
+		}).then(() => {
+			return tokenInstance.approve(optionsInstance.address, maxTransfer, {from: defaultAccount});
+		}).then(() => {
+			return tokenInstance.balanceOf(defaultAccount);
+		}).then((res) => {
+			assert.equal(res.toNumber() >= maxTransfer, true, "balance is large enough");
+			return inflatorObj.mintCall(defaultAccount, reciverAccount, maturity, strike, amount, maxTransfer, {from: defaultAccount});
+		}).then(() => {
+			feeDenominator = 1000;
+			return optionsInstance.setFee(1000, {from: defaultAccount});
+		}).then(() => {
+			return optionsInstance.viewClaimedTokens({from: reciverAccount});
+		}).then((res) => {
+			prevBalance = res.toNumber();
+			return optionsInstance.changeFeeStatus(reciverAccount, {from: defaultAccount});
+		}).then(() => {
+			return optionsInstance.feeImmunity(reciverAccount);
+		}).then((res) => {
+			assert.equal(res, true, "fee immunity granted to receiver account");
+			return optionsInstance.claim(maturity, {from: reciverAccount});
+		}).then(() => {
+			return optionsInstance.viewClaimedTokens({from: reciverAccount});
+		}).then((res) => {
+			//note that there is no fee present when calculating balance
+			assert.equal(res.toNumber(), prevBalance + Math.floor(satUnits*amount*(spot-strike)/spot), "No fee charged on reciverAccount's call to options.claim");
+			return optionsInstance.changeFeeStatus(reciverAccount, {from: defaultAccount});
+		}).then(() => {
+			return optionsInstance.feeImmunity(reciverAccount);			
+		}).then((res) => {
+			assert.equal(res, false, "fee immunity revoked for receiver account");
+			maturity++;
+			maxTransfer = scUnits*amount*strike;
+			return new Promise(resolve => setTimeout(resolve, 1000));
+		}).then(() => {
+			return strikeAssetInstance.approve(optionsInstance.address, maxTransfer, {from: defaultAccount});
+		}).then(() => {
+			return inflatorObj.mintPut(reciverAccount, defaultAccount, maturity, strike, amount, maxTransfer, {from: defaultAccount});
+		}).then((res) => {
+			return optionsInstance.viewClaimedStable({from: reciverAccount});
+		}).then((res) => {
+			prevBalance = res.toNumber();
+			//option expired worthless reciverAccount gets back all collateral
+			return optionsInstance.claim(maturity, {from: reciverAccount});
+		}).then(() => {
+			return optionsInstance.viewClaimedStable({from: reciverAccount});
+		}).then((res) => {
+			assert.equal(res.toNumber(), prevBalance+maxTransfer-Math.floor(maxTransfer/feeDenominator), "fee is now charged again");
 		});
 	});
 });

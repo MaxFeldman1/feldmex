@@ -17,6 +17,12 @@ contract options is Ownable {
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint scUnits;
     /*
+        addresses that are approved do not have to pay fees
+        addresses that are approved are usually market makers/liquidity providers
+        addresses are approved by the owner
+    */
+    mapping(address => bool) public feeImmunity;
+    /*
         number by which the oracle multiplies all spot prices
         also used to inflate strike prices here
     */
@@ -52,7 +58,7 @@ contract options is Ownable {
         @param address _exchangeAddress: this is the address that will be assigned to this contracts exchangeAddress variable
     */
     function setExchangeAddress(address _exchangeAddress) onlyOwner public {
-        require(exchangeAddress == owner, "can only set exchange address once");
+        require(exchangeAddress == owner);
         exchangeAddress = _exchangeAddress;
     }
 
@@ -63,8 +69,19 @@ contract options is Ownable {
             fee == (amount*priceOfOption)/feeDenominator
     */
     function setFee(uint _feeDeonominator) onlyOwner public {
-        require(_feeDeonominator >= 500, "feeDenominator must be >= 500");
+        require(_feeDeonominator >= 500);
         feeDenominator = _feeDeonominator;
+    }
+
+    /*
+        @Description: allows the owner of this contract to give and take approval from accounts that are providing liquidity
+            If an address is already approved approval will be removed if not approval will be awarded
+
+        @address _addr: the address to give or retract fee immunity from
+    */
+    function changeFeeStatus(address _addr) onlyOwner public {
+        if (feeImmunity[_addr]) delete feeImmunity[_addr];
+        else feeImmunity[_addr] = true;
     }
 
     /*
@@ -136,7 +153,7 @@ contract options is Ownable {
     */
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
-        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike), "ensure strike != 0 && both _debtor and _holder have added said strike");
+        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
         ERC20 ua = ERC20(underlyingAssetAddress);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
@@ -178,7 +195,7 @@ contract options is Ownable {
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
-        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike), "ensure strike != 0 && both _debtor and _holder have added said strike");
+        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
         ERC20 sa = ERC20(strikeAssetAddress);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
@@ -188,7 +205,7 @@ contract options is Ownable {
 
         transferAmt = debtorMinSc - scCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return (false, 0);
-        require(sa.transferFrom(msg.sender,  address(this), transferAmt), "transaction failed");
+        require(sa.transferFrom(msg.sender,  address(this), transferAmt));
         scCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSc
         claimedStable[_holder] += scCollateral[_holder][_maturity] - holderMinSc;
         scCollateral[_holder][_maturity] = holderMinSc;
@@ -209,7 +226,7 @@ contract options is Ownable {
         @return bool success: if an error occurs returns false if no error return true
     */
     function claim(uint _maturity) public returns(bool success){
-        require(_maturity < block.timestamp, "can only claim after maturity has passed");
+        require(_maturity < block.timestamp);
         //get info from the oracle
         oracle orc = oracle(oracleAddress);
         uint spot = orc.getAtTime(_maturity);
@@ -230,13 +247,13 @@ contract options is Ownable {
         delete strikes[msg.sender][_maturity];
         if (callValue > satDeduction[msg.sender][_maturity]){
             callValue -= satDeduction[msg.sender][_maturity];
-            uint fee = callValue/feeDenominator;
+            uint fee = feeImmunity[msg.sender] ? 0 : callValue/feeDenominator;
             claimedTokens[owner] += fee;
             claimedTokens[msg.sender] += callValue - fee;
         }
         if (putValue > scDeduction[msg.sender][_maturity]){
             putValue -= scDeduction[msg.sender][_maturity];
-            uint fee = putValue/feeDenominator;
+            uint fee = feeImmunity[msg.sender] ? 0 : putValue/feeDenominator;
             claimedStable[owner] += fee;
             claimedStable[msg.sender] += putValue - fee;
         }
@@ -269,12 +286,12 @@ contract options is Ownable {
     function depositFunds(uint _sats, uint _sc) public returns(bool success){
         if (_sats > 0){
             ERC20 ua = ERC20(underlyingAssetAddress);
-            require(ua.transferFrom(msg.sender, address(this), _sats), "transaction failed");
+            require(ua.transferFrom(msg.sender, address(this), _sats));
             claimedTokens[msg.sender] += _sats;
         }
         if (_sc > 0){
             ERC20 sa = ERC20(strikeAssetAddress);
-            require(sa.transferFrom(msg.sender, address(this), _sc), "transaction failed");
+            require(sa.transferFrom(msg.sender, address(this), _sc));
             claimedStable[msg.sender] += _sc;
         }
         return true;
@@ -478,7 +495,7 @@ contract options is Ownable {
         @return uint: the amount of satUnits or scUnits that must be sent as collateral for the order described to go through
     */
     function transferAmount(bool _token, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint){
-        require(msg.sender == _addr || msg.sender == exchangeAddress, "transferAmount can only be called where msg.sender == _addr");
+        require(msg.sender == _addr || msg.sender == exchangeAddress);
         if (_amount >= 0) return 0;
         if (_token){
             (uint minCollateral, ) = minSats(_addr, _maturity, _amount, _strike);
@@ -625,7 +642,7 @@ contract options is Ownable {
     }
 
     function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        require(_strike != 0 && contains(_to, _maturity, _strike), "ensure strike != 0 && _to has added said strike");
+        require(_strike != 0 && contains(_to, _maturity, _strike));
         emit Transfer(msg.sender, _to, _value, _maturity, _strike, _call);
         if (_call) return transferCall(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
         return transferPut(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
@@ -640,8 +657,8 @@ contract options is Ownable {
     }
 
     function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        require(_strike != 0 && contains(_to, _maturity, _strike), "ensure strike != 0 && _to has added said strike");
-        require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]), "sufficient amount has not been approved");
+        require(_strike != 0 && contains(_to, _maturity, _strike));
+        require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
         emit Transfer(_from, _to, _value, _maturity, _strike, _call);
         if (_call) {
             callAllowance[_from][msg.sender][_maturity][_strike] -= _value;
