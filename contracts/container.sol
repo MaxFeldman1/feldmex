@@ -91,7 +91,7 @@ contract container is ERC20, Ownable, yield {
 		require(progress == 0, "progress must == 0");
 		(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(underlyingAssetContract), address(strikeAssetContract)));
 		require(success, "could not sucessfully deploy options contract");
-		optionsContract = options(oHelper(oHelperAddress).optionsAddress());
+		optionsContract = options(oHelper(oHelperAddress).optionsAddress(address(this)));
 		progress = 1;
 		return true;
 	}
@@ -106,7 +106,7 @@ contract container is ERC20, Ownable, yield {
 		require(progress == 1, "progress must == 1");
 		(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(underlyingAssetContract), address(strikeAssetContract), address(optionsContract)));
 		require(success, "could not sucessfully deploy exchange contract");
-		exchangeContract = exchange(eHelper(eHelperAddress).exchangeAddress());
+		exchangeContract = exchange(eHelper(eHelperAddress).exchangeAddress(address(this)));
 		optionsContract.setExchangeAddress(address(exchangeContract));
 		progress = 2;
 		return true;

@@ -24,10 +24,6 @@ module.exports = function(deployer) {
     return deployer.deploy(container, underlyingAssetAddress, strikeAssetAddress, oHelperAddress, eHelperAddress, 1000000, 0);
   }).then((res) => {
     containerInstance = res;
-    return oHelperInstance.setOwner(containerInstance.address);
-  }).then(() => {
-    return eHelperInstance.setOwner(containerInstance.address);
-  }).then(() => {
     return containerInstance.depOptions();
   }).then(() => {
     return containerInstance.depExchange();

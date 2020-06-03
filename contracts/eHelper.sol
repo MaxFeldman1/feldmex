@@ -7,23 +7,10 @@ import "./exchange.sol";
     Due to contract size limitations we cannot add error strings in require statements in this contract
 */
 contract eHelper {
-	address owner;
-
-	address public exchangeAddress;
-
-
-	constructor () public {
-		owner = msg.sender;
-	}
-
-	function setOwner(address _addr) public {
-		require(msg.sender == owner);
-		owner = _addr;
-	}
+	mapping(address => address) public exchangeAddress;
 
 	function deploy(address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress) public {
-		require(owner == msg.sender);
-		exchangeAddress = address(new exchange(_underlyingAssetAddress, _strikeAssetAddress, _optionsAddress));
+		exchangeAddress[msg.sender] = address(new exchange(_underlyingAssetAddress, _strikeAssetAddress, _optionsAddress));
 	}
 
 }

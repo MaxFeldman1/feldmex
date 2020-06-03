@@ -29,10 +29,6 @@ contract('container', function(accounts){
 			return container.new(tokenInstance.address, strikeAssetInstance.address, oHelperInstance.address, eHelperInstance.address, 0, 0);
 		}).then((res) => {
 			containerInstance = res;
-			return oHelperInstance.setOwner(containerInstance.address);
-		}).then(() => {
-			return eHelperInstance.setOwner(containerInstance.address);
-		}).then(() => {
 			return containerInstance.depOptions();
 		}).then(() => {
 			return containerInstance.depExchange();
