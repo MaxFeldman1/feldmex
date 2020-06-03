@@ -6,8 +6,9 @@ import "./exchange.sol";
 import "./oHelper.sol";
 import "./eHelper.sol";
 import "./Ownable.sol";
+import "./yield.sol";
 
-contract container is ERC20, Ownable {
+contract container is ERC20, Ownable, yield {
 	
 	//smart contract that records prices, records (priceOfUnderlyingAsset)/(priceOfStrikeAsset)
 	oracle public oracleContract;
@@ -38,27 +39,6 @@ contract container is ERC20, Ownable {
 	//timestamp of last time this smart contract called optionContract.withdrawFunds()
 	uint public lastWithdraw;
 
-	/*
-		every time lastWithdraw is updated another value is pushed to contractBalanceUnderlying as contractBalanceStrike
-		thus the length of contractBalanceUnderlying and contractBalanceStrike are always the same
-
-		lastClaim represents the last index of the contractBalance arrays for each address at the most recent time that claim(said address) was called
-	*/
-	//lastClaim represents the last index of the contractBalance arrays for each address at the most recent time that claim(said address) was called
-	mapping(address => uint) lastClaim;
-	//holds the total amount of underlying asset that this contract has generated in fees
-	uint[] public contractBalanceUnderlying;
-	//holds the total amount of strike asset that this contract has genereated in fees
-	uint[] public contractBalanceStrike;
-
-	//each address's balance of claimed underlying asset funds that have yet to be withdrawn
-	mapping(address => uint) balanceUnderlying;
-	//allows users to see their value in the mapping balanceUnderlying
-	function viewUnderlyingAssetBalance() public view returns (uint) {return balanceUnderlying[msg.sender];}
-	//each address's balance of claimed strike asset funds that have yet to be withdrawn
-	mapping(address => uint) balanceStrike;
-	//allows users to see their value in the mapping balanceStrike	
-	function viewStrikeAssetBalance() public view returns (uint) {return balanceStrike[msg.sender];}
 
 
 	//total amount of smallest denomination units of coin in this smart contract
@@ -89,6 +69,8 @@ contract container is ERC20, Ownable {
 		decimals = _decimals;
 		totalSupply = _totalCoins * (uint(10) ** decimals);
 		balanceOf[owner] = totalSupply;
+		yieldDistribution[msg.sender][msg.sender] = totalSupply;
+		totalYield[msg.sender] = totalSupply;
 
 		underlyingAssetContract = ERC20(_underlyingAssetAddress);
 		strikeAssetContract = ERC20(_strikeAssetAddress);
@@ -146,44 +128,6 @@ contract container is ERC20, Ownable {
 	}
 
 
-	/*
-		@Description: Calls options.withdrawFunds() from this contract afterwards users may claim their own portion of the funds
-			may be called once a day
-
-		@return uint underlyingAsset: the amount of underlying asset that has been credited to this contract
-		@return uint strikeAsset: the amount of strike asset that has  been credited to this contract
-	*/
-	function contractClaim() public returns (uint underlyingAsset, uint strikeAsset) {
-		require(lastWithdraw < block.timestamp - 86400, "this function can only be called once every 24 hours");
-		lastWithdraw = block.timestamp;
-		(underlyingAsset, strikeAsset) = optionsContract.withdrawFunds();
-		contractBalanceUnderlying.push(contractBalanceUnderlying[contractBalanceUnderlying.length-1] + underlyingAsset);
-		contractBalanceStrike.push(contractBalanceStrike[contractBalanceStrike.length-1] + strikeAsset);
-		return (underlyingAsset, strikeAsset);
-	}
-
-	/*
-		@Description: allows token holders to claim their portion of the cashflow
-	*/
-	function publicClaim() public {
-		claim(msg.sender);
-	}
-
-	/*
-		@Description: claims an address's portion of cashflow
-
-		@param address _addr: the address for which to claim cashflow
-	*/
-	function claim(address _addr) internal {
-		uint mostRecent = lastClaim[_addr];
-		lastClaim[_addr] = contractBalanceUnderlying.length-1;
-		uint totalIncreace = contractBalanceUnderlying[contractBalanceUnderlying.length-1] - contractBalanceUnderlying[mostRecent];
-		balanceUnderlying[_addr] += totalIncreace * balanceOf[_addr] / totalSupply;
-		totalIncreace = contractBalanceStrike[contractBalanceStrike.length-1] - contractBalanceStrike[mostRecent];
-		balanceStrike[_addr] += totalIncreace * balanceOf[_addr] / totalSupply;
-	}
-
-
     /*
         @Descripton: allows for users to withdraw funds that are not locked up as collateral
             these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
@@ -205,13 +149,15 @@ contract container is ERC20, Ownable {
     event Transfer(
         address indexed _from,
         address indexed _to,
-        uint256 _value
+        uint256 _value,
+        address indexed _yieldOwner
     );
 
     event Approval(
         address indexed _owner,
         address indexed _spender,
-        uint256 _value
+        uint256 _value,
+        address indexed _yieldOwner
     );
 
     /*
@@ -223,17 +169,7 @@ contract container is ERC20, Ownable {
 		@return bool success: true if function executes sucessfully
     */
     function transfer(address _to, uint256 _value) public returns (bool success) {
-        require(balanceOf[msg.sender] >= _value, "balanceOf[msg.sender] is too low");
-
-        claim(msg.sender);
-        claim(_to);
-
-        balanceOf[msg.sender] -= _value;
-        balanceOf[_to] += _value;
-
-        emit Transfer(msg.sender, _to, _value);
-
-        return true;
+        return transferTokenOwner(_to, _value, msg.sender);
     }
 
     /*
@@ -245,11 +181,7 @@ contract container is ERC20, Ownable {
 		@return bool success: true if function executes sucessfully
     */
     function approve(address _spender, uint256 _value) public returns (bool success) {
-        allowance[msg.sender][_spender] = _value;
-
-        emit Approval(msg.sender, _spender, _value);
-
-        return true;
+        return approveYieldOwner(_spender, _value, msg.sender);
     }
 
 
@@ -263,21 +195,172 @@ contract container is ERC20, Ownable {
 		@return bool success: true if function executes sucessfully
     */
     function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
-        require(_value <= balanceOf[_from], "balanceOf[_from] is too low");
-        require(_value <= allowance[_from][msg.sender], "allowance[_from][msg.sender] is too low");
-
-        claim(_from);
-        claim(_to);
-
-        balanceOf[_from] -= _value;
-        balanceOf[_to] += _value;
-
-        allowance[_from][msg.sender] -= _value;
-
-        emit Transfer(_from, _to, _value);
-
-        return true;
+        return transferTokenOwnerFrom(_from, _to, _value, _from);
     }
 
+    //-----------------i-m-p-l-e-m-e-n-t-s---y-i-e-l-d----------------
+    mapping(address => mapping(address => uint256)) public yieldDistribution;
+    mapping(address => uint) public totalYield;
+    mapping(address => mapping(address => mapping(address => uint))) public specificAllowance;
+    mapping(address => bool) public autoClaimYieldDisabled;
+    /*
+		@Description: Emitted when there is movement of _value in yeildDistribution from
+			yeildDistribution[_tokenOwner][_yeildOwner] to
+			yeildDistribution[_tokenOwner][_tokenOwner]
+    */
+    event ClaimYield(
+    	address indexed _tokenOwner,
+    	address indexed _yieldOwner,
+    	uint256 _value
+    );
+
+    /*
+		@Description: Emitted when there is movement of _value in yeildDistribution from
+			yeildDistirbution[_tokenOwner][_tokenOwner] to
+			yeildDistribution[_tokenOwner][_yeildOwner]
+    */
+    event SendYield(
+    	address indexed _tokenOwner,
+    	address indexed _yieldOwner,
+    	uint256 _value
+    );
+
+    function claimYield(address _yieldOwner, uint256 _value) external returns (bool success) {
+        claimYeildInternal(msg.sender, _yieldOwner, _value);
+
+    	return true;
+    }
+
+    function sendYield(address _to, uint256 _value) public returns (bool success) {
+    	require(yieldDistribution[msg.sender][msg.sender] >= _value);
+        claimDividendInternal(msg.sender);
+        claimDividendInternal(_to);
+    	yieldDistribution[msg.sender][msg.sender] -= _value;
+    	totalYield[msg.sender] -= _value;
+    	yieldDistribution[msg.sender][_to] += _value;
+    	totalYield[_to] += _value;
+    	emit SendYield(msg.sender, _to, _value);
+
+    	return true;
+    }
+
+    function transferTokenOwner(address _to, uint256 _value, address _yieldOwner) public returns (bool success) {
+    	require(yieldDistribution[msg.sender][_yieldOwner] >= _value);
+    	yieldDistribution[msg.sender][_yieldOwner] -= _value;
+		balanceOf[msg.sender] -= _value;
+		
+		yieldDistribution[_to][_yieldOwner] += _value;
+		balanceOf[_to] += _value;
+
+        if (!autoClaimYieldDisabled[_to]) claimYeildInternal(_to, _yieldOwner, _value);
+
+		emit Transfer(msg.sender, _to, _value, _yieldOwner);
+
+		return true;
+    }
+
+    function approveYieldOwner(address _spender, uint256 _value, address _yieldOwner) public returns (bool success) {
+    	allowance[msg.sender][_spender] -= specificAllowance[msg.sender][_spender][_yieldOwner];
+    	specificAllowance[msg.sender][_spender][_yieldOwner] = _value;
+    	allowance[msg.sender][_spender] += _value;
+
+    	emit Approval(msg.sender, _spender, _value, _yieldOwner);
+
+    	return true;
+    }
+
+    function transferTokenOwnerFrom(address _from, address _to, uint256 _value, address _yieldOwner) public returns (bool success) {
+    	require(yieldDistribution[_from][_yieldOwner] >= _value);
+    	require(specificAllowance[_from][msg.sender][_yieldOwner] >= _value);
+    	yieldDistribution[_from][_yieldOwner] -= _value;
+		balanceOf[_from] -= _value;
+
+        specificAllowance[_from][msg.sender][_yieldOwner] -= _value;
+		allowance[_from][msg.sender] -= _value;
+
+		yieldDistribution[_to][_yieldOwner] += _value;
+		balanceOf[_to] += _value;
+
+        if (!autoClaimYieldDisabled[_to]) claimYeildInternal(_to, _yieldOwner, _value);
+
+		emit Transfer(_from, _to, _value, _yieldOwner);
+
+		return true;
+    }
+
+    function setAutoClaimYield() public {
+        autoClaimYieldDisabled[msg.sender] = !autoClaimYieldDisabled[msg.sender];
+    }
+
+	/*
+		@Description: allows token holders to claim their portion of the cashflow
+	*/
+	function claimDividend() public {
+		claimDividendInternal(msg.sender);
+	}
+
+	//--------y-i-e-l-d---i-m-p-l-e-m-e-n-t-a-t-i-o-n---h-e-l-p-e-r-s-------------------
+	/*
+		@Description: Calls options.withdrawFunds() from this contract afterwards users may claim their own portion of the funds
+			may be called once a day
+
+		@return uint underlyingAsset: the amount of underlying asset that has been credited to this contract
+		@return uint strikeAsset: the amount of strike asset that has  been credited to this contract
+	*/
+	function contractClaimDividend() public returns (uint underlyingAsset, uint strikeAsset) {
+		require(lastWithdraw < block.timestamp - 86400, "this function can only be called once every 24 hours");
+		lastWithdraw = block.timestamp;
+		(underlyingAsset, strikeAsset) = optionsContract.withdrawFunds();
+		contractBalanceUnderlying.push(contractBalanceUnderlying[contractBalanceUnderlying.length-1] + underlyingAsset);
+		contractBalanceStrike.push(contractBalanceStrike[contractBalanceStrike.length-1] + strikeAsset);
+		return (underlyingAsset, strikeAsset);
+	}
+
+	/*
+		@Description: claims an address's portion of cashflow
+
+		@param address _addr: the address for which to claim cashflow
+	*/
+	function claimDividendInternal(address _addr) internal {
+		uint mostRecent = lastClaim[_addr];
+		lastClaim[_addr] = contractBalanceUnderlying.length-1;
+		uint totalIncreace = contractBalanceUnderlying[contractBalanceUnderlying.length-1] - contractBalanceUnderlying[mostRecent];
+		balanceUnderlying[_addr] += totalIncreace * totalYield[_addr] / totalSupply;
+		totalIncreace = contractBalanceStrike[contractBalanceStrike.length-1] - contractBalanceStrike[mostRecent];
+		balanceStrike[_addr] += totalIncreace * totalYield[_addr] / totalSupply;
+	}
+
+    function claimYeildInternal(address _tokenOwner, address _yieldOwner, uint256 _value) internal {
+        require(yieldDistribution[_tokenOwner][_yieldOwner] >= _value);
+        claimDividendInternal(_tokenOwner);
+        claimDividendInternal(_yieldOwner);
+        yieldDistribution[_tokenOwner][_yieldOwner] -= _value;
+        totalYield[_yieldOwner] -= _value;
+        yieldDistribution[_tokenOwner][_tokenOwner] += _value;
+        totalYield[_tokenOwner] += _value;
+        emit ClaimYield(_tokenOwner, _yieldOwner, _value);
+    }
+
+    /*
+		every time lastWithdraw is updated another value is pushed to contractBalanceUnderlying as contractBalanceStrike
+		thus the length of contractBalanceUnderlying and contractBalanceStrike are always the same
+
+		lastClaim represents the last index of the contractBalance arrays for each address at the most recent time that claimDividendInternal(said address) was called
+	*/
+	//lastClaim represents the last index of the contractBalance arrays for each address at the most recent time that claimDividendInternal(said address) was called
+	mapping(address => uint) lastClaim;
+	//holds the total amount of underlying asset that this contract has generated in fees
+	uint[] public contractBalanceUnderlying;
+	//holds the total amount of strike asset that this contract has genereated in fees
+	uint[] public contractBalanceStrike;
+
+	//each address's balance of claimed underlying asset funds that have yet to be withdrawn
+	mapping(address => uint) balanceUnderlying;
+	//allows users to see their value in the mapping balanceUnderlying
+	function viewUnderlyingAssetBalance() public view returns (uint) {return balanceUnderlying[msg.sender];}
+	//each address's balance of claimed strike asset funds that have yet to be withdrawn
+	mapping(address => uint) balanceStrike;
+	//allows users to see their value in the mapping balanceStrike	
+	function viewStrikeAssetBalance() public view returns (uint) {return balanceStrike[msg.sender];}
 
 }
