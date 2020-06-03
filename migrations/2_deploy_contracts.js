@@ -4,8 +4,10 @@ const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
 const strikeAsset = artifacts.require("strikeAsset");
 const container = artifacts.require("container");
+const organiser = artifacts.require("organiser");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
+const cHelper = artifacts.require("cHelper");
 
 module.exports = function(deployer) {
   deployer.deploy(underlyingAsset, 0).then((res) => {
@@ -21,11 +23,14 @@ module.exports = function(deployer) {
   }).then((res) => {
     eHelperInstance = res;
     eHelperAddress = res.address;
-    return deployer.deploy(container, underlyingAssetAddress, strikeAssetAddress, oHelperAddress, eHelperAddress, 1000000, 0);
+    return deployer.deploy(cHelper);
   }).then((res) => {
-    containerInstance = res;
-    return containerInstance.depOptions();
-  }).then(() => {
-    return containerInstance.depExchange();
+    cHelperInstance = res;
+    cHelperAddress = res.address;
+    return deployer.deploy(organiser, cHelperAddress, oHelperAddress, eHelperAddress);
+  }).then((res) => {
+    organiserInstance = res;
+    organiserAddress = res.address;
+    return cHelperInstance.transferOwnership(organiserAddress);
   });
 }
