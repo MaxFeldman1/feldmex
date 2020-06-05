@@ -154,7 +154,6 @@ contract options is Ownable {
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
         require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
-        ERC20 ua = ERC20(underlyingAssetAddress);
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
@@ -163,7 +162,8 @@ contract options is Ownable {
 
         transferAmt = debtorMinSats - satCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return(false, 0);
-        require(ua.transferFrom(msg.sender, address(this), transferAmt), "transaction failed");
+        (success, ) = underlyingAssetAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), transferAmt));
+        if (!success) return (false, 0);
         satCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSats
         claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
         satCollateral[_holder][_maturity] = holderMinSats;
@@ -196,7 +196,6 @@ contract options is Ownable {
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
         if (_debtor == _holder) return (true, 0);
         require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
-        ERC20 sa = ERC20(strikeAssetAddress);
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
@@ -205,7 +204,8 @@ contract options is Ownable {
 
         transferAmt = debtorMinSc - scCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return (false, 0);
-        require(sa.transferFrom(msg.sender,  address(this), transferAmt));
+        (success, ) = strikeAssetAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), transferAmt));
+        if (!success) return (false, 0);
         scCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSc
         claimedStable[_holder] += scCollateral[_holder][_maturity] - holderMinSc;
         scCollateral[_holder][_maturity] = holderMinSc;
