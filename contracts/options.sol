@@ -1,7 +1,7 @@
 pragma solidity ^0.5.12;
 import "./oracle.sol";
-import "./ERC20.sol";
-import "./Ownable.sol";
+import "./interfaces/ERC20.sol";
+import "./interfaces/Ownable.sol";
 
 contract options is Ownable {
     //address of the contract of the price oracle for the underlying asset in terms of the strike asset such as a price oracle for WBTC/DAI

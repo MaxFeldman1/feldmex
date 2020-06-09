@@ -1,7 +1,7 @@
 pragma solidity ^0.5.12;
 import "./container.sol";
 import "./cHelper.sol";
-import "./Ownable.sol";
+import "./interfaces/Ownable.sol";
 
 contract organiser is Ownable {
 	address public cHelperAddress;

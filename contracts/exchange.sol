@@ -1,5 +1,5 @@
 pragma solidity ^0.5.12;
-import "./ERC20.sol";
+import "./interfaces/ERC20.sol";
 import "./options.sol";
 
 /*

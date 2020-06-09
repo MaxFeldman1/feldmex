@@ -1,5 +1,5 @@
 pragma solidity ^0.5.12;
-import "./Ownable.sol";
+import "./interfaces/Ownable.sol";
 import "./container.sol";
 
 /*

@@ -1,7 +1,6 @@
 pragma solidity >=0.4.21 <0.6.0;
-//import "./ERC20.sol";
 
-interface  yield {
+interface  yieldEnabled {
     /*
         It is important to note the difference between the definitions of yield and dividend used in this contract
         Dividend is defined as the proceeds that one recieves in the form of another asset when one calls the claimPublic function

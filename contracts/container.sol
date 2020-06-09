@@ -1,14 +1,14 @@
 pragma solidity ^0.5.12;
 import "./oracle.sol";
-import "./ERC20.sol";
+import "./interfaces/ERC20.sol";
 import "./options.sol";
 import "./exchange.sol";
 import "./oHelper.sol";
 import "./eHelper.sol";
-import "./Ownable.sol";
-import "./yield.sol";
+import "./interfaces/Ownable.sol";
+import "./interfaces/yieldEnabled.sol";
 
-contract container is ERC20, Ownable, yield {
+contract container is ERC20, Ownable, yieldEnabled {
 	
 	//smart contract that records prices, records (priceOfUnderlyingAsset)/(priceOfStrikeAsset)
 	oracle public oracleContract;
