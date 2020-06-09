@@ -1,5 +1,7 @@
 var oracle = artifacts.require("./oracle.sol");
 
+const helper = require("../helper/helper.js");
+
 contract('oracle', function(accounts){
 
 	it('before each', async() => {
@@ -17,7 +19,7 @@ contract('oracle', function(accounts){
 			return orcInstance.set(spot * inflator);
 		}).then((res) => {
 			blockSetSpot = res.receipt.blockNumber;
-			return new Promise(resolve => setTimeout(resolve, 2000));
+			return helper.advanceTime(2);
 		}).then(() => {
 			return orcInstance.get();
 		}).then((res) => {
@@ -33,7 +35,7 @@ contract('oracle', function(accounts){
 			return orcInstance.set(secondSpot * inflator);
 		}).then((res) => {
 			blockSetSecondSpot = res.receipt.blockNumber;
-			return new Promise(resolve => setTimeout(resolve, 2000));
+			return helper.advanceTime(2);
 		}).then(() => {
 			//note that we have not updated the value of height yet
 			return orcInstance.getUint(height);
@@ -64,12 +66,12 @@ contract('oracle', function(accounts){
 			return orcInstance.set(1 * inflator);
 		}).then((res) => {
 			blockSet1 = res.receipt.blockNumber;
-			return new Promise(resolve => setTimeout(resolve, 2000));
+			return helper.advanceTime(2);
 		}).then(() => {
 			return orcInstance.set(5 * inflator);
 		}).then((res) => {
 			blockSet5 = res.receipt.blockNumber;
-			return new Promise(resolve => setTimeout(resolve, 2000));
+			return helper.advanceTime(2);
 		}).then(() => {
 			return orcInstance.set(6 * inflator);
 		}).then((res) => {

@@ -3,6 +3,8 @@ var underlyingAsset = artifacts.require("./UnderlyingAsset.sol");
 var options = artifacts.require("./options.sol");
 var strikeAsset = artifacts.require("./strikeAsset.sol");
 
+const helper = require("../helper/helper.js");
+
 var strike = 100;
 var finalSpot = 198;
 var amount = 10;
@@ -83,7 +85,7 @@ contract('options', function(accounts){
 			debtor = accounts[1];
 			holder = accounts[2];
 			maturity = res.timestamp;
-			return new Promise(resolve => setTimeout(resolve, 2000));
+			return helper.advanceTime(2);
 		}).then(() => {
 			//add strikes to allow for minting of options
 			return inflatorObj.addStrike(maturity, strike, {from: debtor});
@@ -157,7 +159,7 @@ contract('options', function(accounts){
 		}).then(() => {
 			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, strike*amount*scUnits, {from: defaultAccount});
 		}).then(() => {
-			return new Promise(resolve => setTimeout(resolve, 2000));
+			return helper.advanceTime(2);
 		}).then(() => {
 			return optionsInstance.claim(maturity, {from: debtor});
 		}).then(() => {
@@ -375,7 +377,7 @@ contract('options', function(accounts){
 			maturity = res.timestamp;
 			maxTransfer = satUnits*amount;
 			//wait one second to allow for maturity to pass
-			return new Promise(resolve => setTimeout(resolve, 1000));
+			return helper.advanceTime(1);
 		}).then(() => {
 			return tokenInstance.approve(optionsInstance.address, maxTransfer, {from: defaultAccount});
 		}).then(() => {
@@ -408,7 +410,7 @@ contract('options', function(accounts){
 			assert.equal(res, false, "fee immunity revoked for receiver account");
 			maturity++;
 			maxTransfer = scUnits*amount*strike;
-			return new Promise(resolve => setTimeout(resolve, 1000));
+			return helper.advanceTime(1);
 		}).then(() => {
 			return strikeAssetInstance.approve(optionsInstance.address, maxTransfer, {from: defaultAccount});
 		}).then(() => {

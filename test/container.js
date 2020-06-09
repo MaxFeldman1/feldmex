@@ -7,6 +7,8 @@ const container = artifacts.require("container");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
 
+const helper = require("../helper/helper.js");
+
 contract('container', function(accounts){
 
 	deployerAccount = accounts[0];
@@ -422,7 +424,7 @@ contract('container', function(accounts){
 			expectedFee = parseInt(expectedTransfer/feeDenominator);
 			return tokenInstance.approve(optionsInstance.address, expectedTransfer, {from: deployerAccount});
 		}).then(() => {
-			return new Promise(resolve => setTimeout(resolve, 2000));
+			return helper.advanceTime(2);
 		}).then(() => {
 			optionsInstance.addStrike(maturity, strike, {from: accounts[1]});
 			return optionsInstance.addStrike(maturity, strike, {from: accounts[2]});
