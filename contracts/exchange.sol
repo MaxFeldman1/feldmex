@@ -13,7 +13,7 @@ contract exchange{
     mapping(address => uint) claimedStable;
 
     //------------functions to view balances----------------
-    function viewClaimed(bool _token) public view returns(uint){return _token? claimedToken[msg.sender] : claimedStable[msg.sender];}
+    function viewClaimed(bool _token) public view returns(uint ret){ret = _token? claimedToken[msg.sender] : claimedStable[msg.sender];}
     //function viewClaimedToken() public view returns(uint){return claimedToken[msg.sender];}
 
     //function viewClaimedStable() public view returns(uint){return claimedStable[msg.sender];}
@@ -136,7 +136,7 @@ contract exchange{
             else 
                 return false;
         }
-        return true;
+        success = true;
     }
     
     /*
@@ -152,14 +152,14 @@ contract exchange{
             require(val > 0);
             ERC20 ua = ERC20(underlyingAssetAddress);
             claimedToken[msg.sender] = 0;
-            return ua.transfer(msg.sender, val);
+            success = ua.transfer(msg.sender, val);
         }
         else {
             uint val = claimedStable[msg.sender];
             require(val > 0);
             ERC20 sa = ERC20(strikeAssetAddress);
             claimedStable[msg.sender] = 0;
-            return sa.transfer(msg.sender, val);
+            success = sa.transfer(msg.sender, val);
         }
 
     }
@@ -173,9 +173,9 @@ contract exchange{
         @return bytes32 _name: key in linkedNodes mapping
     */
     function hasher(Offer memory _offer) internal returns(bytes32 _hash, bytes32 _name){
-        bytes32 ret1 =  keccak256(abi.encodePacked(_offer.maturity, _offer.strike, _offer.price, _offer.offerer, _offer.index, totalOrders));
+        _hash =  keccak256(abi.encodePacked(_offer.maturity, _offer.strike, _offer.price, _offer.offerer, _offer.index, totalOrders));
         totalOrders++;
-        return (ret1, keccak256(abi.encodePacked(ret1, now, totalOrders)));
+        _name = keccak256(abi.encodePacked(_hash, now, totalOrders));
     }
 
 
@@ -204,8 +204,9 @@ contract exchange{
             claimedToken[msg.sender] -= _price * _amount;
         }
         else if (index == 1){
-            require(claimedToken[msg.sender] >= _amount * (satUnits - _price));
-            claimedToken[msg.sender] -= _amount * (satUnits - _price);
+            uint req = _amount * (satUnits - _price);
+            require(claimedToken[msg.sender] >= req);
+            claimedToken[msg.sender] -= req;
         }
         else if (index == 2){
             require(claimedStable[msg.sender] >= _price*_amount);
@@ -232,7 +233,6 @@ contract exchange{
         linkedNodes[name] = linkedNode(hash, name, 0, 0);
         listHeads[_maturity][_strike][index] = name;
         emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
-        return;
     }
 
     //allows for users to post Orders with a smaller gas usage by giving another order as refrence to find their orders position from
@@ -259,8 +259,9 @@ contract exchange{
             claimedToken[msg.sender] -= _price * _amount;
         }
         else if (index == 1){
-            require(claimedToken[msg.sender] >= _amount * (satUnits - _price));
-            claimedToken[msg.sender] -= _amount * (satUnits - _price);
+            uint req = _amount * (satUnits - _price);
+            require(claimedToken[msg.sender] >= req);
+            claimedToken[msg.sender] -= req;
         }
         else if (index == 2){
             require(claimedStable[msg.sender] >= _price*_amount);
@@ -460,7 +461,7 @@ contract exchange{
         //clean storage
         delete linkedNodes[_name];
         delete offers[node.hash];
-        return true;
+        success = true;
     }
 
     /*
@@ -517,10 +518,11 @@ contract exchange{
             else claimedStable[_buyer] += offer.amount * (offer.strike - offer.price); 
         }
         else if (offer.index < 2){
-            (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*satUnits);
+            uint _satUnitsTimesAmount = offer.amount*satUnits; //gas savings
+            (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, _satUnitsTimesAmount);
             assert(safe);
             //redeem the seller collateral that was not required
-            claimedToken[offer.offerer] += (satUnits * offer.amount) - transferAmount;
+            claimedToken[offer.offerer] += (_satUnitsTimesAmount) - transferAmount;
         }
         else{
             (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*offer.strike);
@@ -531,7 +533,7 @@ contract exchange{
         //clean storage
         delete linkedNodes[_name];
         delete offers[node.hash];
-        return true;
+        success = true;
     }
 
     /*
@@ -605,7 +607,7 @@ contract exchange{
             node = linkedNodes[listHeads[_maturity][_strike][index]];
             offer = offers[node.hash];
         }
-        return _amount;
+        unfilled = _amount;
     }
 
     /*
@@ -646,7 +648,7 @@ contract exchange{
                     (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
                     assert(safe);
                     //redeem the seller collateral that was not required
-                    claimedToken[offer.offerer] += (satUnits * _amount) - transferAmount;
+                    claimedToken[offer.offerer] += (limit) - transferAmount;
                 }//*
                 else { //!call && msg.sender != offer.offerer
                     if (claimedStable[msg.sender] < offer.price * _amount) return _amount;
@@ -667,6 +669,6 @@ contract exchange{
             node = linkedNodes[listHeads[_maturity][_strike][index]];
             offer = offers[node.hash];
         }
-        return _amount;
+        unfilled = _amount;
     }
 }

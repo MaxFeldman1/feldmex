@@ -173,7 +173,6 @@ contract options is Ownable {
 
         callAmounts[_debtor][_maturity][_strike] -= int(_amount);
         callAmounts[_holder][_maturity][_strike] += int(_amount);
-        return (true, transferAmt);
     }
 
 
@@ -215,7 +214,6 @@ contract options is Ownable {
 
         putAmounts[_debtor][_maturity][_strike] -= int(_amount);
         putAmounts[_holder][_maturity][_strike] += int(_amount);
-        return (true, transferAmt);
     }
     
     /*
@@ -257,7 +255,7 @@ contract options is Ownable {
             claimedStable[owner] += fee;
             claimedStable[msg.sender] += putValue - fee;
         }
-        return true;
+        success = true;
     }
 
     /*
@@ -271,12 +269,11 @@ contract options is Ownable {
         ERC20 ua = ERC20(underlyingAssetAddress);
         underlyingAsset = claimedTokens[msg.sender];
         claimedTokens[msg.sender] = 0;
-        assert(ua.transfer(msg.sender, underlyingAsset));
+        ua.transfer(msg.sender, underlyingAsset);
         ERC20 sa = ERC20(strikeAssetAddress);
         strikeAsset = claimedStable[msg.sender];
         claimedStable[msg.sender] = 0;
-        assert(sa.transfer(msg.sender, strikeAsset));
-        return (underlyingAsset, strikeAsset);
+        sa.transfer(msg.sender, strikeAsset);
     }
 
     /*
@@ -294,7 +291,7 @@ contract options is Ownable {
             require(sa.transferFrom(msg.sender, address(this), _sc));
             claimedStable[msg.sender] += _sc;
         }
-        return true;
+        success = true;
     }
 
     /*
@@ -304,13 +301,13 @@ contract options is Ownable {
         @param uint _maturity: the maturity in question
         @param uint _strike: the strike price in question
 
-        @return bool: returns true if strike[_addr][_maturity] contains _strike otherwise returns false
+        @return bool _contains: returns true if strike[_addr][_maturity] contains _strike otherwise returns false
     */
-    function contains(address _addr, uint _maturity, uint _strike)public view returns(bool){
+    function contains(address _addr, uint _maturity, uint _strike)public view returns(bool _contains){
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             if (strikes[_addr][_maturity][i] == _strike) return true;
         }
-        return false;
+        _contains = false;
     }
 
 
@@ -322,15 +319,17 @@ contract options is Ownable {
         @param uint _strike: the strike prive of the call contract in terms of the underlying versus stablecoie
         @param uint _price: the spot price at which to find the value of the position in terms of the underlying versus stablecoie
 
-        @return uint: the value of the position in terms of the underlying multiplied by the price
+        @return uint value: the value of the position in terms of the underlying multiplied by the price
             inflate value by multiplying by price and divide out after doing calculations with the returned value to maintain accuracy
     */
-    function satValueOf(int _amount, uint _strike, uint _price)internal view returns(uint){
+    function satValueOf(int _amount, uint _strike, uint _price)internal view returns(uint value){
         uint payout = 0;
         if (_amount != 0){
             if (_price > _strike){
-                //inflator is canceld out of numerator and denominator
-                payout = (uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price - (_strike)));
+                //inflator is canceld when it is divided by out
+                //payout = uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price * inflator - (_strike * inflator))/inflator;
+                //payout = uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price - _strike) * inflator/inflator;
+                payout = uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price - _strike);
             }
             if (_amount > 0){
                 return payout;
@@ -339,7 +338,7 @@ contract options is Ownable {
                 return uint(-_amount)*satUnits*_price - payout;
             }
         } 
-        return 0;
+        value = 0;
     }
 
     /*
@@ -350,24 +349,24 @@ contract options is Ownable {
         @param uint _strike: the strike prive of the put contract in terms of the underlying versus stablecoie
         @param uint _prive: the spot price at which to find the value of the position in terms of the underlying versus stablecoie
 
-        @return uint: the value of the position in terms of the strike asset
+        @return uint value: the value of the position in terms of the strike asset
     */
-    function scValueOf(int _amount, uint _strike, uint _price)internal pure returns(uint){
+    function scValueOf(int _amount, uint _strike, uint _price)internal pure returns(uint value){
         uint payout = 0;
         if (_amount != 0){
             if (_price < _strike){
-                //inflator must be divided out thus remove *satUnits
+                //inflator must be divided out thus remove *scUnits
                 payout = (_strike - _price)*uint(_amount > 0 ? _amount : -_amount);
             }
             if (_amount > 0){
                 return payout;
             }
             else {
-                //inflator must be divided out thus remove *satUnits
+                //inflator must be divided out thus remove *scUnits
                 return uint(-_amount)*_strike - payout;
             }
         }
-        return 0;
+        value = 0;
     }
 
     /*
@@ -380,14 +379,14 @@ contract options is Ownable {
         @param int _amount: the amount of the extra position that is to be calculated alongside the positions of the address
         @param uint _strike: the strike price of the position that is to be calculated alongside the positions of the address
 
-        @return uint: the total value of all positons at the spot price combined as well as the value of the added position denominated in the underlying
+        @return uint value: the total value of all positons at the spot price combined as well as the value of the added position denominated in the underlying
     */
-    function totalSatValueOf(address _addr, uint _maturity, uint _price, int _amount, uint _strike)internal view returns(uint){
-        uint value = satValueOf(_amount, _strike, _price);
+    function totalSatValueOf(address _addr, uint _maturity, uint _price, int _amount, uint _strike)internal view returns(uint value){
+        value = satValueOf(_amount, _strike, _price);
         for(uint i = 0; i < strikes[_addr][_maturity].length; i++){
             value+=satValueOf(callAmounts[_addr][_maturity][strikes[_addr][_maturity][i]], strikes[_addr][_maturity][i], _price);
         }
-        return value/_price;
+        value /= _price;
     }
 
     /*
@@ -400,14 +399,13 @@ contract options is Ownable {
         @param int _amount: the amount of the extra position that is to be calculated alongside the positions of the address
         @param uint _strike: the strike price of the position that is to be calculated alongside the positions of the address
 
-        @return uint: the total value of all positons at the spot price combined as well as the value of the added position denominated in strike asset
+        @return uint value: the total value of all positons at the spot price combined as well as the value of the added position denominated in strike asset
     */
-    function totalScValueOf(address _addr, uint _maturity, uint _price, int _amount, uint _strike)internal view returns(uint){
-        uint value = scValueOf(_amount, _strike, _price);
+    function totalScValueOf(address _addr, uint _maturity, uint _price, int _amount, uint _strike)internal view returns(uint value){
+        value = scValueOf(_amount, _strike, _price);
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             value+=scValueOf(putAmounts[_addr][_maturity][strikes[_addr][_maturity][i]], strikes[_addr][_maturity][i], _price);
         }
-        return value;
     }
 
     /*
@@ -440,11 +438,11 @@ contract options is Ownable {
             if (minValue > cValue) minValue = cValue;
         }
         //liabilities has been subtrcted from sum priviously so this is equal to # of bought contracts at infinite spot
-        uint valAtInf = uint(sum+int(liabilities))*satUnits; //assets
-        minValue = (valAtInf < minValue ? valAtInf : minValue);
-        liabilities*=satUnits;
-        if (minValue > liabilities) return (0, liabilities);
-        return ((liabilities) - minValue, liabilities);
+        uint _satUnits = satUnits;
+        uint valAtInf = uint(sum+int(liabilities))*_satUnits; //assets
+        minValue = valAtInf < minValue ? valAtInf : minValue;
+        liabilities*=_satUnits;
+        minCollateral = minValue > liabilities ? 0 : liabilities-minValue;
     }
 
     /*
@@ -477,9 +475,7 @@ contract options is Ownable {
             if (minValue > cValue) minValue = cValue;
         }
         //note that every time we add another liability we multiply by the strike thus the inflator must be divided out when we are done
-        //liabilities*=scUnits;
-        if (minValue > liabilities) return (0, liabilities);
-        return ((liabilities) - minValue, liabilities);
+        minCollateral = minValue > liabilities ? 0 : liabilities - minValue;
     }
 
 
@@ -494,15 +490,17 @@ contract options is Ownable {
 
         @return uint: the amount of satUnits or scUnits that must be sent as collateral for the order described to go through
     */
-    function transferAmount(bool _token, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint){
+    function transferAmount(bool _token, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint value){
         require(msg.sender == _addr || msg.sender == exchangeAddress);
         if (_amount >= 0) return 0;
         if (_token){
             (uint minCollateral, ) = minSats(_addr, _maturity, _amount, _strike);
-            return minCollateral-satCollateral[_addr][_maturity];
+            value = minCollateral-satCollateral[_addr][_maturity];
         }
-        (uint minCollateral, ) = minSc(_addr, _maturity, _amount, _strike);
-        return minCollateral-scCollateral[_addr][_maturity];
+        else {
+            (uint minCollateral, ) = minSc(_addr, _maturity, _amount, _strike);
+            value = minCollateral-scCollateral[_addr][_maturity];
+        }
     }
 
     /*
@@ -533,18 +531,19 @@ contract options is Ownable {
         @return uint: if bool returns true this is set to the index at which the maturitiy is contained
     */
     function containsStrike(address _addr, uint _maturity, uint _strike, bool _push, bool _remove) internal returns(bool contained, uint index){
-        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            if (strikes[_addr][_maturity][i] == _strike){
+        uint length = strikes[_addr][_maturity].length; //gas savings
+        for (index = 0; index < length; index++){
+            if (strikes[_addr][_maturity][index] == _strike){
                 if (_remove){
-                    uint temp = strikes[_addr][_maturity][strikes[_addr][_maturity].length-1];
-                    strikes[_addr][_maturity][i] = temp;
-                    delete strikes[_addr][_maturity][strikes[_addr][_maturity].length-1];
+                    uint temp = strikes[_addr][_maturity][length-1];
+                    strikes[_addr][_maturity][index] = temp;
+                    delete strikes[_addr][_maturity][length-1];
                 }
-                return (true, i);
+                return (true, index);
             }
         }
         if (_push) strikes[_addr][_maturity].push(_strike);
-        return (false, 0);
+        index = 0;
     }
 
 
@@ -612,7 +611,7 @@ contract options is Ownable {
         callAmounts[_to][_maturity][_strike] += int(_amount);
         
         containsStrike(_from, _maturity, _strike, true, false);
-        return (true, transferAmt);
+        success = true;
     }
 
     function transferPut(address _from, address _to, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns(bool success, uint transferAmt){
@@ -638,7 +637,7 @@ contract options is Ownable {
         putAmounts[_to][_maturity][_strike] += int(_amount);
         
         containsStrike(_from, _maturity, _strike, true, false);
-        return (true, transferAmt);
+        success = true;
     }
 
     function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
@@ -653,7 +652,7 @@ contract options is Ownable {
         emit Approval(msg.sender, _spender, _value, _maturity, _strike, _call);
         if (_call) callAllowance[msg.sender][_spender][_maturity][_strike] = _value;
         else putAllowance[msg.sender][_spender][_maturity][_strike] = _value;
-        return true;
+        success = true;
     }
 
     function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
@@ -669,13 +668,11 @@ contract options is Ownable {
     }
 
     function allowance(address _owner, address _spender, uint _maturity, uint _strike, bool _call) public view returns(uint256 remaining){
-        if (_call) return callAllowance[_owner][_spender][_maturity][_strike];
-        return putAllowance[_owner][_spender][_maturity][_strike];
+        remaining = _call ? callAllowance[_owner][_spender][_maturity][_strike] : putAllowance[_owner][_spender][_maturity][_strike];
     }
 
     function balanceOf(address _owner, uint _maturity, uint _strike, bool _call) public view returns(int256 balance){
-        if (_call) return callAmounts[_owner][_maturity][_strike];
-        return putAmounts[_owner][_maturity][_strike];
+        balance = _call ? callAmounts[_owner][_maturity][_strike] : putAmounts[_owner][_maturity][_strike];
     }
 
     //---------------------view functions---------------

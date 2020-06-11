@@ -35,6 +35,7 @@ contract organiser is Ownable {
 		//deploy exchange smart contract
 		(success, ) = containerAddress.call(abi.encodeWithSignature("depExchange()"));
 		require(success, "could not deploy exchange smart contract");
-		return (true, 2);
+		success = true;
+		progress = 2;
 	}
 }

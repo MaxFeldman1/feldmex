@@ -93,7 +93,6 @@ contract container is ERC20, Ownable, yieldEnabled {
 		require(success, "could not sucessfully deploy options contract");
 		optionsContract = options(oHelper(oHelperAddress).optionsAddress(address(this)));
 		progress = 1;
-		return true;
 	}
 
 	/*
@@ -109,12 +108,11 @@ contract container is ERC20, Ownable, yieldEnabled {
 		exchangeContract = exchange(eHelper(eHelperAddress).exchangeAddress(address(this)));
 		optionsContract.setExchangeAddress(address(exchangeContract));
 		progress = 2;
-		return true;
 	}
 
 	function changeFeeStatus(address _addr) onlyOwner public returns (bool success){
 		optionsContract.changeFeeStatus(_addr);
-		return true;
+		success = true;
 	}
 	//----------------end contract setup------------
 
@@ -138,11 +136,10 @@ contract container is ERC20, Ownable, yieldEnabled {
     function withdrawFunds() public returns(uint underlyingAsset, uint strikeAsset){
         underlyingAsset = balanceUnderlying[msg.sender];
         balanceUnderlying[msg.sender] = 0;
-        assert(underlyingAssetContract.transfer(msg.sender, underlyingAsset));
+        underlyingAssetContract.transfer(msg.sender, underlyingAsset);
         strikeAsset = balanceStrike[msg.sender];
         balanceStrike[msg.sender] = 0;
-        assert(strikeAssetContract.transfer(msg.sender, strikeAsset));
-        return (underlyingAsset, strikeAsset);
+        strikeAssetContract.transfer(msg.sender, strikeAsset);
     }
 
 
@@ -169,7 +166,7 @@ contract container is ERC20, Ownable, yieldEnabled {
 		@return bool success: true if function executes sucessfully
     */
     function transfer(address _to, uint256 _value) public returns (bool success) {
-        return transferTokenOwner(_to, _value, msg.sender);
+        success = transferTokenOwner(_to, _value, msg.sender);
     }
 
     /*
@@ -181,7 +178,7 @@ contract container is ERC20, Ownable, yieldEnabled {
 		@return bool success: true if function executes sucessfully
     */
     function approve(address _spender, uint256 _value) public returns (bool success) {
-        return approveYieldOwner(_spender, _value, msg.sender);
+        success = approveYieldOwner(_spender, _value, msg.sender);
     }
 
 
@@ -195,7 +192,7 @@ contract container is ERC20, Ownable, yieldEnabled {
 		@return bool success: true if function executes sucessfully
     */
     function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
-        return transferTokenOwnerFrom(_from, _to, _value, _from);
+        success = transferTokenOwnerFrom(_from, _to, _value, _from);
     }
 
     //-----------------i-m-p-l-e-m-e-n-t-s---y-i-e-l-d----------------
@@ -227,8 +224,7 @@ contract container is ERC20, Ownable, yieldEnabled {
 
     function claimYield(address _yieldOwner, uint256 _value) external returns (bool success) {
         claimYeildInternal(msg.sender, _yieldOwner, _value);
-
-    	return true;
+    	success = true;
     }
 
     function sendYield(address _to, uint256 _value) public returns (bool success) {
@@ -240,8 +236,7 @@ contract container is ERC20, Ownable, yieldEnabled {
     	yieldDistribution[msg.sender][_to] += _value;
     	totalYield[_to] += _value;
     	emit SendYield(msg.sender, _to, _value);
-
-    	return true;
+    	success = true;
     }
 
     function transferTokenOwner(address _to, uint256 _value, address _yieldOwner) public returns (bool success) {
@@ -256,7 +251,7 @@ contract container is ERC20, Ownable, yieldEnabled {
 
 		emit Transfer(msg.sender, _to, _value, _yieldOwner);
 
-		return true;
+		success = true;
     }
 
     function approveYieldOwner(address _spender, uint256 _value, address _yieldOwner) public returns (bool success) {
@@ -266,7 +261,7 @@ contract container is ERC20, Ownable, yieldEnabled {
 
     	emit Approval(msg.sender, _spender, _value, _yieldOwner);
 
-    	return true;
+    	success = true;
     }
 
     function transferTokenOwnerFrom(address _from, address _to, uint256 _value, address _yieldOwner) public returns (bool success) {
@@ -285,7 +280,7 @@ contract container is ERC20, Ownable, yieldEnabled {
 
 		emit Transfer(_from, _to, _value, _yieldOwner);
 
-		return true;
+		success = true;
     }
 
     function setAutoClaimYield() public {
@@ -313,7 +308,6 @@ contract container is ERC20, Ownable, yieldEnabled {
 		(underlyingAsset, strikeAsset) = optionsContract.withdrawFunds();
 		contractBalanceUnderlying.push(contractBalanceUnderlying[contractBalanceUnderlying.length-1] + underlyingAsset);
 		contractBalanceStrike.push(contractBalanceStrike[contractBalanceStrike.length-1] + strikeAsset);
-		return (underlyingAsset, strikeAsset);
 	}
 
 	/*
@@ -323,11 +317,14 @@ contract container is ERC20, Ownable, yieldEnabled {
 	*/
 	function claimDividendInternal(address _addr) internal {
 		uint mostRecent = lastClaim[_addr];
-		lastClaim[_addr] = contractBalanceUnderlying.length-1;
-		uint totalIncreace = contractBalanceUnderlying[contractBalanceUnderlying.length-1] - contractBalanceUnderlying[mostRecent];
-		balanceUnderlying[_addr] += totalIncreace * totalYield[_addr] / totalSupply;
-		totalIncreace = contractBalanceStrike[contractBalanceStrike.length-1] - contractBalanceStrike[mostRecent];
-		balanceStrike[_addr] += totalIncreace * totalYield[_addr] / totalSupply;
+		uint lastIndex = contractBalanceUnderlying.length-1;	//gas savings
+		uint _totalSupply = totalSupply;	//gas savings
+		uint _totalYield = totalYield[_addr];	//gas savings
+		lastClaim[_addr] = lastIndex;
+		uint totalIncreace = contractBalanceUnderlying[lastIndex] - contractBalanceUnderlying[mostRecent];
+		balanceUnderlying[_addr] += totalIncreace * _totalYield / _totalSupply;
+		totalIncreace = contractBalanceStrike[lastIndex] - contractBalanceStrike[mostRecent];
+		balanceStrike[_addr] += totalIncreace * _totalYield / _totalSupply;
 	}
 
     function claimYeildInternal(address _tokenOwner, address _yieldOwner, uint256 _value) internal {
@@ -357,10 +354,10 @@ contract container is ERC20, Ownable, yieldEnabled {
 	//each address's balance of claimed underlying asset funds that have yet to be withdrawn
 	mapping(address => uint) balanceUnderlying;
 	//allows users to see their value in the mapping balanceUnderlying
-	function viewUnderlyingAssetBalance() public view returns (uint) {return balanceUnderlying[msg.sender];}
+	function viewUnderlyingAssetBalance() public view returns (uint ret) {ret = balanceUnderlying[msg.sender];}
 	//each address's balance of claimed strike asset funds that have yet to be withdrawn
 	mapping(address => uint) balanceStrike;
 	//allows users to see their value in the mapping balanceStrike	
-	function viewStrikeAssetBalance() public view returns (uint) {return balanceStrike[msg.sender];}
+	function viewStrikeAssetBalance() public view returns (uint ret) {ret = balanceStrike[msg.sender];}
 
 }
