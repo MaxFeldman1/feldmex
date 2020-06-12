@@ -8,81 +8,43 @@ const organiser = artifacts.require("organiser");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
 const cHelper = artifacts.require("cHelper");
+const nullAddress = "0x0000000000000000000000000000000000000000";
 
-contract('organiser', function(accounts){
-	it('before each', () => {
-		return underlyingAsset.new(0).then((res) => {
-			tokenInstance = res;
-			return strikeAsset.new(0);
-		}).then((res) => {
-			strikeAssetInstance = res;
-			return oHelper.new();
-		}).then((res) => {
-			oHelperInstance = res;
-			return eHelper.new();
-		}).then((res) => {
-			eHelperInstance = res;
-			return cHelper.new();
-		}).then((res) => {
-			cHelperInstance = res;
-			return organiser.new(cHelperInstance.address, oHelperInstance.address, eHelperInstance.address);
-		}).then((res) => {
-			organiserInstance = res;
-			return cHelperInstance.transferOwnership(organiserInstance.address);
-		});
+contract('organiser', async function(accounts){
+	it('before each', async () => {
+		tokenInstance = await underlyingAsset.new(0);
+		strikeAssetInstance = await strikeAsset.new(0);
+		oHelperInstance = await oHelper.new();
+		eHelperInstance = await eHelper.new();
+		cHelperInstance = await cHelper.new();
+		organiserInstance = await organiser.new(cHelperInstance.address, oHelperInstance.address, eHelperInstance.address);
+		await cHelperInstance.transferOwnership(organiserInstance.address);
 	});
 
-	it('contains correct contract addresses', () => {
-		return organiserInstance.cHelperAddress().then((res) => {
-			assert.equal(res, cHelperInstance.address);
-			return organiserInstance.oHelperAddress();
-		}).then((res) => {
-			assert.equal(res, oHelperInstance.address);
-			return organiserInstance.eHelperAddress();
-		}).then((res) => {
-			assert.equal(res, eHelperInstance.address);
-			return cHelperInstance.containerAddress(tokenInstance.address, strikeAssetInstance.address);
-		});
+	it('contains correct contract addresses', async () => {
+		assert.equal(await organiserInstance.cHelperAddress(), cHelperInstance.address);
+		assert.equal(await organiserInstance.oHelperAddress(), oHelperInstance.address);
+		assert.equal(await organiserInstance.eHelperAddress(), eHelperInstance.address);
+		assert.equal(await cHelperInstance.containerAddress(tokenInstance.address, strikeAssetInstance.address), nullAddress, "no link to non existent options chain");
 	});
 
-	it('sucessfully launches options chains', () => {
-		nullAddress = "0x0000000000000000000000000000000000000000";
-		return organiserInstance.progressContainer(tokenInstance.address, strikeAssetInstance.address).then(() => {
-			return cHelperInstance.containerAddress(tokenInstance.address, strikeAssetInstance.address);
-		}).then((res) => {
-			assert.notEqual(res, nullAddress, "containerAddress is not null");
-			return container.at(res);
-		}).then((res) => {
-			containerInstance = res;
-			return containerInstance.oracleContract();
-		}).then((res) => {
-			assert.notEqual(res, nullAddress, "oracle has been deployed");
-			return containerInstance.progress();
-		}).then((res) => {
-			assert.equal(res.toNumber(), 0, "only constructor has been executed");
-			return organiserInstance.progressContainer(tokenInstance.address, strikeAssetInstance.address);
-		}).then(() => {
-			return containerInstance.optionsContract();
-		}).then((res) => {
-			assert.notEqual(res, nullAddress, "options smart contract has been deployed");
-			return options.at(res);
-		}).then((res) => {
-			optionsInstance = res;
-			return containerInstance.progress();
-		}).then((res) => {
-			assert.equal(res.toNumber(), 1, "progress counter is correct");
-			return organiserInstance.progressContainer(tokenInstance.address, strikeAssetInstance.address);
-		}).then(() => {
-			return containerInstance.exchangeContract();
-		}).then((res) => {
-			assert.notEqual(res, nullAddress, "exchange smart contract has been deployed");
-			return exchange.at(res);
-		}).then((res) => {
-			exchangeInstance = res;
-			return containerInstance.progress();
-		}).then((res) => {
-			assert.equal(res, 2, "progress counter is correct");
-		});
+	it('sucessfully launches options chains', async () => {
+		await organiserInstance.progressContainer(tokenInstance.address, strikeAssetInstance.address);
+		res = await cHelperInstance.containerAddress(tokenInstance.address, strikeAssetInstance.address);
+		assert.notEqual(res, nullAddress, "containerAddress is not null");
+		containerInstance = await container.at(res);
+		assert.notEqual(await containerInstance.oracleContract(), nullAddress, "oracle has been deployed");
+		assert.equal((await containerInstance.progress()).toNumber(), 0, "only constructor has been executed");
+		await organiserInstance.progressContainer(tokenInstance.address, strikeAssetInstance.address);
+		res = await containerInstance.optionsContract();
+		assert.notEqual(res, nullAddress, "options smart contract has been deployed");
+		optionsInstance = await options.at(res);
+		assert.equal((await containerInstance.progress()).toNumber(), 1, "progress counter is correct");
+		await organiserInstance.progressContainer(tokenInstance.address, strikeAssetInstance.address);
+		res = await containerInstance.exchangeContract();
+		assert.notEqual(res, nullAddress, "exchange smart contract has been deployed");
+		exchangeInstance = await exchange.at(res);
+		assert.equal(await containerInstance.progress(), 2, "progress counter is correct");
 	});
 
 });
