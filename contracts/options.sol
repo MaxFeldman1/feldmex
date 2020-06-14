@@ -7,9 +7,9 @@ contract options is Ownable {
     //address of the contract of the price oracle for the underlying asset in terms of the strike asset such as a price oracle for WBTC/DAI
     address oracleAddress;
     //address of the contract of the underlying digital asset such as WBTC or WETH
-    address underlyingAssetAddress;
+    address public underlyingAssetAddress;
     //address of a digital asset that represents a unit of account such as DAI
-    address strikeAssetAddress;
+    address public strikeAssetAddress;
     //address of the exchange is allowed to see collateral requirements for all users
     address exchangeAddress;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
@@ -162,8 +162,9 @@ contract options is Ownable {
 
         transferAmt = debtorMinSats - satCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return(false, 0);
-        (success, ) = underlyingAssetAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), transferAmt));
-        if (!success) return (false, 0);
+        ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), transferAmt);
+        //(success, ) = underlyingAssetAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), transferAmt));
+        //if (!success) return (false, 0);
         satCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSats
         claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
         satCollateral[_holder][_maturity] = holderMinSats;
@@ -173,6 +174,7 @@ contract options is Ownable {
 
         callAmounts[_debtor][_maturity][_strike] -= int(_amount);
         callAmounts[_holder][_maturity][_strike] += int(_amount);
+        success = true;
     }
 
 

@@ -16,6 +16,10 @@ contract container is ERC20, Ownable, yieldEnabled {
 	options public optionsContract;
 	//smart contract on which options may be traded
 	exchange public exchangeContract;
+	//options contract for inverse trading pair
+	options public optionsContract2;
+	//exchange contract for inverse trading pair
+	exchange public exchangeContract2;
 	//smart contract of the asset in the numerator of oracle price
 	ERC20 public underlyingAssetContract;
 	//smart contract of the asset in the denominator of oracle price
@@ -88,11 +92,19 @@ contract container is ERC20, Ownable, yieldEnabled {
 		@return bool success: true if function executes sucessfully
 	*/
 	function depOptions() onlyOwner public returns (bool success){
-		require(progress == 0, "progress must == 0");
-		(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(underlyingAssetContract), address(strikeAssetContract)));
-		require(success, "could not sucessfully deploy options contract");
-		optionsContract = options(oHelper(oHelperAddress).optionsAddress(address(this)));
-		progress = 1;
+		uint8 _progress = progress; //gas savings
+		require(_progress == 0 || _progress == 2, "progress must == 0 or 2");
+		if (_progress == 0) {
+			(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(underlyingAssetContract), address(strikeAssetContract)));
+			require(success, "could not sucessfully deploy options contract");
+			optionsContract = options(oHelper(oHelperAddress).optionsAddress(address(this), 0));
+		}
+		else {
+			(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(strikeAssetContract), address(underlyingAssetContract)));
+			require(success, "could not sucessfully deploy options contract");
+			optionsContract2 = options(oHelper(oHelperAddress).optionsAddress(address(this), 1));
+		}
+		progress++;
 	}
 
 	/*
@@ -102,12 +114,20 @@ contract container is ERC20, Ownable, yieldEnabled {
 		@return bool success: true if function executes sucessfully
 	*/
 	function depExchange() onlyOwner public returns (bool success){
-		require(progress == 1, "progress must == 1");
-		(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(underlyingAssetContract), address(strikeAssetContract), address(optionsContract)));
-		require(success, "could not sucessfully deploy exchange contract");
-		exchangeContract = exchange(eHelper(eHelperAddress).exchangeAddress(address(this)));
-		optionsContract.setExchangeAddress(address(exchangeContract));
-		progress = 2;
+		uint8 _progress = progress; //gas savings
+		require(_progress == 1 || _progress == 3, "progress must == 1 or 3");
+		if (_progress == 1) {
+			(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(underlyingAssetContract), address(strikeAssetContract), address(optionsContract)));
+			require(success, "could not sucessfully deploy exchange contract");
+			exchangeContract = exchange(eHelper(eHelperAddress).exchangeAddress(address(this), 0));
+			optionsContract.setExchangeAddress(address(exchangeContract));
+		} else {
+			(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(strikeAssetContract), address(underlyingAssetContract), address(optionsContract2)));
+			require(success, "could not sucessfully deploy exchange contract");
+			exchangeContract2 = exchange(eHelper(eHelperAddress).exchangeAddress(address(this), 1));
+			optionsContract2.setExchangeAddress(address(exchangeContract2));	
+		}
+		progress++;
 	}
 
 	function changeFeeStatus(address _addr) onlyOwner public returns (bool success){
@@ -123,6 +143,7 @@ contract container is ERC20, Ownable, yieldEnabled {
 	*/
 	function setFee(uint _feeDeonominator) onlyOwner public {
 		optionsContract.setFee(_feeDeonominator);
+		if (progress > 2) optionsContract2.setFee(_feeDeonominator);
 	}
 
 
@@ -304,8 +325,16 @@ contract container is ERC20, Ownable, yieldEnabled {
 	*/
 	function contractClaimDividend() public returns (uint underlyingAsset, uint strikeAsset) {
 		require(lastWithdraw < block.timestamp - 86400, "this function can only be called once every 24 hours");
+		uint8 _progress = progress; //gas savings
+		require(_progress > 0, "optionsContract must be initialized before this function may be called");
 		lastWithdraw = block.timestamp;
 		(underlyingAsset, strikeAsset) = optionsContract.withdrawFunds();
+		uint temp1;
+		uint temp2;
+		if (progress > 2) (temp1, temp2) = optionsContract2.withdrawFunds();
+		//reverse order of assets
+		underlyingAsset+=temp2;
+		strikeAsset+=temp1;
 		contractBalanceUnderlying.push(contractBalanceUnderlying[contractBalanceUnderlying.length-1] + underlyingAsset);
 		contractBalanceStrike.push(contractBalanceStrike[contractBalanceStrike.length-1] + strikeAsset);
 	}
@@ -350,7 +379,8 @@ contract container is ERC20, Ownable, yieldEnabled {
 	uint[] public contractBalanceUnderlying;
 	//holds the total amount of strike asset that this contract has genereated in fees
 	uint[] public contractBalanceStrike;
-
+	//length of contractBalance arrays
+	function length() public view returns (uint len) {len = contractBalanceUnderlying.length;}
 	//each address's balance of claimed underlying asset funds that have yet to be withdrawn
 	mapping(address => uint) balanceUnderlying;
 	//allows users to see their value in the mapping balanceUnderlying

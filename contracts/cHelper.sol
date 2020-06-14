@@ -13,6 +13,7 @@ contract cHelper is Ownable {
 	function deploy(address _underlyingAssetAddress, address _strikeAssetAddress, address _oHelperAddress, address _eHelperAddress) onlyOwner public {
 		containerAddress[_underlyingAssetAddress][_strikeAssetAddress] = address(new container(_underlyingAssetAddress, _strikeAssetAddress, _oHelperAddress, _eHelperAddress, 0, 0));
 		container(containerAddress[_underlyingAssetAddress][_strikeAssetAddress]).transferOwnership(msg.sender);
+		containerAddress[_strikeAssetAddress][_underlyingAssetAddress] = containerAddress[_underlyingAssetAddress][_strikeAssetAddress];
 	}
 
 }

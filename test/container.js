@@ -24,10 +24,19 @@ contract('container', async function(accounts){
 		containerInstance = await container.new(tokenInstance.address, strikeAssetInstance.address, oHelperInstance.address, eHelperInstance.address, 0, 0);
 		await containerInstance.depOptions();
 		await containerInstance.depExchange();
-		assert.equal(await containerInstance.progress(), 2, "cotainer contract setup has been sucessfully completed");
+		assert.equal(await containerInstance.progress(), 2, "first options chain setup has been sucessfully completed");
+		await containerInstance.depOptions();
+		await containerInstance.depExchange();
+		assert.equal(await containerInstance.progress(), 4, "second options chain setup has been sucessfully completed");
 		oracleInstance = await oracle.at(await containerInstance.oracleContract());
 		optionsInstance = await options.at(await containerInstance.optionsContract());
 		exchangeInstance = await exchange.at(await containerInstance.exchangeContract());
+		secondOptionsInstance = await options.at(await containerInstance.optionsContract2());
+		secondExchangeInstance = await exchange.at(await containerInstance.exchangeContract2());
+		assert.equal(await optionsInstance.underlyingAssetAddress(), tokenInstance.address, "underlying assset address for options instance is correct");
+		assert.equal(await optionsInstance.strikeAssetAddress(), strikeAssetInstance.address, "strike assset address for options instance is correct");
+		assert.equal(await secondOptionsInstance.underlyingAssetAddress(), strikeAssetInstance.address, "reverses strike and underlying asset between two option chains");
+		assert.equal(await secondOptionsInstance.strikeAssetAddress(), tokenInstance.address, "reverses strike and underlying asset between two option chains");
 		satUnits = Math.pow(10, (await tokenInstance.decimals()).toNumber());
 		scUnits = Math.pow(10, (await strikeAssetInstance.decimals()).toNumber());
 	});
@@ -198,19 +207,19 @@ contract('container', async function(accounts){
 		});
 	});
 
-	it('gathers yeild from fees generated in options contract', async () => {
+	it('gathers yeild from fees generated in first options contract', async () => {
 		await oracleInstance.set(1);
 		maturity = (await web3.eth.getBlock('latest')).timestamp;
 		strike = 100
 		//set spot very low
 		amount = 1000;
 		expectedTransfer = amount * satUnits;
-		expectedFee = parseInt(expectedTransfer/feeDenominator);
+		expectedFee = Math.floor(expectedTransfer/feeDenominator);
 		await tokenInstance.approve(optionsInstance.address, expectedTransfer, {from: deployerAccount});
-		await helper.advanceTime(2);
 		optionsInstance.addStrike(maturity, strike, {from: accounts[1]});
 		await optionsInstance.addStrike(maturity, strike, {from: accounts[2]});
 		await optionsInstance.mintCall(accounts[1], accounts[2], maturity, 100, amount, expectedTransfer, {from: deployerAccount});
+		await helper.advanceTime(2);
 		await optionsInstance.claim(maturity, {from: accounts[1]});
 		await optionsInstance.claim(maturity, {from: accounts[2]});
 		await containerInstance.contractClaimDividend();
@@ -231,6 +240,52 @@ contract('container', async function(accounts){
 		assert.equal(firstUnderlyingBalance, Math.floor(expectedFee*(firstAccountYield)/totalSupply), "correct divident paid to accounts[1]");
 		secondUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: accounts[2]})).toNumber();
 		assert.equal(secondUnderlyingBalance, Math.floor(expectedFee*(secondAccountYield)/totalSupply), "correct divident paid to accounts[2]");
+	});
+
+	it('gathers yeild from fees generated in second options contract', async () => {
+		//set spot very low
+		await oracleInstance.set(1);
+		maturity = (await web3.eth.getBlock('latest')).timestamp;
+		strike = 100
+		amount = 1000;
+		prevContainerBalance = (await strikeAssetInstance.balanceOf(containerInstance.address)).toNumber();
+		length = await containerInstance.length();
+		//strike as underlying asset are flipped
+		prevUnderlyingIndex = (await containerInstance.contractBalanceStrike(length-1)).toNumber();
+		expectedTransfer = amount * scUnits;
+		expectedFee = Math.floor(expectedTransfer/feeDenominator);
+
+		prevDeployerUnderlyingBalance = (await containerInstance.viewStrikeAssetBalance({from: deployerAccount})).toNumber();
+		prevFirstUnderlyingBalance = (await containerInstance.viewStrikeAssetBalance({from: accounts[1]})).toNumber();
+		prevSecondUnderlyingBalance = (await containerInstance.viewStrikeAssetBalance({from: accounts[2]})).toNumber();
+
+		await strikeAssetInstance.approve(secondOptionsInstance.address, expectedTransfer, {from: deployerAccount});
+		secondOptionsInstance.addStrike(maturity, strike, {from: accounts[1]});
+		await secondOptionsInstance.addStrike(maturity, strike, {from: accounts[2]});
+		//second option contract flips trading pair so calls payout in strike asset
+		await secondOptionsInstance.mintCall(accounts[1], accounts[2], maturity, 100, amount, expectedTransfer, {from: deployerAccount});
+		//advance 1 day and 1 second (1 day * 24hrs/day + 1 sec* 60min/hr * 60sec/min  + 1sec == 86400sec + 1 sec == 86401sec)
+		await helper.advanceTime(86401);
+		rec = await secondOptionsInstance.claim(maturity, {from: accounts[1]});
+		await secondOptionsInstance.claim(maturity, {from: accounts[2]});
+		await containerInstance.contractClaimDividend();
+		assert.equal((await strikeAssetInstance.balanceOf(containerInstance.address)).toNumber(), expectedFee+prevContainerBalance, "balance of contract is the same as expectedFee");
+		//size of contractBalanceUnderlying array is 2, get the last index
+		assert.equal((await containerInstance.contractBalanceUnderlying(length)).toNumber(), expectedFee+prevUnderlyingIndex, "fee revenue reflected accurately in contractBalanceUnderlying");
+		//size of contractBalanceStrike array is 2, get the last index
+		assert.equal((await containerInstance.contractBalanceStrike(1)).toNumber(), 0, "no fee revenue has been recorded for the strikeAsset");
+		deployerYield = (await containerInstance.totalYield(deployerAccount)).toNumber();
+		firstAccountYield = (await containerInstance.totalYield(accounts[1])).toNumber();
+		secondAccountYield = (await containerInstance.totalYield(accounts[2])).toNumber();
+		containerInstance.claimDividend({from: deployerAccount});
+		containerInstance.claimDividend({from: accounts[1]});
+		await containerInstance.claimDividend({from: accounts[2]});
+		deployerUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: deployerAccount})).toNumber();
+		assert.equal(deployerUnderlyingBalance, Math.floor(expectedFee*(deployerYield)/totalSupply)+prevDeployerUnderlyingBalance, "correct divident paid to deployerAccount");
+		firstUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: accounts[1]})).toNumber();
+		assert.equal(firstUnderlyingBalance, Math.floor(expectedFee*(firstAccountYield)/totalSupply)+prevFirstUnderlyingBalance, "correct divident paid to accounts[1]");
+		secondUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: accounts[2]})).toNumber();
+		assert.equal(secondUnderlyingBalance, Math.floor(expectedFee*(secondAccountYield)/totalSupply)+prevSecondUnderlyingBalance, "correct divident paid to accounts[2]");
 	});
 
 	it('withdraws funds', async () => {
