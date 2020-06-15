@@ -10,7 +10,7 @@ import "./interfaces/yieldEnabled.sol";
 
 contract container is ERC20, Ownable, yieldEnabled {
 	
-	//smart contract that records prices, records (priceOfUnderlyingAsset)/(priceOfStrikeAsset)
+	//smart contract that records prices, records (reservesOfAsset1)/(reservesOfAsset2)
 	oracle public oracleContract;
 	//smart contract that handles settlement of calls and puts
 	options public optionsContract;
@@ -21,9 +21,9 @@ contract container is ERC20, Ownable, yieldEnabled {
 	//exchange contract for inverse trading pair
 	exchange public exchangeContract2;
 	//smart contract of the asset in the numerator of oracle price
-	ERC20 public underlyingAssetContract;
+	ERC20 public Asset1Contract;
 	//smart contract of the asset in the denominator of oracle price
-	ERC20 public strikeAssetContract;
+	ERC20 public Asset2Contract;
 
 	//address of the smart contract that helps deploy optionsContract
 	address oHelperAddress;
@@ -59,14 +59,14 @@ contract container is ERC20, Ownable, yieldEnabled {
 	/*
 		@Description: Assigns inital values and credits the owner of this contract with all coins
 
-		@param address _underlyingAssetAddress: the address of the ERC0 contract of the underlying asset
-		@param address _strikeAssetAddress: the address of the ERC20 contract of the strike asset
+		@param address _asset1Address: the address of the ERC0 contract of asset1
+		@param address _asset2Address: the address of the ERC20 contract of asset2
 		@param address _oHelperAddress: the address of the oHelper contract that helps with deployment of the options contract
 		@param address _eHelperAddress: the address of the eHelper contract that helps with deployment of the exchange contract
 		@param uint _totalCoins: the number of full coins to be included in the total supply
 		@param uint _decimals: the number of digits to which each full unit of coin is divisible
 	*/
-	constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _oHelperAddress, address _eHelperAddress, uint _totalCoins, uint8 _decimals) public {
+	constructor (address _asset1Address, address _asset2Address, address _oHelperAddress, address _eHelperAddress, uint _totalCoins, uint8 _decimals) public {
 		if (_totalCoins == 0) _totalCoins = 1000000;
 		if (_decimals == 0) _decimals = 4;
 		owner = msg.sender;
@@ -75,14 +75,13 @@ contract container is ERC20, Ownable, yieldEnabled {
 		balanceOf[owner] = totalSupply;
 		yieldDistribution[msg.sender][msg.sender] = totalSupply;
 		totalYield[msg.sender] = totalSupply;
-
-		underlyingAssetContract = ERC20(_underlyingAssetAddress);
-		strikeAssetContract = ERC20(_strikeAssetAddress);
+		Asset1Contract = ERC20(_asset1Address);
+		Asset2Contract = ERC20(_asset2Address);
 		oracleContract = new oracle();
 		oHelperAddress = _oHelperAddress;
 		eHelperAddress = _eHelperAddress;
-		contractBalanceUnderlying.push(0);
-		contractBalanceStrike.push(0);
+		contractBalanceAsset1.push(0);
+		contractBalanceAsset2.push(0);
 	}
 
 	/*
@@ -95,12 +94,12 @@ contract container is ERC20, Ownable, yieldEnabled {
 		uint8 _progress = progress; //gas savings
 		require(_progress == 0 || _progress == 2, "progress must == 0 or 2");
 		if (_progress == 0) {
-			(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(underlyingAssetContract), address(strikeAssetContract)));
+			(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(Asset1Contract), address(Asset2Contract)));
 			require(success, "could not sucessfully deploy options contract");
 			optionsContract = options(oHelper(oHelperAddress).optionsAddress(address(this), 0));
 		}
 		else {
-			(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(strikeAssetContract), address(underlyingAssetContract)));
+			(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(Asset2Contract), address(Asset1Contract)));
 			require(success, "could not sucessfully deploy options contract");
 			optionsContract2 = options(oHelper(oHelperAddress).optionsAddress(address(this), 1));
 		}
@@ -117,12 +116,12 @@ contract container is ERC20, Ownable, yieldEnabled {
 		uint8 _progress = progress; //gas savings
 		require(_progress == 1 || _progress == 3, "progress must == 1 or 3");
 		if (_progress == 1) {
-			(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(underlyingAssetContract), address(strikeAssetContract), address(optionsContract)));
+			(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(Asset1Contract), address(Asset2Contract), address(optionsContract)));
 			require(success, "could not sucessfully deploy exchange contract");
 			exchangeContract = exchange(eHelper(eHelperAddress).exchangeAddress(address(this), 0));
 			optionsContract.setExchangeAddress(address(exchangeContract));
 		} else {
-			(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(strikeAssetContract), address(underlyingAssetContract), address(optionsContract2)));
+			(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(Asset2Contract), address(Asset1Contract), address(optionsContract2)));
 			require(success, "could not sucessfully deploy exchange contract");
 			exchangeContract2 = exchange(eHelper(eHelperAddress).exchangeAddress(address(this), 1));
 			optionsContract2.setExchangeAddress(address(exchangeContract2));	
@@ -149,18 +148,18 @@ contract container is ERC20, Ownable, yieldEnabled {
 
     /*
         @Descripton: allows for users to withdraw funds that are not locked up as collateral
-            these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
+            these funds are tracked in the claimedTokens mapping and the claimedStable mapping for asset1 and asset2 respectively
 
-        @return uint underlyingAsset: the amount of the underlying asset that has been withdrawn
-        @return uint strikeAsset: the amount of the strike asset that has been withdrawn
+        @return uint asset1: the amount of asset1 that has been withdrawn
+        @return uint asset2: the amount of asset2 that has been withdrawn
     */
-    function withdrawFunds() public returns(uint underlyingAsset, uint strikeAsset){
-        underlyingAsset = balanceUnderlying[msg.sender];
-        balanceUnderlying[msg.sender] = 0;
-        underlyingAssetContract.transfer(msg.sender, underlyingAsset);
-        strikeAsset = balanceStrike[msg.sender];
-        balanceStrike[msg.sender] = 0;
-        strikeAssetContract.transfer(msg.sender, strikeAsset);
+    function withdrawFunds() public returns(uint asset1, uint asset2){
+        asset1 = balanceAsset1[msg.sender];
+        balanceAsset1[msg.sender] = 0;
+        Asset1Contract.transfer(msg.sender, asset1);
+        asset2 = balanceAsset2[msg.sender];
+        balanceAsset2[msg.sender] = 0;
+        Asset2Contract.transfer(msg.sender, asset2);
     }
 
 
@@ -320,23 +319,23 @@ contract container is ERC20, Ownable, yieldEnabled {
 		@Description: Calls options.withdrawFunds() from this contract afterwards users may claim their own portion of the funds
 			may be called once a day
 
-		@return uint underlyingAsset: the amount of underlying asset that has been credited to this contract
-		@return uint strikeAsset: the amount of strike asset that has  been credited to this contract
+		@return uint asset1: the amount of asset1 that has been credited to this contract
+		@return uint asset2: the amount of asset2 that has been credited to this contract
 	*/
-	function contractClaimDividend() public returns (uint underlyingAsset, uint strikeAsset) {
+	function contractClaimDividend() public returns (uint asset1, uint asset2) {
 		require(lastWithdraw < block.timestamp - 86400, "this function can only be called once every 24 hours");
 		uint8 _progress = progress; //gas savings
 		require(_progress > 0, "optionsContract must be initialized before this function may be called");
 		lastWithdraw = block.timestamp;
-		(underlyingAsset, strikeAsset) = optionsContract.withdrawFunds();
+		(asset1, asset2) = optionsContract.withdrawFunds();
 		uint temp1;
 		uint temp2;
 		if (progress > 2) (temp1, temp2) = optionsContract2.withdrawFunds();
 		//reverse order of assets
-		underlyingAsset+=temp2;
-		strikeAsset+=temp1;
-		contractBalanceUnderlying.push(contractBalanceUnderlying[contractBalanceUnderlying.length-1] + underlyingAsset);
-		contractBalanceStrike.push(contractBalanceStrike[contractBalanceStrike.length-1] + strikeAsset);
+		asset1+=temp2;
+		asset2+=temp1;
+		contractBalanceAsset1.push(contractBalanceAsset1[contractBalanceAsset1.length-1] + asset1);
+		contractBalanceAsset2.push(contractBalanceAsset2[contractBalanceAsset2.length-1] + asset2);
 	}
 
 	/*
@@ -346,14 +345,14 @@ contract container is ERC20, Ownable, yieldEnabled {
 	*/
 	function claimDividendInternal(address _addr) internal {
 		uint mostRecent = lastClaim[_addr];
-		uint lastIndex = contractBalanceUnderlying.length-1;	//gas savings
+		uint lastIndex = contractBalanceAsset1.length-1;	//gas savings
 		uint _totalSupply = totalSupply;	//gas savings
 		uint _totalYield = totalYield[_addr];	//gas savings
 		lastClaim[_addr] = lastIndex;
-		uint totalIncreace = contractBalanceUnderlying[lastIndex] - contractBalanceUnderlying[mostRecent];
-		balanceUnderlying[_addr] += totalIncreace * _totalYield / _totalSupply;
-		totalIncreace = contractBalanceStrike[lastIndex] - contractBalanceStrike[mostRecent];
-		balanceStrike[_addr] += totalIncreace * _totalYield / _totalSupply;
+		uint totalIncreace = contractBalanceAsset1[lastIndex] - contractBalanceAsset1[mostRecent];
+		balanceAsset1[_addr] += totalIncreace * _totalYield / _totalSupply;
+		totalIncreace = contractBalanceAsset2[lastIndex] - contractBalanceAsset2[mostRecent];
+		balanceAsset2[_addr] += totalIncreace * _totalYield / _totalSupply;
 	}
 
     function claimYeildInternal(address _tokenOwner, address _yieldOwner, uint256 _value) internal {
@@ -368,26 +367,26 @@ contract container is ERC20, Ownable, yieldEnabled {
     }
 
     /*
-		every time lastWithdraw is updated another value is pushed to contractBalanceUnderlying as contractBalanceStrike
-		thus the length of contractBalanceUnderlying and contractBalanceStrike are always the same
+		every time lastWithdraw is updated another value is pushed to contractBalanceAsset1 as contractBalanceAsset2
+		thus the length of contractBalanceAsset1 and contractBalanceAsset2 are always the same
 
 		lastClaim represents the last index of the contractBalance arrays for each address at the most recent time that claimDividendInternal(said address) was called
 	*/
 	//lastClaim represents the last index of the contractBalance arrays for each address at the most recent time that claimDividendInternal(said address) was called
 	mapping(address => uint) lastClaim;
-	//holds the total amount of underlying asset that this contract has generated in fees
-	uint[] public contractBalanceUnderlying;
-	//holds the total amount of strike asset that this contract has genereated in fees
-	uint[] public contractBalanceStrike;
+	//holds the total amount of asset1 that this contract has generated in fees
+	uint[] public contractBalanceAsset1;
+	//holds the total amount of asset2 that this contract has genereated in fees
+	uint[] public contractBalanceAsset2;
 	//length of contractBalance arrays
-	function length() public view returns (uint len) {len = contractBalanceUnderlying.length;}
-	//each address's balance of claimed underlying asset funds that have yet to be withdrawn
-	mapping(address => uint) balanceUnderlying;
-	//allows users to see their value in the mapping balanceUnderlying
-	function viewUnderlyingAssetBalance() public view returns (uint ret) {ret = balanceUnderlying[msg.sender];}
-	//each address's balance of claimed strike asset funds that have yet to be withdrawn
-	mapping(address => uint) balanceStrike;
-	//allows users to see their value in the mapping balanceStrike	
-	function viewStrikeAssetBalance() public view returns (uint ret) {ret = balanceStrike[msg.sender];}
+	function length() public view returns (uint len) {len = contractBalanceAsset1.length;}
+	//each address's balance of claimed asset1 funds that have yet to be withdrawn
+	mapping(address => uint) balanceAsset1;
+	//allows users to see their value in the mapping balanceAsset1
+	function viewAsset1Balance() public view returns (uint ret) {ret = balanceAsset1[msg.sender];}
+	//each address's balance of claimed asset2 funds that have yet to be withdrawn
+	mapping(address => uint) balanceAsset2;
+	//allows users to see their value in the mapping balanceAsset2	
+	function viewAsset2Balance() public view returns (uint ret) {ret = balanceAsset2[msg.sender];}
 
 }

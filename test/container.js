@@ -224,21 +224,21 @@ contract('container', async function(accounts){
 		await optionsInstance.claim(maturity, {from: accounts[2]});
 		await containerInstance.contractClaimDividend();
 		assert.equal((await tokenInstance.balanceOf(containerInstance.address)).toNumber(), expectedFee, "balance of contract is the same as expectedFee");
-		//size of contractBalanceUnderlying array is 2, get the last index
-		assert.equal((await containerInstance.contractBalanceUnderlying(1)).toNumber(), expectedFee, "balance of contract reflected in contractBalanceUnderlying");
-		//size of contractBalanceStrike array is 2, get the last index
-		assert.equal((await containerInstance.contractBalanceStrike(1)).toNumber(), 0, "no fee revenue has been recorded for the strikeAsset");
+		//size of contractBalanceAsset1 array is 2, get the last index
+		assert.equal((await containerInstance.contractBalanceAsset1(1)).toNumber(), expectedFee, "balance of contract reflected in contractBalanceAsset1");
+		//size of contractBalanceAsset2 array is 2, get the last index
+		assert.equal((await containerInstance.contractBalanceAsset2(1)).toNumber(), 0, "no fee revenue has been recorded for the strikeAsset");
 		deployerYield = (await containerInstance.totalYield(deployerAccount)).toNumber();
 		firstAccountYield = (await containerInstance.totalYield(accounts[1])).toNumber();
 		secondAccountYield = (await containerInstance.totalYield(accounts[2])).toNumber();
 		containerInstance.claimDividend({from: deployerAccount});
 		containerInstance.claimDividend({from: accounts[1]});
 		await containerInstance.claimDividend({from: accounts[2]});
-		deployerUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: deployerAccount})).toNumber();
+		deployerUnderlyingBalance = (await containerInstance.viewAsset1Balance({from: deployerAccount})).toNumber();
 		assert.equal(deployerUnderlyingBalance, Math.floor(expectedFee*(deployerYield)/totalSupply), "correct divident paid to deployerAccount");
-		firstUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: accounts[1]})).toNumber();
+		firstUnderlyingBalance = (await containerInstance.viewAsset1Balance({from: accounts[1]})).toNumber();
 		assert.equal(firstUnderlyingBalance, Math.floor(expectedFee*(firstAccountYield)/totalSupply), "correct divident paid to accounts[1]");
-		secondUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: accounts[2]})).toNumber();
+		secondUnderlyingBalance = (await containerInstance.viewAsset1Balance({from: accounts[2]})).toNumber();
 		assert.equal(secondUnderlyingBalance, Math.floor(expectedFee*(secondAccountYield)/totalSupply), "correct divident paid to accounts[2]");
 	});
 
@@ -250,14 +250,13 @@ contract('container', async function(accounts){
 		amount = 1000;
 		prevContainerBalance = (await strikeAssetInstance.balanceOf(containerInstance.address)).toNumber();
 		length = await containerInstance.length();
-		//strike as underlying asset are flipped
-		prevUnderlyingIndex = (await containerInstance.contractBalanceStrike(length-1)).toNumber();
+		prevUnderlyingIndex = (await containerInstance.contractBalanceAsset2(length-1)).toNumber();
 		expectedTransfer = amount * scUnits;
 		expectedFee = Math.floor(expectedTransfer/feeDenominator);
 
-		prevDeployerUnderlyingBalance = (await containerInstance.viewStrikeAssetBalance({from: deployerAccount})).toNumber();
-		prevFirstUnderlyingBalance = (await containerInstance.viewStrikeAssetBalance({from: accounts[1]})).toNumber();
-		prevSecondUnderlyingBalance = (await containerInstance.viewStrikeAssetBalance({from: accounts[2]})).toNumber();
+		prevDeployerUnderlyingBalance = (await containerInstance.viewAsset2Balance({from: deployerAccount})).toNumber();
+		prevFirstUnderlyingBalance = (await containerInstance.viewAsset2Balance({from: accounts[1]})).toNumber();
+		prevSecondUnderlyingBalance = (await containerInstance.viewAsset2Balance({from: accounts[2]})).toNumber();
 
 		await strikeAssetInstance.approve(secondOptionsInstance.address, expectedTransfer, {from: deployerAccount});
 		secondOptionsInstance.addStrike(maturity, strike, {from: accounts[1]});
@@ -270,21 +269,21 @@ contract('container', async function(accounts){
 		await secondOptionsInstance.claim(maturity, {from: accounts[2]});
 		await containerInstance.contractClaimDividend();
 		assert.equal((await strikeAssetInstance.balanceOf(containerInstance.address)).toNumber(), expectedFee+prevContainerBalance, "balance of contract is the same as expectedFee");
-		//size of contractBalanceUnderlying array is 2, get the last index
-		assert.equal((await containerInstance.contractBalanceUnderlying(length)).toNumber(), expectedFee+prevUnderlyingIndex, "fee revenue reflected accurately in contractBalanceUnderlying");
-		//size of contractBalanceStrike array is 2, get the last index
-		assert.equal((await containerInstance.contractBalanceStrike(1)).toNumber(), 0, "no fee revenue has been recorded for the strikeAsset");
+		//size of contractBalanceAsset1 array is 2, get the last index
+		assert.equal((await containerInstance.contractBalanceAsset1(length)).toNumber(), expectedFee+prevUnderlyingIndex, "fee revenue reflected accurately in contractBalanceAsset1");
+		//size of contractBalanceAsset2 array is 2, get the last index
+		assert.equal((await containerInstance.contractBalanceAsset2(1)).toNumber(), 0, "no fee revenue has been recorded for the strikeAsset");
 		deployerYield = (await containerInstance.totalYield(deployerAccount)).toNumber();
 		firstAccountYield = (await containerInstance.totalYield(accounts[1])).toNumber();
 		secondAccountYield = (await containerInstance.totalYield(accounts[2])).toNumber();
 		containerInstance.claimDividend({from: deployerAccount});
 		containerInstance.claimDividend({from: accounts[1]});
 		await containerInstance.claimDividend({from: accounts[2]});
-		deployerUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: deployerAccount})).toNumber();
+		deployerUnderlyingBalance = (await containerInstance.viewAsset1Balance({from: deployerAccount})).toNumber();
 		assert.equal(deployerUnderlyingBalance, Math.floor(expectedFee*(deployerYield)/totalSupply)+prevDeployerUnderlyingBalance, "correct divident paid to deployerAccount");
-		firstUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: accounts[1]})).toNumber();
+		firstUnderlyingBalance = (await containerInstance.viewAsset1Balance({from: accounts[1]})).toNumber();
 		assert.equal(firstUnderlyingBalance, Math.floor(expectedFee*(firstAccountYield)/totalSupply)+prevFirstUnderlyingBalance, "correct divident paid to accounts[1]");
-		secondUnderlyingBalance = (await containerInstance.viewUnderlyingAssetBalance({from: accounts[2]})).toNumber();
+		secondUnderlyingBalance = (await containerInstance.viewAsset1Balance({from: accounts[2]})).toNumber();
 		assert.equal(secondUnderlyingBalance, Math.floor(expectedFee*(secondAccountYield)/totalSupply)+prevSecondUnderlyingBalance, "correct divident paid to accounts[2]");
 	});
 
@@ -297,13 +296,13 @@ contract('container', async function(accounts){
 		deployerUnderlyingBalance += (await tokenInstance.balanceOf(deployerAccount)).toNumber();
 		await containerInstance.withdrawFunds({from: deployerAccount});
 		assert.equal((await tokenInstance.balanceOf(deployerAccount)).toNumber(), deployerUnderlyingBalance, "correct amount of funds credited to deployerAccount");
-		assert.equal((await containerInstance.viewUnderlyingAssetBalance({from: deployerAccount})).toNumber(), 0, "correct amount of deployerAccount's funds remain in container contract");
+		assert.equal((await containerInstance.viewAsset1Balance({from: deployerAccount})).toNumber(), 0, "correct amount of deployerAccount's funds remain in container contract");
 		await containerInstance.withdrawFunds({from: accounts[1]});
 		assert.equal((await tokenInstance.balanceOf(accounts[1])).toNumber(), firstUnderlyingBalance, "correct amount of funds credited to first account");
-		assert.equal((await containerInstance.viewUnderlyingAssetBalance({from: accounts[1]})).toNumber(), 0, "correct amount of first account's funds remain in container contract");
+		assert.equal((await containerInstance.viewAsset1Balance({from: accounts[1]})).toNumber(), 0, "correct amount of first account's funds remain in container contract");
 		await containerInstance.withdrawFunds({from: accounts[2]});
 		assert.equal((await tokenInstance.balanceOf(accounts[2])).toNumber(), secondUnderlyingBalance, "correct amount of funds credited to second account");
-		assert.equal((await containerInstance.viewUnderlyingAssetBalance({from: accounts[2]})).toNumber(), 0, "correct amount of second account's funds remain in container contract");
+		assert.equal((await containerInstance.viewAsset1Balance({from: accounts[2]})).toNumber(), 0, "correct amount of second account's funds remain in container contract");
 	});
 
 	it('grants fee immunity', async () => {
