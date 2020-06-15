@@ -8,6 +8,8 @@ const organiser = artifacts.require("organiser");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
 const cHelper = artifacts.require("cHelper");
+const orcHelper = artifacts.require("orcHelper");
+
 const nullAddress = "0x0000000000000000000000000000000000000000";
 
 contract('organiser', async function(accounts){
@@ -17,7 +19,8 @@ contract('organiser', async function(accounts){
 		oHelperInstance = await oHelper.new();
 		eHelperInstance = await eHelper.new();
 		cHelperInstance = await cHelper.new();
-		organiserInstance = await organiser.new(cHelperInstance.address, oHelperInstance.address, eHelperInstance.address);
+		orcHelperInstance = await orcHelper.new();
+		organiserInstance = await organiser.new(cHelperInstance.address, oHelperInstance.address, eHelperInstance.address, orcHelperInstance.address);
 		await cHelperInstance.transferOwnership(organiserInstance.address);
 	});
 

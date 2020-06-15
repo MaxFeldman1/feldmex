@@ -26,15 +26,19 @@ var setWithInflator;
 contract('options', async function(accounts){
 
 	it('before each', async () => {
-		oracleInstance = await oracle.new();
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
+		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address);
 		feeDenominator = 1000;
 		await optionsInstance.setFee(1000, {from: accounts[0]});
 		inflatorObj = {};
 		//setWithInflator sets spot and adjusts for the inflator
-		setWithInflator = (_spot) => {return oracleInstance.set(_spot * inflator);};
+		//because median of last 3 is returned by oracle we must set spot 2 times
+		setWithInflator = async (_spot) => {
+			await oracleInstance.set(_spot * inflator);
+			await oracleInstance.set(_spot * inflator);
+		};
 		inflatorObj.addStrike = (maturity, strike, params) => {return optionsInstance.addStrike(maturity, strike*inflator, params);};
 		inflatorObj.mintCall = (debtor, holder, maturity, strike, amount, limit, params) => {
 			inflatorObj.addStrike(maturity, strike, {from: debtor});

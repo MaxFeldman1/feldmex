@@ -6,6 +6,7 @@ const strikeAsset = artifacts.require("strikeAsset");
 const container = artifacts.require("container");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
+const orcHelper = artifacts.require("orcHelper");
 
 const helper = require("../helper/helper.js");
 
@@ -21,7 +22,8 @@ contract('container', async function(accounts){
 		strikeAssetInstance = await strikeAsset.new(0);
 		oHelperInstance = await oHelper.new();
 		eHelperInstance = await eHelper.new();
-		containerInstance = await container.new(tokenInstance.address, strikeAssetInstance.address, oHelperInstance.address, eHelperInstance.address, 0, 0);
+		orcHelperInstance = await orcHelper.new();
+		containerInstance = await container.new(tokenInstance.address, strikeAssetInstance.address, oHelperInstance.address, eHelperInstance.address, orcHelperInstance.address, 0, 0);
 		await containerInstance.depOptions();
 		await containerInstance.depExchange();
 		assert.equal(await containerInstance.progress(), 2, "first options chain setup has been sucessfully completed");
@@ -41,6 +43,12 @@ contract('container', async function(accounts){
 		scUnits = Math.pow(10, (await strikeAssetInstance.decimals()).toNumber());
 	});
 
+
+	//because oracle returns median of last 3 returned prices we must set price 2 times
+	async function setPrice(spot) {
+		await oracleInstance.set(spot);
+		await oracleInstance.set(spot);
+	}
 
 	it('implements erc20', async () => {
 			//allows token transfer
@@ -208,7 +216,7 @@ contract('container', async function(accounts){
 	});
 
 	it('gathers yeild from fees generated in first options contract', async () => {
-		await oracleInstance.set(1);
+		await setPrice(1);
 		maturity = (await web3.eth.getBlock('latest')).timestamp;
 		strike = 100
 		//set spot very low
@@ -244,7 +252,7 @@ contract('container', async function(accounts){
 
 	it('gathers yeild from fees generated in second options contract', async () => {
 		//set spot very low
-		await oracleInstance.set(1);
+		await setPrice(1);
 		maturity = (await web3.eth.getBlock('latest')).timestamp;
 		strike = 100
 		amount = 1000;
@@ -310,7 +318,7 @@ contract('container', async function(accounts){
 		spot = strike+10;
 		//strike*=satUnits;
 		//spot*=satUnits;
-		await oracleInstance.set(spot);
+		await setPrice(spot);
 		maturity = (await web3.eth.getBlock('latest')).timestamp;
 		maxTransfer = satUnits*amount;
 		//wait one second to allow for maturity to pass

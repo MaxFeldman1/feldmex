@@ -8,6 +8,7 @@ const organiser = artifacts.require("organiser");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
 const cHelper = artifacts.require("cHelper");
+const orcHelper = artifacts.require("orcHelper");
 
 module.exports = function(deployer) {
   deployer.deploy(underlyingAsset, 0).then((res) => {
@@ -27,7 +28,11 @@ module.exports = function(deployer) {
   }).then((res) => {
     cHelperInstance = res;
     cHelperAddress = res.address;
-    return deployer.deploy(organiser, cHelperAddress, oHelperAddress, eHelperAddress);
+    return deployer.deploy(orcHelper);
+  }).then((res) => {
+    orcHelperInstance = res;
+    orcHelperAddress = res.address;
+    return deployer.deploy(organiser, cHelperAddress, oHelperAddress, eHelperAddress, orcHelperAddress);
   }).then((res) => {
     organiserInstance = res;
     organiserAddress = res.address;

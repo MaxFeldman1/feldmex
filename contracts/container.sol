@@ -1,17 +1,19 @@
 pragma solidity ^0.5.12;
-import "./oracle.sol";
 import "./interfaces/ERC20.sol";
+import "./oracle.sol";
 import "./options.sol";
 import "./exchange.sol";
 import "./oHelper.sol";
 import "./eHelper.sol";
+import "./orcHelper.sol";
+import "./interfaces/ITimeSeriesOracle.sol";
 import "./interfaces/Ownable.sol";
 import "./interfaces/yieldEnabled.sol";
 
 contract container is ERC20, Ownable, yieldEnabled {
 	
 	//smart contract that records prices, records (reservesOfAsset1)/(reservesOfAsset2)
-	oracle public oracleContract;
+	ITimeSeriesOracle public oracleContract;
 	//smart contract that handles settlement of calls and puts
 	options public optionsContract;
 	//smart contract on which options may be traded
@@ -66,7 +68,7 @@ contract container is ERC20, Ownable, yieldEnabled {
 		@param uint _totalCoins: the number of full coins to be included in the total supply
 		@param uint _decimals: the number of digits to which each full unit of coin is divisible
 	*/
-	constructor (address _asset1Address, address _asset2Address, address _oHelperAddress, address _eHelperAddress, uint _totalCoins, uint8 _decimals) public {
+	constructor (address _asset1Address, address _asset2Address, address _oHelperAddress, address _eHelperAddress, address _orcHelperAddress, uint _totalCoins, uint8 _decimals) public {
 		if (_totalCoins == 0) _totalCoins = 1000000;
 		if (_decimals == 0) _decimals = 4;
 		owner = msg.sender;
@@ -77,7 +79,13 @@ contract container is ERC20, Ownable, yieldEnabled {
 		totalYield[msg.sender] = totalSupply;
 		Asset1Contract = ERC20(_asset1Address);
 		Asset2Contract = ERC20(_asset2Address);
-		oracleContract = new oracle();
+		address _oracleAddress = orcHelper(_orcHelperAddress).oracleAddresses(_asset1Address, _asset2Address);
+		if (_oracleAddress == address(0)) {
+			(bool success, ) = _orcHelperAddress.call(abi.encodeWithSignature("deploy(address,address)", _asset1Address, _asset2Address));
+			assert(success);
+			_oracleAddress = orcHelper(_orcHelperAddress).oracleAddresses(_asset1Address, _asset2Address);
+		}
+		oracleContract = ITimeSeriesOracle(_oracleAddress);
 		oHelperAddress = _oHelperAddress;
 		eHelperAddress = _eHelperAddress;
 		contractBalanceAsset1.push(0);

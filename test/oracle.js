@@ -1,122 +1,114 @@
 var oracle = artifacts.require("./oracle.sol");
+var token = artifacts.require("./UnderlyingAsset.sol");
 
 const helper = require("../helper/helper.js");
 
 contract('oracle', function(accounts){
 
-	it('before each', async() => {
-		return oracle.new().then((i) => {
-			orcInstance = i;
-			return;
-		});
+	it('before each', async () => {
+		asset1 = await token.new(0);
+		asset2 = await token.new(0);
+		oracleInstance = await oracle.new(asset1.address, asset2.address);
+		inflator = await oracleInstance.inflator();
 	});
 
-	it('sets and fetches spot price', function(){
-		spot = 5
-		secondSpot = 7;
-		return orcInstance.inflator().then((res) => {
-			inflator = res;
-			return orcInstance.set(spot * inflator);
-		}).then((res) => {
-			blockSetSpot = res.receipt.blockNumber;
-			return helper.advanceTime(2);
-		}).then(() => {
-			return orcInstance.get();
-		}).then((res) => {
-			res /= inflator;
-			assert.equal(res, spot, 'get() fetches current spot price');
-			return orcInstance.height();
-		}).then((res) => {
-			height = res.toNumber();
-			return orcInstance.getUint(height);
-		}).then((res) => {
-			res /= inflator;
+	async function setPrice(spot) {
+		return oracleInstance.set(spot*inflator);
+	}
+
+	async function heightToPrevTs(height) {
+		var index = (await oracleInstance.heightToIndex(height)).toNumber();
+		var newHeight = (await oracleInstance.heights(index)).toNumber();
+		return (await oracleInstance.timestamps(newHeight)).toNumber();
+	}
+
+	async function heightToPrevSpot(height) {
+		var index = (await oracleInstance.heightToIndex(height)).toNumber();
+		var newHeight = (await oracleInstance.heights(index)).toNumber();
+		return (await oracleInstance.heightToSpot(newHeight)).toNumber();
+	}
+
+	async function tsToPrevSpot(time) {
+		var index = (await oracleInstance.tsToIndex(time)).toNumber();
+		var newHeight = (await oracleInstance.heights(index)).toNumber();
+		return (await oracleInstance.heightToSpot(newHeight)).toNumber();
+	}
+
+	async function indexToSpot(index) {
+		var height = (await oracleInstance.heights(index)).toNumber();
+		return (await oracleInstance.heightToSpot(height)) / inflator;
+	}
+
+	//in solidity block.number is always height of the next block, in web3 it is height of prev block
+	function getBlockNumber() {
+		return web3.eth.getBlockNumber();
+	}
+
+	it('sets and fetches spot price', async () => {
+		try{
+			spot = 5
+			secondSpot = 7;
+			await setPrice(spot);
+			blockSetSpot = await getBlockNumber();
+			await helper.advanceTime(2);
+			res = (await oracleInstance.latestSpot()) / inflator;
+			assert.equal(res, spot, 'latestSpot() fetches current spot price');
+			height = await getBlockNumber();
+			res = (await heightToPrevSpot(height))/inflator;
+			//res = (await heightToPrevSpot(height))/inflator;
 			assert.equal(res, spot, "getUint(uint) fetches the latest spot price");
-			return orcInstance.set(secondSpot * inflator);
-		}).then((res) => {
-			blockSetSecondSpot = res.receipt.blockNumber;
-			return helper.advanceTime(2);
-		}).then(() => {
+			await setPrice(secondSpot);
+			blockSetSecondSpot = await getBlockNumber();
+			await helper.advanceTime(2);
 			//note that we have not updated the value of height yet
-			return orcInstance.getUint(height);
-		}).then((res) => {
-			res /= inflator;
+			res = (await heightToPrevSpot(height)) / inflator;
 			assert.equal(res, spot, "getUint(uint) can fetch previous values");
 			//we are now feching the price of the blocks after setting the spot a second time
-			return orcInstance.getUint(height+2);
-		}).then((res) => {
-			res /= inflator;
+			res = (await heightToPrevSpot(blockSetSecondSpot+5))/inflator;
 			assert.equal(res, secondSpot, "getUint(uint) can fetch the most recent spot");
-			return orcInstance.getUint(height-2);
-		}).then((res) => {
-			res /= inflator;
+			res = (await heightToPrevSpot(height-3))/inflator;
 			assert.equal(res, 0, "getUint(uint) returns 0 when there are no previous spot prices");
-			return web3.eth.getBlock('latest');
-		}).then((res) => {
+			res = await web3.eth.getBlock('latest');
 			height = res.number;
 			time = res.timestamp;
-			return orcInstance.getUint(height);
-		}).then((res) => {
-			res /= inflator;
-			result = res;
-			return orcInstance.timestampBehindHeight(height);
-		}).then((res) => {
-			assert.equal(res[0].toNumber() <= time, true, "returns the correct timestamp");
-		}).then((res) => {
-			return orcInstance.set(1 * inflator);
-		}).then((res) => {
-			blockSet1 = res.receipt.blockNumber;
-			return helper.advanceTime(2);
-		}).then(() => {
-			return orcInstance.set(5 * inflator);
-		}).then((res) => {
-			blockSet5 = res.receipt.blockNumber;
-			return helper.advanceTime(2);
-		}).then(() => {
-			return orcInstance.set(6 * inflator);
-		}).then((res) => {
-			blockSet6 = res.receipt.blockNumber;
-			return web3.eth.getBlock('latest');
-		}).then((res) => {
+			result = (await heightToPrevSpot(height))/inflator;
+			//res  = await oracleInstance.timestampBehindHeight(height);
+			res  = await heightToPrevTs(height);
+			assert.equal(res <= time, true, "returns the correct timestamp");
+			await setPrice(1);
+			blockSet1 = await getBlockNumber();
+			await helper.advanceTime(2);
+			await setPrice(5);
+			blockSet5 = await getBlockNumber();
+			await helper.advanceTime(2);
+			await setPrice(6);
+			blockSet6 = await getBlockNumber();
+			res = await web3.eth.getBlock('latest');
 			diff = res.timestamp-time;
 			time = res.timestamp;
 			height = res.number;
-			return orcInstance.getAtTime(time);
-		}).then((res) => {
-			res /= inflator;
+			res = (await tsToPrevSpot(time))/inflator;
 			assert.equal(res, 6, "correct spot");
-			return web3.eth.getBlock(height-2);
-		}).then((res) => {
-			newTime = res.timestamp+1;
-			return orcInstance.getAtTime(newTime);
-		}).then((res) => {
-			assert.equal(res.toNumber()/inflator, 1, "correct spot");
-			return web3.eth.getBlock(blockSet5);
-		}).then((res) => {
-			newTime = res.timestamp+1;
-			return orcInstance.getAtTime(newTime);
-		}).then((res) => {
-			res /= inflator;
+			newTime = (await web3.eth.getBlock(blockSet1)).timestamp+1;
+			res = (await tsToPrevSpot(newTime))/inflator;
+			assert.equal(res, 1, "correct spot");
+			newTime = (await web3.eth.getBlock(blockSet5)).timestamp+1;
+			res = (await tsToPrevSpot(newTime))/inflator;
 			assert.equal(res, 5, "correct spot");
-			return web3.eth.getBlock(blockSetSpot);
-		}).then((res) => {
-			newTime = res.timestamp;
+			newTime = (await web3.eth.getBlock(blockSetSpot)).timestamp;
 			spotTime = newTime;
-			return orcInstance.getAtTime(newTime);
-		}).then((res) => {
-			res /= inflator;
+			res = (await tsToPrevSpot(newTime))/inflator;
 			assert.equal(res, spot, "correct spot");
-			return web3.eth.getBlock(blockSetSecondSpot);
-		}).then((res) => {
-			newTime = res.timestamp;
-			return orcInstance.getAtTime(newTime);
-		}).then((res) => {
-			res /= inflator;
+			newTime = (await web3.eth.getBlock(blockSetSecondSpot)).timestamp;
+			res = (await tsToPrevSpot(newTime))/inflator;
 			assert.equal(res, secondSpot, "correct spot");
-			return orcInstance.getAtTime(spotTime-4);
-		}).then((res) => {
-			res /= inflator;
+			res = (await tsToPrevSpot(spotTime-4))/inflator;
 			assert.equal(res, 0, "correct spot");
-		});
+		} catch (err) {
+			console.error(err.message);
+			throw err;
+		}
+
 	});
+
 });

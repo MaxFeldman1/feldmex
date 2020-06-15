@@ -32,9 +32,9 @@ var receiverAccountPosition = 0;
 contract('exchange', async function(accounts) {
 
 	it('before each', async () => {
-		oracleInstance = await oracle.new();
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
+		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address);
 		mintHandler.postOrder = (maturity, strike, price, amount, buy, call, params) => {
 			if (typeof(strikes[maturity]) === 'undefined'){

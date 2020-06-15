@@ -1,4 +1,5 @@
 pragma solidity ^0.5.12;
+import "./interfaces/ITimeSeriesOracle.sol";
 import "./oracle.sol";
 import "./interfaces/ERC20.sol";
 import "./interfaces/Ownable.sol";
@@ -44,6 +45,7 @@ contract options is Ownable {
         underlyingAssetAddress = _underlyingAssetAddress;
         strikeAssetAddress = _strikeAssetAddress;
         exchangeAddress = msg.sender;
+        //ITimeSeriesOracle orc = ITimeSeriesOracle(oracleAddress);
         oracle orc = oracle(oracleAddress);
         inflator = orc.inflator();
         ERC20 ua = ERC20(underlyingAssetAddress);
@@ -228,8 +230,9 @@ contract options is Ownable {
     function claim(uint _maturity) public returns(bool success){
         require(_maturity < block.timestamp);
         //get info from the oracle
-        oracle orc = oracle(oracleAddress);
-        uint spot = orc.getAtTime(_maturity);
+        ITimeSeriesOracle orc = ITimeSeriesOracle(oracleAddress);
+        //oracle orc = oracle(oracleAddress);
+        uint spot = orc.fetchSpotAtTime(_maturity);
         uint callValue = 0;
         uint putValue = 0;
         //calls & puts
