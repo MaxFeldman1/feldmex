@@ -512,14 +512,26 @@ contract options is Ownable {
         @Description: The function was created for positions at a strike to be inclueded in calculation of collateral requirements for a user
             User calls this instead of smart contract adding strikes automatically when funds are transfered to an address by the transfer or transferFrom functions
             because it prevents a malicious actor from overloading a user with many different strikes thus making it impossible to claim funds because of the gas limit
+            strikes array is sorted from smallest to largest
 
         @param uint _maturity: this is the maturity at which the strike will be added if it is not already recorded at this maturity
         @param uint _strike: this is the strike that will be added.
-
-        @return bool: returns true if the strike is sucessfully added and false if the strike was already recorded at the maturity
-    */
-    function addStrike(uint _maturity, uint _strike) public returns(bool contained){
-        (contained,) = containsStrike(msg.sender, _maturity, _strike, true, false);
+        @param uint _index: the index at which to insert the strike
+7    */
+    function addStrike(uint _maturity, uint _strike, uint _index) public {
+        require(_maturity > 0 && _strike > 0);
+        uint size = strikes[msg.sender][_maturity].length;
+        require(_index <= size);
+        if (_index > 0) require(_strike > strikes[msg.sender][_maturity][_index-1]);
+        if (size == 1 && strikes[msg.sender][_maturity][0] == 0) {
+            strikes[msg.sender][_maturity][0] = _strike;
+        }
+        if (_index < size) require(_strike < strikes[msg.sender][_maturity][_index]);
+        strikes[msg.sender][_maturity].push(_strike);
+        if (size == 0) return;
+        for (uint i = size-1; i >= _index && i != uint(-1); i--)
+            strikes[msg.sender][_maturity][i+1] = strikes[msg.sender][_maturity][i];
+        strikes[msg.sender][_maturity][_index] = _strike;
     }
 
 

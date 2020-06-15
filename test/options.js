@@ -39,18 +39,15 @@ contract('options', async function(accounts){
 			await oracleInstance.set(_spot * inflator);
 			await oracleInstance.set(_spot * inflator);
 		};
-		inflatorObj.addStrike = (maturity, strike, params) => {return optionsInstance.addStrike(maturity, strike*inflator, params);};
-		inflatorObj.mintCall = (debtor, holder, maturity, strike, amount, limit, params) => {
-			inflatorObj.addStrike(maturity, strike, {from: debtor});
-			return inflatorObj.addStrike(maturity, strike, {from: holder}).then(() => {
-				return optionsInstance.mintCall(debtor, holder, maturity, strike*inflator, amount, limit, params);
-			});
+		inflatorObj.mintCall = async (debtor, holder, maturity, strike, amount, limit, params) => {
+			await addStrike(debtor, maturity, strike);
+			await addStrike(holder, maturity, strike);
+			return optionsInstance.mintCall(debtor, holder, maturity, strike*inflator, amount, limit, params);
 		};
-		inflatorObj.mintPut = (debtor, holder, maturity, strike, amount, limit, params) => {
-			inflatorObj.addStrike(maturity, strike, {from: debtor});
-			return inflatorObj.addStrike(maturity, strike, {from: holder}).then(() => {
-				return optionsInstance.mintPut(debtor, holder, maturity, strike*inflator, amount, limit, params);
-			});
+		inflatorObj.mintPut = async (debtor, holder, maturity, strike, amount, limit, params) => {
+			await addStrike(debtor, maturity, strike);
+			await addStrike(holder, maturity, strike);
+			return optionsInstance.mintPut(debtor, holder, maturity, strike*inflator, amount, limit, params);
 		};
 		inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
 		inflatorObj.transfer = (to, value, maturity, strike, maxTransfer, callPut, params) => {return optionsInstance.transfer(to, value, maturity, strike*inflator, maxTransfer, callPut, params);};
@@ -58,6 +55,16 @@ contract('options', async function(accounts){
 		inflatorObj.approve = (spender, value, maturity, strike, callPut, params) => {return optionsInstance.approve(spender, value, maturity, strike*inflator, callPut, params);};
 	});
 
+	async function addStrike(from, maturity, strike) {
+		strike*=inflator;
+		strikes = await optionsInstance.viewStrikes(maturity, {from});
+		var index = 0;
+		for (;index < strikes.length; index++){ 
+			if (strikes[index] == strike) return;
+			if (strikes[index] > strike) break;
+		}
+		await optionsInstance.addStrike(maturity, strike, index, {from});
+	}
 
 	it ('mints, exercizes call options', async () => {
 		defaultAccount = accounts[0];
@@ -73,8 +80,8 @@ contract('options', async function(accounts){
 		maturity = (await web3.eth.getBlock('latest')).timestamp;
 		await helper.advanceTime(2);
 		//add strikes to allow for minting of options
-		await inflatorObj.addStrike(maturity, strike, {from: debtor});
-		await inflatorObj.addStrike(maturity, strike, {from: holder});
+		await addStrike(debtor, maturity, strike);
+		await addStrike(holder, maturity, strike);
 		res = await optionsInstance.viewStrikes(maturity, {from: debtor});
 		assert.equal(res[0].toNumber(), strike*inflator, "the correct strike is added");
 		await inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
@@ -112,8 +119,8 @@ contract('options', async function(accounts){
 		await setWithInflator(strike-difference);
 		maturity = (await web3.eth.getBlock('latest')).timestamp+1;
 		//add strikes to allow for minting of options
-		await inflatorObj.addStrike(maturity, strike, {from: debtor});
-		await inflatorObj.addStrike(maturity, strike, {from: holder});
+		await addStrike(debtor, maturity, strike);
+		await addStrike(holder, maturity, strike);
 		await inflatorObj.mintPut(debtor, holder, maturity, strike, amount, strike*amount*scUnits, {from: defaultAccount});
 		await helper.advanceTime(2);
 		await optionsInstance.claim(maturity, {from: debtor});
@@ -159,7 +166,7 @@ contract('options', async function(accounts){
 		await optionsInstance.depositFunds(1000*satUnits, 1000*strike*scUnits, {from: debtor});
 		amount = 10;
 		//debtor must accept transfers on a strike before recieving them
-		await inflatorObj.addStrike(maturity, strike, {from: debtor});
+		await addStrike(debtor, maturity, strike);
 		await inflatorObj.transfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, true)).toNumber(), amount, "correct amount for the debtor");
 		assert.equal((await inflatorObj.balanceOf(defaultAccount, maturity, strike, true)).toNumber(), -amount, "correct amount for the defaultAccount");
@@ -171,7 +178,7 @@ contract('options', async function(accounts){
 		newStrike = strike+10;
 		await inflatorObj.approve(defaultAccount, amount, maturity, newStrike, false, {from: debtor});
 		//defaultAccount must accept transfers on a strike before recieving them
-		await inflatorObj.addStrike(maturity, newStrike, {from: defaultAccount});
+		await addStrike(defaultAccount, maturity, newStrike);
 		await inflatorObj.transferFrom(debtor, defaultAccount, amount, maturity, newStrike, amount*newStrike*scUnits, false, {from: defaultAccount});
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, false)).toNumber(), amount, "correct put balance at strike "+strike+" for "+debtor);
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, newStrike, false)).toNumber(), -amount, "correct put balance at strike "+newStrike+" for "+debtor);
@@ -229,7 +236,7 @@ contract('options', async function(accounts){
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OOF", 'could not mint put without adding the maturity strike combo for either account');
-			return optionsInstance.addStrike(maturity, strike, {from: debtor});
+			return addStrike(debtor, maturity, strike);
 		}).then(() => {
 			//test for calls with only debtor adding the maturity strike combo
 			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
@@ -249,7 +256,7 @@ contract('options', async function(accounts){
 			assert.equal(res, "OOF", 'could not mint put without adding maturity strike combo for holder account');
 			maturity +=1;
 			//test for calls with only holder adding the maturity strike combo
-			return optionsInstance.addStrike(maturity, strike, {from: holder});			
+			return addStrike(holder, maturity, strike);
 		}).then(() => {
 			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});			
 		}).then(() => {

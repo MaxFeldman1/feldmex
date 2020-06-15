@@ -36,38 +36,39 @@ contract('exchange', async function(accounts) {
 		strikeAssetInstance = await strikeAsset.new(0);
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address);
-		mintHandler.postOrder = (maturity, strike, price, amount, buy, call, params) => {
-			if (typeof(strikes[maturity]) === 'undefined'){
-				strikes[maturity] = {};
-			}
+		mintHandler.postOrder = async (maturity, strike, price, amount, buy, call, params) => {
+			if (typeof(strikes[maturity]) === 'undefined') strikes[maturity] = {};
 			if (typeof(strikes[maturity][strike]) === 'undefined'){
 				strikes[maturity][strike] = true;
-				return optionsInstance.addStrike(maturity, strike, {from: accounts[1]}).then(() => {
-					return optionsInstance.addStrike(maturity, strike, {from: accounts[2]});
-				}).then(() => {
-					return exchangeInstance.postOrder(maturity, strike, price, amount, buy, call, params);
-				});
+				await addStrike(accounts[1], maturity, strike);
+				await addStrike(accounts[2], maturity, strike);
 			}
 			return exchangeInstance.postOrder(maturity, strike, price, amount, buy, call, params);
 		};
 
-		mintHandler.insertOrder = (maturity, strike, price, amount, buy, call, name, params) => {
-			if (typeof(strikes[maturity]) === 'undefined'){
-				strikes[maturity] = {};
-			}
+		mintHandler.insertOrder = async (maturity, strike, price, amount, buy, call, name, params) => {
+			if (typeof(strikes[maturity]) === 'undefined') strikes[maturity] = {};
 			if (typeof(strikes[maturity][strike]) === 'undefined'){
 				strikes[maturity][strike] = true;
-				return optionsInstance.addStrike(maturity, strike, {from: accounts[1]}).then(() => {
-					return optionsInstance.addStrike(maturity, strike, {from: accounts[2]});
-				}).then(() => {
-					return exchangeInstance.insertOrder(maturity, strike, price, amount, buy, call, name, params);
-				});
+				await addStrike(accounts[1], maturity, strike);
+				await addStrike(accounts[2], maturity, strike);
 			}
 			return exchangeInstance.insertOrder(maturity, strike, price, amount, buy, call, name, params);
 		};
 		exchangeInstance = await exchange.new(tokenInstance.address, strikeAssetInstance.address, optionsInstance.address);
 		await optionsInstance.setExchangeAddress(exchangeInstance.address);
 	});
+
+	async function addStrike(from, maturity, strike) {
+		strikes = await optionsInstance.viewStrikes(maturity, {from});
+		var index = 0;
+		for (;index < strikes.length; index++){ 
+			if (strikes[index] == strike) return;
+			if (strikes[index] > strike) break;
+		}
+		await optionsInstance.addStrike(maturity, strike, index, {from});
+	}
+
 
 	it('can post and take buy orders of calls', async () => {
 		originAccount = accounts[0]
@@ -605,7 +606,7 @@ contract('exchange', async function(accounts) {
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OOF", "can't postOrder without first adding maturity strike combo on options smart contract");
-			return optionsInstance.addStrike(maturity, strike, {from: defaultAccount});
+			return addStrike(defaultAccount, maturity, strike);
 		}).then(() => {
 			return exchangeInstance.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
 		}).then(async () => {
