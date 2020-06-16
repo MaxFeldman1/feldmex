@@ -375,45 +375,6 @@ contract options is Ownable {
     }
 
     /*
-        @Description: used to find the value of an addresses call positions at a given maturity
-            also alows for input of another position to find the value of and add to the total value
-
-        @param address _addr: address of which to check the value of call positons
-        @param uint _maturity: the maturity in question
-        @param uint _price: the spot price at which to find the value of positions
-        @param int _amount: the amount of the extra position that is to be calculated alongside the positions of the address
-        @param uint _strike: the strike price of the position that is to be calculated alongside the positions of the address
-
-        @return uint value: the total value of all positons at the spot price combined as well as the value of the added position denominated in the underlying
-    */
-    function totalSatValueOf(address _addr, uint _maturity, uint _price, int _amount, uint _strike)internal view returns(uint value){
-        value = satValueOf(_amount, _strike, _price);
-        for(uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            value+=satValueOf(callAmounts[_addr][_maturity][strikes[_addr][_maturity][i]], strikes[_addr][_maturity][i], _price);
-        }
-        value /= _price;
-    }
-
-    /*
-        @Description: used to find the value of an addresses put positions at a given maturity
-            also alows for input of another position to find the value of and add to the total value
-
-        @param address _addr: address of which to check the value of put positons
-        @param uint _maturity: the maturity in question
-        @param uint _price: the spot price at which to find the value of positions
-        @param int _amount: the amount of the extra position that is to be calculated alongside the positions of the address
-        @param uint _strike: the strike price of the position that is to be calculated alongside the positions of the address
-
-        @return uint value: the total value of all positons at the spot price combined as well as the value of the added position denominated in strike asset
-    */
-    function totalScValueOf(address _addr, uint _maturity, uint _price, int _amount, uint _strike)internal view returns(uint value){
-        value = scValueOf(_amount, _strike, _price);
-        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            value+=scValueOf(putAmounts[_addr][_maturity][strikes[_addr][_maturity][i]], strikes[_addr][_maturity][i], _price);
-        }
-    }
-
-    /*
         @Description: used to find the minimum amount of collateral that is required to to support call positions for a certain user at a given maturity
             also takes into account an extra position that is entered in the last two parameters
             The purpose of adding having the extra position in the last two parameters is that it allows for 
@@ -426,28 +387,47 @@ contract options is Ownable {
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in the underlying
         @return uint: sum of all short call positions multiplied by satUnits
     */
-    function minSats(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minCollateral, uint liabilities){
-        uint strike = _strike;
-        //total number of bought calls minus total number of sold calls
-        _amount += callAmounts[_addr][_maturity][_strike];
-        int sum = _amount;
-        liabilities = (_amount < 0) ? uint(-_amount) : 0;
-        uint minValue = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
-        uint cValue = 0;
+    function minSats(address _addr, uint _maturity, int _amount, uint _strike) internal view returns (uint minCollateral, uint liabilities) {
+        uint _satUnits = satUnits; //gas savings
+        int delta = 0;
+        int value = 0;
+        uint prevStrike;
+        bool hit = false;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            strike = strikes[_addr][_maturity][i];
-            if (strike == _strike || callAmounts[_addr][_maturity][strike] == 0) continue;
-            sum += callAmounts[_addr][_maturity][strike];
-            liabilities += (callAmounts[_addr][_maturity][strike] < 0)? uint(-callAmounts[_addr][_maturity][strike]) : 0;
-            cValue = totalSatValueOf(_addr, _maturity, strike, _amount, _strike);
-            if (minValue > cValue) minValue = cValue;
+            uint strike = strikes[_addr][_maturity][i];
+            int amt = callAmounts[_addr][_maturity][strike];
+            if (!hit && _strike <= strike) {
+                if (_strike < strike){
+                    strike = _strike;
+                    amt = _amount;
+                    i--;
+                } else
+                    amt += _amount;
+                hit = true;
+            }
+            //placeHolder for numerator 
+            prevStrike = uint(delta * int(_satUnits * (strike-prevStrike)));
+            value += int(prevStrike) / int(strike);
+            //in solidity integer division rounds up when result is negative, counteract this
+            if (delta < 0 && uint(-int(prevStrike))%strike != 0) value--;
+            delta += amt;
+            prevStrike = strike;
+            if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
+            if (amt < 0) liabilities+=uint(-amt);
         }
-        //liabilities has been subtrcted from sum priviously so this is equal to # of bought contracts at infinite spot
-        uint _satUnits = satUnits;
-        uint valAtInf = uint(sum+int(liabilities))*_satUnits; //assets
-        minValue = valAtInf < minValue ? valAtInf : minValue;
-        liabilities*=_satUnits;
-        minCollateral = minValue > liabilities ? 0 : liabilities-minValue;
+        if (!hit) {
+            prevStrike = uint(delta * int(_satUnits * (_strike-prevStrike)));
+            value += int(prevStrike) / int(_strike);
+            //in solidity integer division rounds up when result is negative, counteract this
+            if (delta < 0 && uint(-int(prevStrike))%_strike != 0) value--;
+            delta += _amount;
+            if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
+            if (_amount < 0) liabilities+=uint(-_amount);
+        }
+        //value at inf
+        value = int(_satUnits)*delta;
+        if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
+        liabilities *= _satUnits;
     }
 
     /*
@@ -463,24 +443,39 @@ contract options is Ownable {
         @return uint: negative value denominated in scUnits of all short put postions at a spot price of 0
     */
     function minSc(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minCollateral, uint liabilities){
-        //account for spot price of 0
-        uint strike = 0;
-        _amount += putAmounts[_addr][_maturity][_strike];
-        uint minValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
-        int sum = _amount;
-        liabilities = _strike * ((_amount < 0) ? uint(-_amount) : 0);
-        uint cValue = totalScValueOf(_addr, _maturity, _strike, _amount, _strike);
-        if (minValue > cValue) minValue = cValue;
-        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            strike = strikes[_addr][_maturity][i];
-            if (strike == _strike || putAmounts[_addr][_maturity][strike] == 0) continue;
-            sum += putAmounts[_addr][_maturity][strike];
-            liabilities += strike * ((putAmounts[_addr][_maturity][strike] < 0)? uint(-putAmounts[_addr][_maturity][strike]) : 0);
-            cValue = totalScValueOf(_addr, _maturity, strike, _amount, _strike);
-            if (minValue > cValue) minValue = cValue;
+        int delta = 0;
+        int value = 0;
+        uint prevStrike;
+        bool hit = false;
+        uint lastIndex = strikes[_addr][_maturity].length-1;
+        for(uint i = lastIndex; i != uint(-1); i--) {
+            uint strike = strikes[_addr][_maturity][i];
+            int amt = putAmounts[_addr][_maturity][strike];
+            if (!hit && _strike >= strike) {
+                if (_strike > strike){
+                    strike = _strike;
+                    amt = _amount;
+                    i++;                    
+                } else
+                    amt += _amount;
+                hit = true;
+            }
+            value += delta * int(prevStrike-strike);
+            delta += amt;
+            prevStrike = strike;
+            if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
+            if (amt < 0) liabilities+=uint(-amt)*strike;
         }
-        //note that every time we add another liability we multiply by the strike thus the inflator must be divided out when we are done
-        minCollateral = minValue > liabilities ? 0 : liabilities - minValue;
+        if (!hit) {
+            value += delta * int(prevStrike-_strike);
+            delta += _amount;
+            prevStrike = _strike;
+            if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
+            if (_amount < 0) liabilities+=uint(-_amount)*_strike;
+        }
+        //value at 0
+        value += delta * int(prevStrike);
+        if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
     }
 
 
@@ -517,7 +512,7 @@ contract options is Ownable {
         @param uint _maturity: this is the maturity at which the strike will be added if it is not already recorded at this maturity
         @param uint _strike: this is the strike that will be added.
         @param uint _index: the index at which to insert the strike
-7    */
+    */
     function addStrike(uint _maturity, uint _strike, uint _index) public {
         require(_maturity > 0 && _strike > 0);
         uint size = strikes[msg.sender][_maturity].length;
