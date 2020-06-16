@@ -482,7 +482,7 @@ contract options is Ownable {
     /*
         @Description: used to find the amount by which a user's account would need to be funded for a user to make an order
 
-        @param bool _token: _token => call also !_token => put
+        @param bool _call: true if inquiry regards calls false if pretaining to puts
         @param address _addr: the user in question
         @param uint _maturity: the maturity timestamp in question
         @param int _amount: the amount of calls or puts in the order, positive amount means buy, negative amount means sell
@@ -490,10 +490,10 @@ contract options is Ownable {
 
         @return uint: the amount of satUnits or scUnits that must be sent as collateral for the order described to go through
     */
-    function transferAmount(bool _token, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint value){
+    function transferAmount(bool _call, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint value){
         require(msg.sender == _addr || msg.sender == exchangeAddress);
         if (_amount >= 0) return 0;
-        if (_token){
+        if (_call){
             (uint minCollateral, ) = minSats(_addr, _maturity, _amount, _strike);
             value = minCollateral-satCollateral[_addr][_maturity];
         }
@@ -518,9 +518,6 @@ contract options is Ownable {
         uint size = strikes[msg.sender][_maturity].length;
         require(_index <= size);
         if (_index > 0) require(_strike > strikes[msg.sender][_maturity][_index-1]);
-        if (size == 1 && strikes[msg.sender][_maturity][0] == 0) {
-            strikes[msg.sender][_maturity][0] = _strike;
-        }
         if (_index < size) require(_strike < strikes[msg.sender][_maturity][_index]);
         strikes[msg.sender][_maturity].push(_strike);
         if (size == 0) return;
