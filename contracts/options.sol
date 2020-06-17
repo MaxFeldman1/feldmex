@@ -156,7 +156,7 @@ contract options is Ownable {
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
         if (_debtor == _holder) return 0;
         clearPositions();
-        addPosition(_strike, int(_amount), 0, true);
+        addPosition(_strike, int(_amount), true);
         useDeposits[msg.sender] = false;
         //setUseDeposits(false);
         (transferAmt, ) = assignCallPosition(_debtor, _holder, _maturity);
@@ -183,7 +183,7 @@ contract options is Ownable {
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
         if (_debtor == _holder) return 0;
         clearPositions();
-        addPosition(_strike, int(_amount), 0, false);
+        addPosition(_strike, int(_amount), false);
         useDeposits[msg.sender] = false;
         //setUseDeposits(false);
         (transferAmt, ) = assignPutPosition(_debtor, _holder, _maturity);
@@ -553,7 +553,7 @@ contract options is Ownable {
 
     function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(uint transferAmt){
         clearPositions();
-        addPosition(_strike, int(_value), 0, _call);
+        addPosition(_strike, int(_value), _call);
         useDeposits[msg.sender] = true;
         if (_call)
             (transferAmt, ) = assignCallPosition(msg.sender, _to, _maturity);
@@ -574,7 +574,7 @@ contract options is Ownable {
     function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(uint transferAmt){
         require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
         clearPositions();
-        addPosition(_strike, int(_value), 0, _call);
+        addPosition(_strike, int(_value), _call);
         useDeposits[msg.sender] = true;
         if (_call) {
             callAllowance[_from][msg.sender][_maturity][_strike] -= _value;
@@ -602,25 +602,18 @@ contract options is Ownable {
     //make helper maturities extremely far out, Dec 4th, 292277026596 A.D
     /*
         first helper maturity is where positions are added
-        second helper maturity is where positions are combined with user positions to calculate collateral requirements
     */
     uint helperMaturity = 10**20;
-    uint helperMaturity2 = 10**20 + 1;
 
     address helperAddress = address(0);
 
-    function addPosition(uint _strike, int _amount, uint8 _index, bool _call) public {
+    function addPosition(uint _strike, int _amount, bool _call) public {
         require(_strike > 0);
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity; //gas savings
         uint size = strikes[_helperAddress][_helperMaturity].length;
-        require(_index <= size);
-        if (_index > 0) require(_strike > strikes[_helperAddress][_helperMaturity][_index-1]);
-        if (_index < size) require(_strike < strikes[_helperAddress][_helperMaturity][_index]);
+        if (size > 0) require(_strike > strikes[_helperAddress][_helperMaturity][size-1]);
         strikes[_helperAddress][_helperMaturity].push(_strike);
-        for (uint i = size-1; i >= _index && i != uint(-1); i--)
-            strikes[_helperAddress][_helperMaturity][i+1] = strikes[_helperAddress][_helperMaturity][i];
-        strikes[_helperAddress][_helperMaturity][_index] = _strike;
         if (_call)
             callAmounts[_helperAddress][_helperMaturity][_strike] = _amount;
         else
@@ -635,35 +628,19 @@ contract options is Ownable {
     function combinePosition(address _addr, uint _maturity, bool _call) internal {
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity; //gas savings
-        uint _helperMaturity2 = helperMaturity2; //gas savings
-        uint size = strikes[_addr][_maturity].length;
+        uint size1 = strikes[_addr][_maturity].length;
         uint size2 = strikes[_helperAddress][_helperMaturity].length;
-        delete strikes[_helperAddress][_helperMaturity2];
-        //merge sort
         uint counter1; //counter for strikes[_addr][_maturity]
         uint counter2; //counter for strikes[_helperAddress][_helperMaturity]
-        while (counter1+counter2< size+size2){
-            if (counter2 == size2 || strikes[_addr][_maturity][counter1] < strikes[_helperAddress][_helperMaturity][counter2]) {
-                uint strike = strikes[_addr][_maturity][counter1];
-                strikes[_helperAddress][_helperMaturity2].push(strike);
-                if (_call)
-                    callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_addr][_maturity][strike];
-                else
-                    putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_addr][_maturity][strike];
-                counter1++;
-            }
-            else if (strikes[_addr][_maturity][counter1] == strikes[_helperAddress][_helperMaturity][counter2]){
+        for (; counter2 < size2; counter1++) {
+            if (counter1 == size1 || strikes[_addr][_maturity][counter1] > strikes[_helperAddress][_helperMaturity][counter2])  revert(); //not all strikes have been added
+            else if (strikes[_addr][_maturity][counter1] == strikes[_helperAddress][_helperMaturity][counter2]) {
                 uint strike = strikes[_helperAddress][_helperMaturity][counter2];
-                strikes[_helperAddress][_helperMaturity2].push(strike);
                 if (_call)
-                   callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_addr][_maturity][strike] + callAmounts[_helperAddress][_helperMaturity][strike];
+                    callAmounts[_addr][_maturity][strike] += callAmounts[_helperAddress][_helperMaturity][strike];
                 else
-                    putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_addr][_maturity][strike] + putAmounts[_helperAddress][_helperMaturity][strike];
-                counter1++;
+                    putAmounts[_addr][_maturity][strike] += putAmounts[_helperAddress][_helperMaturity][strike];
                 counter2++;
-            } else {
-                //this block will not be hit unless a strike in strikes[_helperAddress][_helperMaturity] has not been added to strikes[_addr][_maturity]
-                revert();
             }
         }
     }
@@ -679,16 +656,9 @@ contract options is Ownable {
     function assignCallPosition(address _debtor, address _holder, uint _maturity) internal returns (uint transferAmtDebtor, uint transferAmtHolder) {
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity; //gas savings
-        uint _helperMaturity2 = helperMaturity2; //gas savings
 
         combinePosition(_holder, _maturity, true);
-        (uint minCollateral, uint liabilities) = minSats(_helperAddress, _helperMaturity2, 0,1);
-        strikes[_holder][_maturity] = strikes[_helperAddress][_helperMaturity2];
-        uint size = strikes[_holder][_maturity].length;
-        for (uint i = 0; i < size; i++){
-            uint strike = strikes[_holder][_maturity][i];
-            callAmounts[_holder][_maturity][strike] = callAmounts[_helperAddress][_helperMaturity2][strike];
-        }
+        (uint minCollateral, uint liabilities) = minSats(_holder, _maturity, 0,1);
 
         if (minCollateral > satCollateral[_holder][_maturity])
             transferAmtHolder = minCollateral - satCollateral[_holder][_maturity];
@@ -698,17 +668,12 @@ contract options is Ownable {
         satDeduction[_holder][_maturity] = liabilities - minCollateral;
         
         //inverse positions for debtor
-        size = strikes[_helperAddress][_helperMaturity].length;
+        uint size = strikes[_helperAddress][_helperMaturity].length;
         for (uint i = 0; i < size; i++)
             callAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
 
         combinePosition(_debtor, _maturity, true);        
-        (minCollateral, liabilities) = minSats(_helperAddress, _helperMaturity2, 0,1);
-        size = strikes[_debtor][_maturity].length;
-        for (uint i = 0; i < size; i++){
-            uint strike = strikes[_debtor][_maturity][i];
-            callAmounts[_debtor][_maturity][strike] = callAmounts[_helperAddress][_helperMaturity2][strike];
-        }
+        (minCollateral, liabilities) = minSats(_debtor, _maturity, 0,1);
 
         if (minCollateral > satCollateral[_debtor][_maturity])
             transferAmtDebtor = minCollateral - satCollateral[_debtor][_maturity];
@@ -728,16 +693,9 @@ contract options is Ownable {
     function assignPutPosition(address _debtor, address _holder, uint _maturity) internal returns (uint transferAmtDebtor, uint transferAmtHolder) {
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity; //gas savings
-        uint _helperMaturity2 = helperMaturity2; //gas savings
         
         combinePosition(_holder, _maturity, false);
-        (uint minCollateral, uint liabilities) = minSc(_helperAddress, _helperMaturity2, 0,1);
-        strikes[_holder][_maturity] = strikes[_helperAddress][_helperMaturity2];
-        uint size = strikes[_holder][_maturity].length;
-        for (uint i = 0; i < size; i++){
-            uint strike = strikes[_holder][_maturity][i];
-            putAmounts[_holder][_maturity][strike] = putAmounts[_helperAddress][_helperMaturity2][strike];
-        }
+        (uint minCollateral, uint liabilities) = minSc(_holder, _maturity, 0,1);
         
         if (minCollateral > scCollateral[_holder][_maturity])
             transferAmtHolder = minCollateral - scCollateral[_holder][_maturity];
@@ -746,19 +704,13 @@ contract options is Ownable {
         scCollateral[_holder][_maturity] = minCollateral;
         scDeduction[_holder][_maturity] = liabilities - minCollateral;
 
-
         //inverse positions for debtor
-        size = strikes[_helperAddress][_helperMaturity].length;
+        uint size = strikes[_helperAddress][_helperMaturity].length;
         for (uint i = 0; i < size; i++)
             putAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
 
         combinePosition(_debtor, _maturity, false);        
-        (minCollateral, liabilities) = minSc(_helperAddress, _helperMaturity2, 0,1);
-        size = strikes[_debtor][_maturity].length;
-        for (uint i = 0; i < size; i++){
-            uint strike = strikes[_debtor][_maturity][i];
-            putAmounts[_debtor][_maturity][strike] = putAmounts[_helperAddress][_helperMaturity2][strike];
-        }
+        (minCollateral, liabilities) = minSc(_debtor, _maturity, 0,1);
 
         if (minCollateral > scCollateral[_debtor][_maturity])
             transferAmtDebtor = minCollateral - scCollateral[_debtor][_maturity];
