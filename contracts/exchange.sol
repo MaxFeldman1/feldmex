@@ -437,8 +437,7 @@ contract exchange{
             else claimedStable[_seller] += offer.price * offer.amount;
         }
         else if (offer.index < 2){
-            (bool safe, uint transferAmt) = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
-            assert(safe);
+            uint transferAmt = optionsContract.mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
             //redeem difference between expectedAmt and transferAmt and any excess between option premium recieved and expectedAmt
             /*
                 2nd expression in ternary operator simplifies as follows
@@ -448,8 +447,7 @@ contract exchange{
             claimedToken[_seller] += offer.price * offer.amount  >= expectedAmt ? offer.price * offer.amount - transferAmt : expectedAmt-transferAmt;
         }
         else{            
-            (bool safe, uint transferAmt) = optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
-            assert(safe);
+            uint transferAmt = optionsContract.mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
             //redeem difference between expectedAmt and transferAmt and any excess between option premium recieved and expectedAmt
             /*
                 2nd expression in ternary operator simplifies as follows
@@ -519,14 +517,12 @@ contract exchange{
         }
         else if (offer.index < 2){
             uint _satUnitsTimesAmount = offer.amount*satUnits; //gas savings
-            (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, _satUnitsTimesAmount);
-            assert(safe);
+            uint transferAmount = optionsContract.mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, _satUnitsTimesAmount);
             //redeem the seller collateral that was not required
             claimedToken[offer.offerer] += (_satUnitsTimesAmount) - transferAmount;
         }
         else{
-            (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*offer.strike);
-            assert(safe);
+            uint transferAmount = optionsContract.mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*offer.strike);
             //redeem the seller collateral that was not required
             claimedStable[offer.offerer] += (offer.amount * offer.strike) - transferAmount;
         }
@@ -571,8 +567,7 @@ contract exchange{
                     uint expectedAmt = optionsContract.transferAmount(true, msg.sender, offer.maturity, -int(_amount), offer.strike);
                     if (offer.price * _amount < expectedAmt && claimedToken[msg.sender] < expectedAmt - (offer.price * _amount)) return _amount;
                     claimedToken[msg.sender] -= offer.price * _amount >= expectedAmt ? 0 : expectedAmt - offer.price * _amount;
-                    (bool safe, uint transferAmount) = optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
-                    assert(safe);
+                    uint transferAmount = optionsContract.mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     //redeem the seller collateral that was not required
                     //redeem difference between expectedAmt and transferAmt and any excess between option premium recieved and expectedAmt
                     /*
@@ -586,8 +581,7 @@ contract exchange{
                     uint expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(_amount), offer.strike);
                     if (offer.price * _amount < expectedAmt && claimedStable[msg.sender] < expectedAmt - (offer.price * _amount)) return _amount;
                     claimedStable[msg.sender] -= offer.price * _amount >= expectedAmt ? 0 : expectedAmt - offer.price * _amount;
-                    (bool safe, uint transferAmount) = optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
-                    assert(safe);
+                    uint transferAmount = optionsContract.mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, expectedAmt);
                     //redeem the seller collateral that was not required
                     //redeem difference between expectedAmt and transferAmt and any excess between option premium recieved and expectedAmt
                     /*
@@ -645,8 +639,7 @@ contract exchange{
                     if (claimedToken[msg.sender] < offer.price * _amount) return _amount;
                     claimedToken[msg.sender] -= offer.price * _amount;
                     uint limit = _amount*satUnits;
-                    (bool safe, uint transferAmount) = optionsContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
-                    assert(safe);
+                    uint transferAmount = optionsContract.mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
                     //redeem the seller collateral that was not required
                     claimedToken[offer.offerer] += (limit) - transferAmount;
                 }//*
@@ -654,8 +647,7 @@ contract exchange{
                     if (claimedStable[msg.sender] < offer.price * _amount) return _amount;
                     claimedStable[msg.sender] -= offer.price * _amount;
                     uint limit = _amount*offer.strike;
-                    (bool safe, uint transferAmount) = optionsContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
-                    assert(safe);
+                    uint transferAmount = optionsContract.mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
                     //redeem the seller collateral that was not used
                     claimedStable[offer.offerer] += (_amount * _strike) - transferAmount;
                 }

@@ -394,6 +394,7 @@ contract('exchange', async function(accounts) {
 	it('does not require excessive amount of collateral for calls', async () => {
 		newMaturity = 2*maturity;
 		strike = 100;
+		try{
 		await tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount});
 		await tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: defaultAccount});
 		await tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: receiverAccount});
@@ -428,6 +429,7 @@ contract('exchange', async function(accounts) {
 		//second defaultAccount sells back to receiver account
 		await mintHandler.postOrder(newMaturity, strike, price, amount, false, true, {from: receiverAccount});
 		await exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: defaultAccount});
+		} catch(err) {process.exit();}
 	});
 
 	it('does not require excessive amount of collateral for puts', async () => {

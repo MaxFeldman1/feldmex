@@ -153,9 +153,10 @@ contract options is Ownable {
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
-        if (_debtor == _holder) return (true, 0);
-        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
+    function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
+        if (_debtor == _holder) return 0;
+        //require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
+        /*
         //satDeduction == liabilities - minSats
         //minSats == liabilities - satDeduction
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
@@ -167,7 +168,7 @@ contract options is Ownable {
         ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), transferAmt);
         //(success, ) = underlyingAssetAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), transferAmt));
         //if (!success) return (false, 0);
-        satCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSats
+        satCollateral[_debtor][_maturity] = debtorMinSats; // += transferAmt
         claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
         satCollateral[_holder][_maturity] = holderMinSats;
 
@@ -177,6 +178,12 @@ contract options is Ownable {
         callAmounts[_debtor][_maturity][_strike] -= int(_amount);
         callAmounts[_holder][_maturity][_strike] += int(_amount);
         success = true;
+        //*/
+        clearPositions();
+        addPosition(_strike, int(_amount), 0);
+        //address(this).call(abi.encodeWithSignature("assignCallPosition(address,address,uint)"));
+        (transferAmt, ) = assignCallPosition(_debtor, _holder, _maturity);
+        assert(transferAmt <= _maxTransfer);
     }
 
 
@@ -196,9 +203,10 @@ contract options is Ownable {
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of strike asset that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(bool success, uint transferAmt){
-        if (_debtor == _holder) return (true, 0);
-        require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
+    function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
+        if (_debtor == _holder) return 0;
+        //require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
+        /*
         //scDeduction == liabilities - minSc
         //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
         //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
@@ -207,9 +215,10 @@ contract options is Ownable {
 
         transferAmt = debtorMinSc - scCollateral[_debtor][_maturity];
         if (transferAmt > _maxTransfer) return (false, 0);
-        (success, ) = strikeAssetAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), transferAmt));
-        if (!success) return (false, 0);
-        scCollateral[_debtor][_maturity] += transferAmt; // == debtorMinSc
+        ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), transferAmt);
+        //(bool success, ) = strikeAssetAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), transferAmt));
+        //if (!success) return (false, 0);
+        scCollateral[_debtor][_maturity] = debtorMinSc; // += transferAmt
         claimedStable[_holder] += scCollateral[_holder][_maturity] - holderMinSc;
         scCollateral[_holder][_maturity] = holderMinSc;
 
@@ -218,6 +227,14 @@ contract options is Ownable {
 
         putAmounts[_debtor][_maturity][_strike] -= int(_amount);
         putAmounts[_holder][_maturity][_strike] += int(_amount);
+
+        success = true;
+        //*/
+        //*
+        clearPositions();
+        addPosition(_strike, int(_amount), 0);
+        (transferAmt, ) = assignPutPosition(_debtor, _holder, _maturity);
+        assert(transferAmt <= _maxTransfer);
     }
     
     /*
@@ -520,7 +537,6 @@ contract options is Ownable {
         if (_index > 0) require(_strike > strikes[msg.sender][_maturity][_index-1]);
         if (_index < size) require(_strike < strikes[msg.sender][_maturity][_index]);
         strikes[msg.sender][_maturity].push(_strike);
-        if (size == 0) return;
         for (uint i = size-1; i >= _index && i != uint(-1); i--)
             strikes[msg.sender][_maturity][i+1] = strikes[msg.sender][_maturity][i];
         strikes[msg.sender][_maturity][_index] = _strike;
@@ -683,6 +699,171 @@ contract options is Ownable {
     function balanceOf(address _owner, uint _maturity, uint _strike, bool _call) public view returns(int256 balance){
         balance = _call ? callAmounts[_owner][_maturity][_strike] : putAmounts[_owner][_maturity][_strike];
     }
+
+    //---------------------allow for complex positions to have limit orders-----------------
+    //store positions in call/putAmounts[helperAddress][helperMaturity] to allow us to calculate collateral requirements
+    //hashOf(strikesAndAmountsArray) => address of corresponding exchange
+    //mapping(bytes32 => address) hashToAddr;
+    //address[] allAddrs;
+
+    //make helper maturities extremely far out, Dec 4th, 292277026596 A.D
+    /*
+        first helper maturity is where positions are added
+        second helper maturity is where positions are combined with user positions to calculate collateral requirements
+    */
+    uint helperMaturity = 10**20;
+    uint helperMaturity2 = 10**20 + 1;
+
+    address helperAddress = address(0);
+
+    function addPosition(uint _strike, int _amount, uint8 _index) public {
+        require(_strike > 0);
+        address _helperAddress = helperAddress; //gas savings
+        uint _helperMaturity = helperMaturity; //gas savings
+        uint size = strikes[_helperAddress][_helperMaturity].length;
+        require(_index <= size);
+        if (_index > 0) require(_strike > strikes[_helperAddress][_helperMaturity][_index-1]);
+        if (_index < size) require(_strike < strikes[_helperAddress][_helperMaturity][_index]);
+        strikes[_helperAddress][_helperMaturity].push(_strike);
+        for (uint i = size-1; i >= _index && i != uint(-1); i--)
+            strikes[_helperAddress][_helperMaturity][i+1] = strikes[_helperAddress][_helperMaturity][i];
+        strikes[_helperAddress][_helperMaturity][_index] = _strike;
+        callAmounts[_helperAddress][_helperMaturity][_strike] = _amount;
+        putAmounts[_helperAddress][_helperMaturity][_strike] = _amount;
+    }
+
+    function clearPositions() public {
+        delete strikes[helperAddress][helperMaturity];
+    }
+
+
+    function combinePosition(address _addr, uint _maturity) internal {
+        address _helperAddress = helperAddress; //gas savings
+        uint _helperMaturity = helperMaturity; //gas savings
+        uint _helperMaturity2 = helperMaturity2; //gas savings
+        uint size = strikes[_addr][_maturity].length;
+        uint size2 = strikes[_helperAddress][_helperMaturity].length;
+        delete strikes[_helperAddress][_helperMaturity2];
+        //merge sort
+        uint counter1; //counter for strikes[_addr][_maturity]
+        uint counter2; //counter for strikes[_helperAddress][_helperMaturity]
+        while (counter1+counter2< size+size2){
+            if (counter1 == size || (counter2 != size2 && strikes[_addr][_maturity][counter1] > strikes[_helperAddress][_helperMaturity][counter2])){
+                uint strike = strikes[_helperAddress][_helperMaturity][counter2];
+                strikes[_helperAddress][_helperMaturity2].push(strike);
+                callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_helperAddress][_helperMaturity][strike];
+                putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_helperAddress][_helperMaturity][strike];
+                counter2++;
+            }
+            else if (counter2 == size2 || strikes[_addr][_maturity][counter1] < strikes[_helperAddress][_helperMaturity][counter2]) {
+                uint strike = strikes[_addr][_maturity][counter1];
+                strikes[_helperAddress][_helperMaturity2].push(strike);
+                callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_addr][_maturity][strike];
+                putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_addr][_maturity][strike];
+                counter1++;
+            }
+            else /*(strikes[_addr][_maturity][counter1] == strikes[_helperAddress][_helperMaturity][counter2])*/{
+                uint strike = strikes[_helperAddress][_helperMaturity][counter2];
+                strikes[_helperAddress][_helperMaturity2].push(strike);
+                callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_addr][_maturity][strike] + callAmounts[_helperAddress][_helperMaturity][strike];
+                putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_addr][_maturity][strike] + putAmounts[_helperAddress][_helperMaturity][strike];
+                counter1++;
+                counter2++;
+            }
+        }
+    }
+
+
+    function assignCallPosition(address _debtor, address _holder, uint _maturity) internal returns (uint transferAmtDebtor, uint transferAmtHolder) {
+        address _helperAddress = helperAddress; //gas savings
+        uint _helperMaturity = helperMaturity; //gas savings
+        uint _helperMaturity2 = helperMaturity2; //gas savings
+
+        combinePosition(_holder, _maturity);
+        (uint minCollateral, uint liabilities) = minSats(_helperAddress, _helperMaturity2, 0,1);
+        strikes[_holder][_maturity] = strikes[_helperAddress][_helperMaturity2];
+        uint size = strikes[_holder][_maturity].length;
+        for (uint i = 0; i < size; i++){
+            uint strike = strikes[_holder][_maturity][i];
+            callAmounts[_holder][_maturity][strike] = callAmounts[_helperAddress][_helperMaturity2][strike];
+        }
+
+        if (minCollateral > satCollateral[_holder][_maturity])
+            transferAmtHolder = minCollateral - satCollateral[_holder][_maturity];
+        else 
+            claimedTokens[_holder] += satCollateral[_holder][_maturity] - minCollateral;
+        satCollateral[_holder][_maturity] = minCollateral;
+        satDeduction[_holder][_maturity] = liabilities - minCollateral;
+        
+        //inverse positions for debtor
+        size = strikes[_helperAddress][_helperMaturity].length;
+        for (uint i = 0; i < size; i++)
+            callAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
+
+        combinePosition(_debtor, _maturity);        
+        (minCollateral, liabilities) = minSats(_helperAddress, _helperMaturity2, 0,1);
+        size = strikes[_debtor][_maturity].length;
+        for (uint i = 0; i < size; i++){
+            uint strike = strikes[_debtor][_maturity][i];
+            callAmounts[_debtor][_maturity][strike] = callAmounts[_helperAddress][_helperMaturity2][strike];
+        }
+
+        if (minCollateral > satCollateral[_debtor][_maturity])
+            transferAmtDebtor = minCollateral - satCollateral[_debtor][_maturity];
+        else
+            claimedTokens[_debtor] += satCollateral[_debtor][_maturity] - minCollateral;
+        satCollateral[_debtor][_maturity] = minCollateral;
+        satDeduction[_debtor][_maturity] = liabilities - minCollateral;
+
+        ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
+    }
+
+
+    function assignPutPosition(address _debtor, address _holder, uint _maturity) internal returns (uint transferAmtDebtor, uint transferAmtHolder) {
+        address _helperAddress = helperAddress; //gas savings
+        uint _helperMaturity = helperMaturity; //gas savings
+        uint _helperMaturity2 = helperMaturity2; //gas savings
+        
+        combinePosition(_holder, _maturity);
+        (uint minCollateral, uint liabilities) = minSc(_helperAddress, _helperMaturity2, 0,1);
+        strikes[_holder][_maturity] = strikes[_helperAddress][_helperMaturity2];
+        uint size = strikes[_holder][_maturity].length;
+        for (uint i = 0; i < size; i++){
+            uint strike = strikes[_holder][_maturity][i];
+            putAmounts[_holder][_maturity][strike] = putAmounts[_helperAddress][_helperMaturity2][strike];
+        }
+        
+        if (minCollateral > scCollateral[_holder][_maturity])
+            transferAmtHolder = minCollateral - scCollateral[_holder][_maturity];
+        else
+            claimedStable[_holder] += scCollateral[_holder][_maturity] - minCollateral;
+        scCollateral[_holder][_maturity] = minCollateral;
+        scDeduction[_holder][_maturity] = liabilities - minCollateral;
+
+
+        //inverse positions for debtor
+        size = strikes[_helperAddress][_helperMaturity].length;
+        for (uint i = 0; i < size; i++)
+            putAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
+
+        combinePosition(_debtor, _maturity);        
+        (minCollateral, liabilities) = minSc(_helperAddress, _helperMaturity2, 0,1);
+        size = strikes[_debtor][_maturity].length;
+        for (uint i = 0; i < size; i++){
+            uint strike = strikes[_debtor][_maturity][i];
+            putAmounts[_debtor][_maturity][strike] = putAmounts[_helperAddress][_helperMaturity2][strike];
+        }
+
+        if (minCollateral > scCollateral[_debtor][_maturity])
+            transferAmtDebtor = minCollateral - scCollateral[_debtor][_maturity];
+        else
+            claimedStable[_debtor] += scCollateral[_debtor][_maturity] - minCollateral;
+        scCollateral[_debtor][_maturity] = minCollateral;
+        scDeduction[_debtor][_maturity] = liabilities - minCollateral;
+
+        ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
+    }
+
 
     //---------------------view functions---------------
     function viewClaimedTokens() public view returns(uint){return claimedTokens[msg.sender];}
