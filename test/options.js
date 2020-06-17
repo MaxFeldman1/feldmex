@@ -50,8 +50,16 @@ contract('options', async function(accounts){
 			return optionsInstance.mintPut(debtor, holder, maturity, strike*inflator, amount, limit, params);
 		};
 		inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
-		inflatorObj.transfer = (to, value, maturity, strike, maxTransfer, callPut, params) => {return optionsInstance.transfer(to, value, maturity, strike*inflator, maxTransfer, callPut, params);};
-		inflatorObj.transferFrom = (from, to, value, maturity, strike, maxTransfer, callPut, params) => {return optionsInstance.transferFrom(from, to, value, maturity, strike*inflator, maxTransfer, callPut, params);};
+		inflatorObj.transfer = async (to, value, maturity, strike, maxTransfer, callPut, params) => {
+			await addStrike(to, maturity, strike);
+			await addStrike(params.from, maturity, strike);
+			return optionsInstance.transfer(to, value, maturity, strike*inflator, maxTransfer, callPut, params);
+		};
+		inflatorObj.transferFrom = async (from, to, value, maturity, strike, maxTransfer, callPut, params) => {
+			await addStrike(to, maturity, strike);
+			await addStrike(from, maturity, strike);
+			return optionsInstance.transferFrom(from, to, value, maturity, strike*inflator, maxTransfer, callPut, params);
+		};
 		inflatorObj.approve = (spender, value, maturity, strike, callPut, params) => {return optionsInstance.approve(spender, value, maturity, strike*inflator, callPut, params);};
 	});
 
@@ -166,7 +174,6 @@ contract('options', async function(accounts){
 		await optionsInstance.depositFunds(1000*satUnits, 1000*strike*scUnits, {from: debtor});
 		amount = 10;
 		//debtor must accept transfers on a strike before recieving them
-		await addStrike(debtor, maturity, strike);
 		await inflatorObj.transfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, true)).toNumber(), amount, "correct amount for the debtor");
 		assert.equal((await inflatorObj.balanceOf(defaultAccount, maturity, strike, true)).toNumber(), -amount, "correct amount for the defaultAccount");
@@ -178,7 +185,6 @@ contract('options', async function(accounts){
 		newStrike = strike+10;
 		await inflatorObj.approve(defaultAccount, amount, maturity, newStrike, false, {from: debtor});
 		//defaultAccount must accept transfers on a strike before recieving them
-		await addStrike(defaultAccount, maturity, newStrike);
 		await inflatorObj.transferFrom(debtor, defaultAccount, amount, maturity, newStrike, amount*newStrike*scUnits, false, {from: defaultAccount});
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, false)).toNumber(), amount, "correct put balance at strike "+strike+" for "+debtor);
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, newStrike, false)).toNumber(), -amount, "correct put balance at strike "+newStrike+" for "+debtor);

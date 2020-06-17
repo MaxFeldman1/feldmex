@@ -155,33 +155,10 @@ contract options is Ownable {
     */
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
         if (_debtor == _holder) return 0;
-        //require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
-        /*
-        //satDeduction == liabilities - minSats
-        //minSats == liabilities - satDeduction
-        //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
-        (uint debtorMinSats, uint debtorLiabilities) = minSats(_debtor, _maturity, -int(_amount), _strike);
-        (uint holderMinSats, uint holderLiabilities) = minSats(_holder, _maturity, int(_amount), _strike);
-
-        transferAmt = debtorMinSats - satCollateral[_debtor][_maturity];
-        if (transferAmt > _maxTransfer) return(false, 0);
-        ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), transferAmt);
-        //(success, ) = underlyingAssetAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), transferAmt));
-        //if (!success) return (false, 0);
-        satCollateral[_debtor][_maturity] = debtorMinSats; // += transferAmt
-        claimedTokens[_holder] += satCollateral[_holder][_maturity] - holderMinSats;
-        satCollateral[_holder][_maturity] = holderMinSats;
-
-        satDeduction[_debtor][_maturity] = debtorLiabilities-debtorMinSats;
-        satDeduction[_holder][_maturity] = holderLiabilities-holderMinSats;
-
-        callAmounts[_debtor][_maturity][_strike] -= int(_amount);
-        callAmounts[_holder][_maturity][_strike] += int(_amount);
-        success = true;
-        //*/
         clearPositions();
         addPosition(_strike, int(_amount), 0, true);
-        //address(this).call(abi.encodeWithSignature("assignCallPosition(address,address,uint)"));
+        useDeposits[msg.sender] = false;
+        //setUseDeposits(false);
         (transferAmt, ) = assignCallPosition(_debtor, _holder, _maturity);
         assert(transferAmt <= _maxTransfer);
     }
@@ -205,34 +182,10 @@ contract options is Ownable {
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
         if (_debtor == _holder) return 0;
-        //require(_strike != 0 && contains(_debtor, _maturity, _strike) && contains(_holder, _maturity, _strike));
-        /*
-        //scDeduction == liabilities - minSc
-        //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
-        //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
-        (uint debtorMinSc, uint debtorLiabilities) = minSc(_debtor, _maturity, -int(_amount), _strike);
-        (uint holderMinSc, uint holderLiabilities) = minSc(_holder, _maturity, int(_amount), _strike);
-
-        transferAmt = debtorMinSc - scCollateral[_debtor][_maturity];
-        if (transferAmt > _maxTransfer) return (false, 0);
-        ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), transferAmt);
-        //(bool success, ) = strikeAssetAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), transferAmt));
-        //if (!success) return (false, 0);
-        scCollateral[_debtor][_maturity] = debtorMinSc; // += transferAmt
-        claimedStable[_holder] += scCollateral[_holder][_maturity] - holderMinSc;
-        scCollateral[_holder][_maturity] = holderMinSc;
-
-        scDeduction[_debtor][_maturity] = debtorLiabilities-debtorMinSc;
-        scDeduction[_holder][_maturity] = holderLiabilities-holderMinSc;
-
-        putAmounts[_debtor][_maturity][_strike] -= int(_amount);
-        putAmounts[_holder][_maturity][_strike] += int(_amount);
-
-        success = true;
-        //*/
-        //*
         clearPositions();
         addPosition(_strike, int(_amount), 0, false);
+        useDeposits[msg.sender] = false;
+        //setUseDeposits(false);
         (transferAmt, ) = assignPutPosition(_debtor, _holder, _maturity);
         assert(transferAmt <= _maxTransfer);
     }
@@ -597,79 +550,17 @@ contract options is Ownable {
     
     //approver => spender => strike => amount of puts
     mapping(address => mapping(address => mapping(uint => mapping(uint => uint)))) putAllowance;
-    
-    string public name = "Feldmex";
 
-    /*
-        the total supply will always be zero as all long positions(positive values) are canceled out by all short positions(negative values)
-        this applys for both calls and puts at all maturities and strikes
-    */
-
-    uint256 public totalSupply = 0;
-    
-    /*
-        @Description: this function takes from claimedTokens[msg.sender] as the source of needed collateral instead of calling transferFrom
-            which would take the funds from msg.sender directly
-            msg.sender needs to have sufficent funds deposited in this contract before calling this function
-
-    */
-    function transferCall(address _from, address _to, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns(bool success, uint transferAmt){
-        if (_from == _to || _amount == 0) return (true, 0);
-        //satDeduction == liabilities - minSats
-        //minSats == liabilities - satDeduction
-        //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*satUnits)
-        (uint debtorMinSats, uint debtorLiabilities) = minSats(_from, _maturity, -int(_amount), _strike);
-        (uint toMinSats, uint toLiabilities) = minSats(_to, _maturity, int(_amount), _strike);
-
-        transferAmt = debtorMinSats - satCollateral[_from][_maturity];
-        if (transferAmt > _maxTransfer || claimedTokens[_from] < transferAmt) return(false, 0);
-        claimedTokens[_from] -= transferAmt;
-        satCollateral[_from][_maturity] += transferAmt; // == debtorMinSats
-        
-        claimedTokens[_to] += satCollateral[_to][_maturity] - toMinSats;
-        satCollateral[_to][_maturity] = toMinSats;
-
-        satDeduction[_from][_maturity] = debtorLiabilities-debtorMinSats;
-        satDeduction[_to][_maturity] = toLiabilities-toMinSats;
-
-        callAmounts[_from][_maturity][_strike] -= int(_amount);
-        callAmounts[_to][_maturity][_strike] += int(_amount);
-        
-        containsStrike(_from, _maturity, _strike, true, false);
-        success = true;
-    }
-
-    function transferPut(address _from, address _to, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns(bool success, uint transferAmt){
-        if (_from == _to || _amount == 0) return (true, 0);
-        //scDeduction == liabilities - minSc
-        //minSc == liabilities - ssDeductionuint debtorMinSc = minSc(_debtor, _maturity, -int(_amount), _strike);
-        //the previous liabilities amount for the debtor is debtorLiabilities-(_amount*scUnits)
-        (uint debtorMinSc, uint debtorLiabilities) = minSc(_from, _maturity, -int(_amount), _strike);
-        (uint toMinSc, uint toLiabilities) = minSc(_to, _maturity, int(_amount), _strike);
-
-        transferAmt = debtorMinSc - scCollateral[_from][_maturity];
-        if (transferAmt > _maxTransfer || claimedStable[_from] < transferAmt) return (false, 0);
-        claimedStable[_from] -= transferAmt;
-        scCollateral[_from][_maturity] += transferAmt; // == debtorMinSc
-
-        claimedStable[_to] += scCollateral[_to][_maturity] - toMinSc;
-        scCollateral[_to][_maturity] = toMinSc;
-
-        scDeduction[_from][_maturity] = debtorLiabilities-debtorMinSc;
-        scDeduction[_to][_maturity] = toLiabilities-toMinSc;
-
-        putAmounts[_from][_maturity][_strike] -= int(_amount);
-        putAmounts[_to][_maturity][_strike] += int(_amount);
-        
-        containsStrike(_from, _maturity, _strike, true, false);
-        success = true;
-    }
-
-    function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        require(_strike != 0 && contains(_to, _maturity, _strike));
+    function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(uint transferAmt){
+        clearPositions();
+        addPosition(_strike, int(_value), 0, _call);
+        useDeposits[msg.sender] = true;
+        if (_call)
+            (transferAmt, ) = assignCallPosition(msg.sender, _to, _maturity);
+        else
+            (transferAmt, ) = assignPutPosition(msg.sender, _to, _maturity); 
+        assert(transferAmt <= _maxTransfer);
         emit Transfer(msg.sender, _to, _value, _maturity, _strike, _call);
-        if (_call) return transferCall(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
-        return transferPut(msg.sender, _to, _maturity, _strike, _value, _maxTransfer);
     }
 
     function approve(address _spender, uint256 _value, uint _maturity, uint _strike, bool _call) public returns(bool success){
@@ -680,16 +571,21 @@ contract options is Ownable {
         success = true;
     }
 
-    function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(bool success, uint transferAmt){
-        require(_strike != 0 && contains(_to, _maturity, _strike));
+    function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(uint transferAmt){
         require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
-        emit Transfer(_from, _to, _value, _maturity, _strike, _call);
+        clearPositions();
+        addPosition(_strike, int(_value), 0, _call);
+        useDeposits[msg.sender] = true;
         if (_call) {
             callAllowance[_from][msg.sender][_maturity][_strike] -= _value;
-            return transferCall(_from, _to, _maturity, _strike, _value, _maxTransfer);
+            (transferAmt, ) = assignCallPosition(_from, _to, _maturity);
         }
-        putAllowance[_from][msg.sender][_maturity][_strike] -= _value;
-        return transferPut(_from, _to, _maturity, _strike, _value, _maxTransfer);
+        else {
+            putAllowance[_from][msg.sender][_maturity][_strike] -= _value;
+            (transferAmt, ) = assignPutPosition(_from, _to, _maturity);
+        }
+        assert(transferAmt <= _maxTransfer);
+        emit Transfer(_from, _to, _value, _maturity, _strike, _call);
     }
 
     function allowance(address _owner, address _spender, uint _maturity, uint _strike, bool _call) public view returns(uint256 remaining){
@@ -772,6 +668,13 @@ contract options is Ownable {
         }
     }
 
+    /*
+        when true funds are taken from claimedToken and claimedSc reserves to meet collateral requirements
+        when false funds are transfered from the address to this contract to meet collateral requirements
+    */
+    mapping(address => bool) public useDeposits;
+    function setUseDeposits(bool _set) public {useDeposits[msg.sender] = _set;}
+
 
     function assignCallPosition(address _debtor, address _holder, uint _maturity) internal returns (uint transferAmtDebtor, uint transferAmtHolder) {
         address _helperAddress = helperAddress; //gas savings
@@ -813,8 +716,12 @@ contract options is Ownable {
             claimedTokens[_debtor] += satCollateral[_debtor][_maturity] - minCollateral;
         satCollateral[_debtor][_maturity] = minCollateral;
         satDeduction[_debtor][_maturity] = liabilities - minCollateral;
-
-        ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
+        if (useDeposits[msg.sender]){
+            assert(claimedTokens[msg.sender] > transferAmtHolder+transferAmtDebtor);
+            claimedTokens[msg.sender] -= transferAmtHolder+transferAmtDebtor;
+        }
+        else
+            ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
     }
 
 
@@ -859,8 +766,12 @@ contract options is Ownable {
             claimedStable[_debtor] += scCollateral[_debtor][_maturity] - minCollateral;
         scCollateral[_debtor][_maturity] = minCollateral;
         scDeduction[_debtor][_maturity] = liabilities - minCollateral;
-
-        ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
+        if (useDeposits[msg.sender]){
+            assert(claimedStable[msg.sender] > transferAmtHolder+transferAmtDebtor);
+            claimedStable[msg.sender] -= transferAmtHolder+transferAmtDebtor;
+        }
+        else 
+            ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
     }
 
 
