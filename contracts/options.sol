@@ -180,7 +180,7 @@ contract options is Ownable {
         success = true;
         //*/
         clearPositions();
-        addPosition(_strike, int(_amount), 0);
+        addPosition(_strike, int(_amount), 0, true);
         //address(this).call(abi.encodeWithSignature("assignCallPosition(address,address,uint)"));
         (transferAmt, ) = assignCallPosition(_debtor, _holder, _maturity);
         assert(transferAmt <= _maxTransfer);
@@ -232,7 +232,7 @@ contract options is Ownable {
         //*/
         //*
         clearPositions();
-        addPosition(_strike, int(_amount), 0);
+        addPosition(_strike, int(_amount), 0, false);
         (transferAmt, ) = assignPutPosition(_debtor, _holder, _maturity);
         assert(transferAmt <= _maxTransfer);
     }
@@ -702,9 +702,6 @@ contract options is Ownable {
 
     //---------------------allow for complex positions to have limit orders-----------------
     //store positions in call/putAmounts[helperAddress][helperMaturity] to allow us to calculate collateral requirements
-    //hashOf(strikesAndAmountsArray) => address of corresponding exchange
-    //mapping(bytes32 => address) hashToAddr;
-    //address[] allAddrs;
 
     //make helper maturities extremely far out, Dec 4th, 292277026596 A.D
     /*
@@ -716,7 +713,7 @@ contract options is Ownable {
 
     address helperAddress = address(0);
 
-    function addPosition(uint _strike, int _amount, uint8 _index) public {
+    function addPosition(uint _strike, int _amount, uint8 _index, bool _call) public {
         require(_strike > 0);
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity; //gas savings
@@ -728,8 +725,10 @@ contract options is Ownable {
         for (uint i = size-1; i >= _index && i != uint(-1); i--)
             strikes[_helperAddress][_helperMaturity][i+1] = strikes[_helperAddress][_helperMaturity][i];
         strikes[_helperAddress][_helperMaturity][_index] = _strike;
-        callAmounts[_helperAddress][_helperMaturity][_strike] = _amount;
-        putAmounts[_helperAddress][_helperMaturity][_strike] = _amount;
+        if (_call)
+            callAmounts[_helperAddress][_helperMaturity][_strike] = _amount;
+        else
+            putAmounts[_helperAddress][_helperMaturity][_strike] = _amount;
     }
 
     function clearPositions() public {
@@ -737,7 +736,7 @@ contract options is Ownable {
     }
 
 
-    function combinePosition(address _addr, uint _maturity) internal {
+    function combinePosition(address _addr, uint _maturity, bool _call) internal {
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity; //gas savings
         uint _helperMaturity2 = helperMaturity2; //gas savings
@@ -748,27 +747,27 @@ contract options is Ownable {
         uint counter1; //counter for strikes[_addr][_maturity]
         uint counter2; //counter for strikes[_helperAddress][_helperMaturity]
         while (counter1+counter2< size+size2){
-            if (counter1 == size || (counter2 != size2 && strikes[_addr][_maturity][counter1] > strikes[_helperAddress][_helperMaturity][counter2])){
-                uint strike = strikes[_helperAddress][_helperMaturity][counter2];
-                strikes[_helperAddress][_helperMaturity2].push(strike);
-                callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_helperAddress][_helperMaturity][strike];
-                putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_helperAddress][_helperMaturity][strike];
-                counter2++;
-            }
-            else if (counter2 == size2 || strikes[_addr][_maturity][counter1] < strikes[_helperAddress][_helperMaturity][counter2]) {
+            if (counter2 == size2 || strikes[_addr][_maturity][counter1] < strikes[_helperAddress][_helperMaturity][counter2]) {
                 uint strike = strikes[_addr][_maturity][counter1];
                 strikes[_helperAddress][_helperMaturity2].push(strike);
-                callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_addr][_maturity][strike];
-                putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_addr][_maturity][strike];
+                if (_call)
+                    callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_addr][_maturity][strike];
+                else
+                    putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_addr][_maturity][strike];
                 counter1++;
             }
-            else /*(strikes[_addr][_maturity][counter1] == strikes[_helperAddress][_helperMaturity][counter2])*/{
+            else if (strikes[_addr][_maturity][counter1] == strikes[_helperAddress][_helperMaturity][counter2]){
                 uint strike = strikes[_helperAddress][_helperMaturity][counter2];
                 strikes[_helperAddress][_helperMaturity2].push(strike);
-                callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_addr][_maturity][strike] + callAmounts[_helperAddress][_helperMaturity][strike];
-                putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_addr][_maturity][strike] + putAmounts[_helperAddress][_helperMaturity][strike];
+                if (_call)
+                   callAmounts[_helperAddress][_helperMaturity2][strike] = callAmounts[_addr][_maturity][strike] + callAmounts[_helperAddress][_helperMaturity][strike];
+                else
+                    putAmounts[_helperAddress][_helperMaturity2][strike] = putAmounts[_addr][_maturity][strike] + putAmounts[_helperAddress][_helperMaturity][strike];
                 counter1++;
                 counter2++;
+            } else {
+                //this block will not be hit unless a strike in strikes[_helperAddress][_helperMaturity] has not been added to strikes[_addr][_maturity]
+                revert();
             }
         }
     }
@@ -779,7 +778,7 @@ contract options is Ownable {
         uint _helperMaturity = helperMaturity; //gas savings
         uint _helperMaturity2 = helperMaturity2; //gas savings
 
-        combinePosition(_holder, _maturity);
+        combinePosition(_holder, _maturity, true);
         (uint minCollateral, uint liabilities) = minSats(_helperAddress, _helperMaturity2, 0,1);
         strikes[_holder][_maturity] = strikes[_helperAddress][_helperMaturity2];
         uint size = strikes[_holder][_maturity].length;
@@ -800,7 +799,7 @@ contract options is Ownable {
         for (uint i = 0; i < size; i++)
             callAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
 
-        combinePosition(_debtor, _maturity);        
+        combinePosition(_debtor, _maturity, true);        
         (minCollateral, liabilities) = minSats(_helperAddress, _helperMaturity2, 0,1);
         size = strikes[_debtor][_maturity].length;
         for (uint i = 0; i < size; i++){
@@ -824,7 +823,7 @@ contract options is Ownable {
         uint _helperMaturity = helperMaturity; //gas savings
         uint _helperMaturity2 = helperMaturity2; //gas savings
         
-        combinePosition(_holder, _maturity);
+        combinePosition(_holder, _maturity, false);
         (uint minCollateral, uint liabilities) = minSc(_helperAddress, _helperMaturity2, 0,1);
         strikes[_holder][_maturity] = strikes[_helperAddress][_helperMaturity2];
         uint size = strikes[_holder][_maturity].length;
@@ -846,7 +845,7 @@ contract options is Ownable {
         for (uint i = 0; i < size; i++)
             putAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
 
-        combinePosition(_debtor, _maturity);        
+        combinePosition(_debtor, _maturity, false);        
         (minCollateral, liabilities) = minSc(_helperAddress, _helperMaturity2, 0,1);
         size = strikes[_debtor][_maturity].length;
         for (uint i = 0; i < size; i++){
