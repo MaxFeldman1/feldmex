@@ -357,24 +357,14 @@ contract options is Ownable {
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in the underlying
         @return uint: sum of all short call positions multiplied by satUnits
     */
-    function minSats(address _addr, uint _maturity, int _amount, uint _strike) internal view returns (uint minCollateral, uint liabilities) {
+    function minSats(address _addr, uint _maturity) internal view returns (uint minCollateral, uint liabilities) {
         uint _satUnits = satUnits; //gas savings
         int delta = 0;
         int value = 0;
         uint prevStrike;
-        bool hit = false;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
             uint strike = strikes[_addr][_maturity][i];
             int amt = callAmounts[_addr][_maturity][strike];
-            if (!hit && _strike <= strike) {
-                if (_strike < strike){
-                    strike = _strike;
-                    amt = _amount;
-                    i--;
-                } else
-                    amt += _amount;
-                hit = true;
-            }
             //placeHolder for numerator 
             prevStrike = uint(delta * int(_satUnits * (strike-prevStrike)));
             value += int(prevStrike) / int(strike);
@@ -384,15 +374,6 @@ contract options is Ownable {
             prevStrike = strike;
             if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
             if (amt < 0) liabilities+=uint(-amt);
-        }
-        if (!hit) {
-            prevStrike = uint(delta * int(_satUnits * (_strike-prevStrike)));
-            value += int(prevStrike) / int(_strike);
-            //in solidity integer division rounds up when result is negative, counteract this
-            if (delta < 0 && uint(-int(prevStrike))%_strike != 0) value--;
-            delta += _amount;
-            if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
-            if (_amount < 0) liabilities+=uint(-_amount);
         }
         //value at inf
         value = int(_satUnits)*delta;
@@ -412,36 +393,19 @@ contract options is Ownable {
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in strike asset
         @return uint: negative value denominated in scUnits of all short put postions at a spot price of 0
     */
-    function minSc(address _addr, uint _maturity, int _amount, uint _strike) internal view returns(uint minCollateral, uint liabilities){
+    function minSc(address _addr, uint _maturity) internal view returns(uint minCollateral, uint liabilities){
         int delta = 0;
         int value = 0;
         uint prevStrike;
-        bool hit = false;
         uint lastIndex = strikes[_addr][_maturity].length-1;
         for(uint i = lastIndex; i != uint(-1); i--) {
             uint strike = strikes[_addr][_maturity][i];
             int amt = putAmounts[_addr][_maturity][strike];
-            if (!hit && _strike >= strike) {
-                if (_strike > strike){
-                    strike = _strike;
-                    amt = _amount;
-                    i++;                    
-                } else
-                    amt += _amount;
-                hit = true;
-            }
             value += delta * int(prevStrike-strike);
             delta += amt;
             prevStrike = strike;
             if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
             if (amt < 0) liabilities+=uint(-amt)*strike;
-        }
-        if (!hit) {
-            value += delta * int(prevStrike-_strike);
-            delta += _amount;
-            prevStrike = _strike;
-            if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
-            if (_amount < 0) liabilities+=uint(-_amount)*_strike;
         }
         //value at 0
         value += delta * int(prevStrike);
@@ -460,16 +424,22 @@ contract options is Ownable {
 
         @return uint: the amount of satUnits or scUnits that must be sent as collateral for the order described to go through
     */
-    function transferAmount(bool _call, address _addr, uint _maturity, int _amount, uint _strike) public view returns (uint value){
+    function transferAmount(bool _call, address _addr, uint _maturity, int _amount, uint _strike) public returns (uint value){
         require(msg.sender == _addr || msg.sender == exchangeAddress);
         if (_amount >= 0) return 0;
         if (_call){
-            (uint minCollateral, ) = minSats(_addr, _maturity, _amount, _strike);
+            int amt = callAmounts[_addr][_maturity][_strike];
+            callAmounts[_addr][_maturity][_strike] += _amount;
+            (uint minCollateral, ) = minSats(_addr, _maturity);
             value = minCollateral-satCollateral[_addr][_maturity];
+            callAmounts[_addr][_maturity][_strike] = amt;
         }
         else {
-            (uint minCollateral, ) = minSc(_addr, _maturity, _amount, _strike);
+            int amt = putAmounts[_addr][_maturity][_strike];
+            putAmounts[_addr][_maturity][_strike] += _amount;
+            (uint minCollateral, ) = minSc(_addr, _maturity);
             value = minCollateral-scCollateral[_addr][_maturity];
+            putAmounts[_addr][_maturity][_strike] = amt;
         }
     }
 
@@ -494,36 +464,6 @@ contract options is Ownable {
             strikes[msg.sender][_maturity][i+1] = strikes[msg.sender][_maturity][i];
         strikes[msg.sender][_maturity][_index] = _strike;
     }
-
-
-    /*
-        @Description: used to tell if strikes[givenAddress][givenMaturiy] contains a given strike
-
-        @param address _addr: the address in question
-        @param uint _maturity: the maturity in question
-        @param uint _strike: the strike in question
-        @param bool _push: if the strike is not contained then it will be added to strikes
-        @param bool _remove: if the strike is contained then it will be removed
-
-        @return bool: returns true if _maturity is contained in maturities
-        @return uint: if bool returns true this is set to the index at which the maturitiy is contained
-    */
-    function containsStrike(address _addr, uint _maturity, uint _strike, bool _push, bool _remove) internal returns(bool contained, uint index){
-        uint length = strikes[_addr][_maturity].length; //gas savings
-        for (index = 0; index < length; index++){
-            if (strikes[_addr][_maturity][index] == _strike){
-                if (_remove){
-                    uint temp = strikes[_addr][_maturity][length-1];
-                    strikes[_addr][_maturity][index] = temp;
-                    delete strikes[_addr][_maturity][length-1];
-                }
-                return (true, index);
-            }
-        }
-        if (_push) strikes[_addr][_maturity].push(_strike);
-        index = 0;
-    }
-
 
     //------------------------------------------------------------------------------------E-R-C---2-0---I-m-p-l-e-m-e-n-t-a-t-i-o-n---------------------------
     
@@ -624,6 +564,27 @@ contract options is Ownable {
         delete strikes[helperAddress][helperMaturity];
     }
 
+    function inversePosition(bool _call) internal {
+        address _helperAddress = helperAddress;
+        uint _helperMaturity = helperMaturity;
+        uint size = strikes[_helperAddress][_helperMaturity].length;
+        if (_call){
+            for (uint i = 0; i < size; i++)
+                callAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
+        } else {
+            for (uint i = 0; i < size; i++)
+                putAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
+        }
+    }
+
+
+    function transferAmountPosition(address _addr, uint _maturity, bool _call) public returns (uint value) {
+        combinePosition(_addr, _maturity, _call);
+        (uint minCollateral, ) = _call ? minSats(_addr, _maturity) : minSc(_addr, _maturity);
+        value = minCollateral - (_call ? satCollateral : scCollateral)[_addr][_maturity];
+        inversePosition(_call);
+        combinePosition(_addr, _maturity, _call);        
+    }
 
     function combinePosition(address _addr, uint _maturity, bool _call) internal {
         address _helperAddress = helperAddress; //gas savings
@@ -654,11 +615,8 @@ contract options is Ownable {
 
 
     function assignCallPosition(address _debtor, address _holder, uint _maturity) internal returns (uint transferAmtDebtor, uint transferAmtHolder) {
-        address _helperAddress = helperAddress; //gas savings
-        uint _helperMaturity = helperMaturity; //gas savings
-
         combinePosition(_holder, _maturity, true);
-        (uint minCollateral, uint liabilities) = minSats(_holder, _maturity, 0,1);
+        (uint minCollateral, uint liabilities) = minSats(_holder, _maturity);
 
         if (minCollateral > satCollateral[_holder][_maturity])
             transferAmtHolder = minCollateral - satCollateral[_holder][_maturity];
@@ -667,13 +625,10 @@ contract options is Ownable {
         satCollateral[_holder][_maturity] = minCollateral;
         satDeduction[_holder][_maturity] = liabilities - minCollateral;
         
-        //inverse positions for debtor
-        uint size = strikes[_helperAddress][_helperMaturity].length;
-        for (uint i = 0; i < size; i++)
-            callAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
+        inversePosition(true);
 
         combinePosition(_debtor, _maturity, true);        
-        (minCollateral, liabilities) = minSats(_debtor, _maturity, 0,1);
+        (minCollateral, liabilities) = minSats(_debtor, _maturity);
 
         if (minCollateral > satCollateral[_debtor][_maturity])
             transferAmtDebtor = minCollateral - satCollateral[_debtor][_maturity];
@@ -691,11 +646,8 @@ contract options is Ownable {
 
 
     function assignPutPosition(address _debtor, address _holder, uint _maturity) internal returns (uint transferAmtDebtor, uint transferAmtHolder) {
-        address _helperAddress = helperAddress; //gas savings
-        uint _helperMaturity = helperMaturity; //gas savings
-        
         combinePosition(_holder, _maturity, false);
-        (uint minCollateral, uint liabilities) = minSc(_holder, _maturity, 0,1);
+        (uint minCollateral, uint liabilities) = minSc(_holder, _maturity);
         
         if (minCollateral > scCollateral[_holder][_maturity])
             transferAmtHolder = minCollateral - scCollateral[_holder][_maturity];
@@ -705,12 +657,10 @@ contract options is Ownable {
         scDeduction[_holder][_maturity] = liabilities - minCollateral;
 
         //inverse positions for debtor
-        uint size = strikes[_helperAddress][_helperMaturity].length;
-        for (uint i = 0; i < size; i++)
-            putAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
+        inversePosition(false);
 
         combinePosition(_debtor, _maturity, false);        
-        (minCollateral, liabilities) = minSc(_debtor, _maturity, 0,1);
+        (minCollateral, liabilities) = minSc(_debtor, _maturity);
 
         if (minCollateral > scCollateral[_debtor][_maturity])
             transferAmtDebtor = minCollateral - scCollateral[_debtor][_maturity];
