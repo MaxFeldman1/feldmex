@@ -138,59 +138,6 @@ contract options is Ownable {
     mapping(address => mapping(uint => uint)) scDeduction;
 
     /*
-        @Description: handles the logistics of creating a long call position for the holder and short call position for the debtor
-            collateral is given by the sender of this transaction who must have already approved this contract to spend on their behalf
-            the sender of this transaction does not nessecarially need to be debtor or holder as the sender provides the needed collateral this cannot harm either the debtor or holder
-
-        @param address _debtor: the address that collateral posted here will be associated with and the for which the call will be considered a liability
-        @param address _holder: the address that owns the right to the value of the option contract at the maturity
-        @param uint _maturity: the evm and unix timestamp at which the call contract matures and settles
-        @param uint _strike: the spot price of the underlying in terms of the strike asset at which this option contract settles at the maturity timestamp
-        @param uint _amount: the amount of calls that the debtor is adding as short and the holder is adding as long
-        @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in satUnits
-            if this limit needs to be broken to mint the call the transaction will return (true, 0)
-
-        @return bool success: if an error occurs returns false if no error return true
-        @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
-    *//*
-    function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
-        if (_debtor == _holder) return 0;
-        clearPositions();
-        addPosition(_strike, int(_amount), true);
-        useDeposits[msg.sender] = false;
-        //setUseDeposits(false);
-        (transferAmt, ) = assignCallPosition(_debtor, _holder, _maturity);
-        assert(transferAmt <= _maxTransfer);
-    }
-
-
-    /*
-        @Description: handles the logistics of creating a long put position for the holder and short put position for the debtor
-            collateral is given by the sender of this transaction who must have already approved this contract to spend on their behalf
-            the sender of this transaction does not nessecarially need to be debtor or holder as the sender provides the needed collateral this cannot harm either the debtor or holder
-
-        @param address _debtor: the address that collateral posted here will be associated with and the for which the put will be considered a liability
-        @param address _holder: the address that owns the right to the value of the option contract at the maturity
-        @param uint _maturity: the evm and unix timestamp at which the put contract matures and settles
-        @param uint _strike: the spot price of the underlying in terms of the strike asset at which this option contract settles at the maturity timestamp
-        @param uint _amount: the amount of puts that the debtor is adding as short and the holder is adding as long
-        @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in scUnits
-            if this limit needs to be broken to mint the put the transaction will return (false, 0)
-
-        @return bool success: if an error occurs returns false if no error return true
-        @return uint transferAmt: returns the amount of strike asset that was transfered from the message sender to act as collateral for the debtor
-    *//*
-    function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
-        if (_debtor == _holder) return 0;
-        clearPositions();
-        addPosition(_strike, int(_amount), false);
-        useDeposits[msg.sender] = false;
-        //setUseDeposits(false);
-        (transferAmt, ) = assignPutPosition(_debtor, _holder, _maturity);
-        assert(transferAmt <= _maxTransfer);
-    }
-    
-    /*
         @Description: after the maturity holders of contracts to claim the value of the contracts and allows debtors to claim the unused collateral
 
         @pram uint _maturity: the maturity that the sender of this transaction is attempting to claim rewards from
@@ -538,11 +485,17 @@ contract options is Ownable {
 
     //---------------------allow for complex positions to have limit orders-----------------
     //store positions in call/putAmounts[helperAddress][helperMaturity] to allow us to calculate collateral requirements
-
     //make helper maturities extremely far out, Dec 4th, 292277026596 A.D
     uint helperMaturity = 10**20;
     address helperAddress = address(0);
 
+    /*
+        @Description: add a strike to strikes[helperAddress][helperMaturity] and an amount to either callAmounts or putAmounts
+
+        @param uint _strike: the strike of the position in question
+        @param int _amount: the amount of the position in question
+        @param bool _call: true if the position is for calls false if it is for puts
+    */
     function addPosition(uint _strike, int _amount, bool _call) public {
         require(_strike > 0);
         address _helperAddress = helperAddress; //gas savings
@@ -556,10 +509,18 @@ contract options is Ownable {
             putAmounts[_helperAddress][_helperMaturity][_strike] = _amount;
     }
 
+    /*
+        @Description: deletes strikes[helperAddress][helperMaturity]
+    */
     function clearPositions() public {
         delete strikes[helperAddress][helperMaturity];
     }
 
+    /*
+        @Description: multiplies all call/put Amounts by -1
+
+        @param bool _call: true if the position is for calls false if it is for puts
+    */
     function inversePosition(bool _call) internal {
         address _helperAddress = helperAddress;
         uint _helperMaturity = helperMaturity;
@@ -573,7 +534,13 @@ contract options is Ownable {
         }
     }
 
+    /*
+        @Description:finds the amount of collateral needed for an address to take on a position
 
+        @param address _addr: the address of the account for which to find collateral requirements
+        @param uint _maturity: the maturity for which to find collateral requirements
+        @param bool _call: true if the position is for calls false if it is for puts
+    */
     function transferAmountPosition(address _addr, uint _maturity, bool _call) public returns (uint value) {
         combinePosition(_addr, _maturity, _call);
         (uint minCollateral, ) = _call ? minSats(_addr, _maturity) : minSc(_addr, _maturity);
@@ -582,6 +549,13 @@ contract options is Ownable {
         combinePosition(_addr, _maturity, _call);        
     }
 
+    /*
+        @Description: combine position stored at helperAddress at helperMaturity with another address at a specified maturity
+
+        @param address _addr: the address of the account for which to combine the position stored at helperAddress at helperMaturity
+        @param uint _maturity: the maturity for which to combine the position stored at helperAddress at helperMaturity
+        @param bool _call: true if the position is for calls false if it is for puts        
+    */
     function combinePosition(address _addr, uint _maturity, bool _call) internal {
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity; //gas savings
@@ -609,7 +583,14 @@ contract options is Ownable {
     mapping(address => bool) public useDeposits;
     function setUseDeposits(bool _set) public {useDeposits[msg.sender] = _set;}
 
+    /*
+        @Description: assign the call position stored at helperAddress at helperMaturity to a specitied address
+            and assign the inverse to another specified address
 
+        @param address _debtor: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
+        @param address _holder: the address that will gain the opposide payoff profile of the position stored at helperAddress at helperMaturity
+        @param uint _maturity: the timestamp at which the calls may be exercised
+    */
     function assignCallPosition(address _debtor, address _holder, uint _maturity) public returns (uint transferAmtDebtor, uint transferAmtHolder) {
         combinePosition(_holder, _maturity, true);
         (uint minCollateral, uint liabilities) = minSats(_holder, _maturity);
@@ -641,6 +622,14 @@ contract options is Ownable {
     }
 
 
+    /*
+        @Description: assign the put position stored at helperAddress at helperMaturity to a specitied address
+            and assign the inverse to another specified address
+
+        @param address _debtor: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
+        @param address _holder: the address that will gain the opposide payoff profile of the position stored at helperAddress at helperMaturity
+        @param uint _maturity: the timestamp at which the puts may be exercised
+    */
     function assignPutPosition(address _debtor, address _holder, uint _maturity) public returns (uint transferAmtDebtor, uint transferAmtHolder) {
         combinePosition(_holder, _maturity, false);
         (uint minCollateral, uint liabilities) = minSc(_holder, _maturity);

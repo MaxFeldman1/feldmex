@@ -663,6 +663,22 @@ contract exchange{
         unfilled = _amount;
     }
 
+    /*
+        @Description: handles the logistics of creating a long call position for the holder and short call position for the debtor
+            collateral is given by the sender of this transaction who must have already approved this contract to spend on their behalf
+            the sender of this transaction does not nessecarially need to be debtor or holder as the sender provides the needed collateral this cannot harm either the debtor or holder
+
+        @param address _debtor: the address that collateral posted here will be associated with and the for which the call will be considered a liability
+        @param address _holder: the address that owns the right to the value of the option contract at the maturity
+        @param uint _maturity: the evm and unix timestamp at which the call contract matures and settles
+        @param uint _strike: the spot price of the underlying in terms of the strike asset at which this option contract settles at the maturity timestamp
+        @param uint _amount: the amount of calls that the debtor is adding as short and the holder is adding as long
+        @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in satUnits
+            if this limit needs to be broken to mint the call the transaction will return (true, 0)
+
+        @return bool success: if an error occurs returns false if no error return true
+        @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
+    */
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns (uint transferAmt){        
         options optionsContract = options(optionsAddress);
         optionsContract.clearPositions();
@@ -671,6 +687,22 @@ contract exchange{
         assert(transferAmt <= _maxTransfer);
     }
 
+    /*
+        @Description: handles the logistics of creating a long put position for the holder and short put position for the debtor
+            collateral is given by the sender of this transaction who must have already approved this contract to spend on their behalf
+            the sender of this transaction does not nessecarially need to be debtor or holder as the sender provides the needed collateral this cannot harm either the debtor or holder
+
+        @param address _debtor: the address that collateral posted here will be associated with and the for which the put will be considered a liability
+        @param address _holder: the address that owns the right to the value of the option contract at the maturity
+        @param uint _maturity: the evm and unix timestamp at which the put contract matures and settles
+        @param uint _strike: the spot price of the underlying in terms of the strike asset at which this option contract settles at the maturity timestamp
+        @param uint _amount: the amount of puts that the debtor is adding as short and the holder is adding as long
+        @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in scUnits
+            if this limit needs to be broken to mint the put the transaction will return (false, 0)
+
+        @return bool success: if an error occurs returns false if no error return true
+        @return uint transferAmt: returns the amount of strike asset that was transfered from the message sender to act as collateral for the debtor
+    */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns (uint transferAmt){        
         options optionsContract = options(optionsAddress);
         optionsContract.clearPositions();
