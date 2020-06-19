@@ -311,18 +311,21 @@ contract options is Ownable {
         uint _satUnits = satUnits; //gas savings
         int delta = 0;
         int value = 0;
-        uint prevStrike;
+        int cumulativeStrike;
         for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            uint strike = strikes[_addr][_maturity][i];
-            int amt = callAmounts[_addr][_maturity][strike];
-            //placeHolder for numerator 
-            prevStrike = uint(delta * int(_satUnits * (strike-prevStrike)));
-            value += int(prevStrike) / int(strike);
-            //in solidity integer division rounds up when result is negative, counteract this
-            if (delta < 0 && uint(-int(prevStrike))%strike != 0) value--;
+            int strike = int(strikes[_addr][_maturity][i]);
+            int amt = callAmounts[_addr][_maturity][uint(strike)];
+            /*
+                value = satUnits * sigma((delta*strike-cumulativeStrike)/strike)
+            */
+            int numerator = int(satUnits) * (delta*strike-cumulativeStrike);
+            value = numerator/strike;
+            cumulativeStrike += amt*int(strike);
             delta += amt;
-            prevStrike = strike;
-            if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
+            if (value < 0 && uint(-value) >= minCollateral) {
+                if (numerator%strike != 0) value--;
+                minCollateral = uint(-value);
+            }
             if (amt < 0) liabilities+=uint(-amt);
         }
         //value at inf
@@ -485,7 +488,8 @@ contract options is Ownable {
         (uint minCollateral, ) = _call ? minSats(_addr, _maturity) : minSc(_addr, _maturity);
         value = minCollateral - (_call ? satCollateral : scCollateral)[_addr][_maturity];
         inversePosition(_call);
-        combinePosition(_addr, _maturity, _call);        
+        combinePosition(_addr, _maturity, _call);
+        transferAmountHolder = value;
     }
 
     /*
@@ -523,6 +527,12 @@ contract options is Ownable {
     function setUseDeposits(bool _set) public {useDeposits[msg.sender] = _set;}
 
     /*
+        store most recent transfer amounts
+    */
+    uint public transferAmountDebtor;
+    uint public transferAmountHolder;
+
+    /*
         @Description: assign the call position stored at helperAddress at helperMaturity to a specitied address
             and assign the inverse to another specified address
 
@@ -553,13 +563,15 @@ contract options is Ownable {
         satCollateral[_debtor][_maturity] = minCollateral;
         satDeduction[_debtor][_maturity] = liabilities - minCollateral;
         if (useDeposits[msg.sender]){
-            assert(claimedTokens[msg.sender] > transferAmtHolder+transferAmtDebtor);
+            assert(claimedTokens[msg.sender] >= transferAmtHolder+transferAmtDebtor);
             claimedTokens[msg.sender] -= transferAmtHolder+transferAmtDebtor;
         }
         else{
             ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
             satReserves += transferAmtHolder+transferAmtDebtor;
         }
+        transferAmountDebtor = transferAmtDebtor;
+        transferAmountHolder = transferAmtHolder;
     }
 
 
@@ -595,13 +607,15 @@ contract options is Ownable {
         scCollateral[_debtor][_maturity] = minCollateral;
         scDeduction[_debtor][_maturity] = liabilities - minCollateral;
         if (useDeposits[msg.sender]){
-            assert(claimedStable[msg.sender] > transferAmtHolder+transferAmtDebtor);
+            assert(claimedStable[msg.sender] >= transferAmtHolder+transferAmtDebtor);
             claimedStable[msg.sender] -= transferAmtHolder+transferAmtDebtor;
         }
         else {
             ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
             scReserves += transferAmtHolder+transferAmtDebtor;
         }
+        transferAmountDebtor = transferAmtDebtor;
+        transferAmountHolder = transferAmtHolder;
     }
 
 
