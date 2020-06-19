@@ -69,6 +69,12 @@ contract('exchange', async function(accounts) {
 		await optionsInstance.addStrike(maturity, strike, index, {from});
 	}
 
+	async function depositFunds(sats, sc, params) {
+		await tokenInstance.transfer(exchangeInstance.address, sats, params);
+		await strikeAssetInstance.transfer(exchangeInstance.address, sc, params);
+		return exchangeInstance.depositFunds(params.from);
+	}
+
 
 	it('can post and take buy orders of calls', async () => {
 		originAccount = accounts[0]
@@ -84,8 +90,8 @@ contract('exchange', async function(accounts) {
 		await strikeAssetInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		await strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		await strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
-		await exchangeInstance.depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: defaultAccount});
-		await exchangeInstance.depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: receiverAccount});
+		await depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: defaultAccount});
+		await depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		res = (await exchangeInstance.viewClaimed(true, {from: defaultAccount})).toNumber();
 		assert.equal(res, 10*satUnits*transferAmount, "correct amount of collateral claimed for " + defaultAccount);
 		defaultAccountBalance = res;
@@ -394,7 +400,6 @@ contract('exchange', async function(accounts) {
 	it('does not require excessive amount of collateral for calls', async () => {
 		newMaturity = 2*maturity;
 		strike = 100;
-		try{
 		await tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount});
 		await tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: defaultAccount});
 		await tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: receiverAccount});
@@ -402,8 +407,8 @@ contract('exchange', async function(accounts) {
 		await strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		await strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		//------------------------------------------------------test with calls-------------------------------------
-		await exchangeInstance.depositFunds(price*amount + 1, 0, {from: defaultAccount});
-		await exchangeInstance.depositFunds(amount*satUnits, 0, {from: receiverAccount});
+		await depositFunds(price*amount + 1, 0, {from: defaultAccount});
+		await depositFunds(amount*satUnits, 0, {from: receiverAccount});
 		//Test market sells
 		//fist defaultAccount buys from receiver account
 		await mintHandler.postOrder(newMaturity, strike, price, amount, true, true, {from: defaultAccount});
@@ -421,22 +426,21 @@ contract('exchange', async function(accounts) {
 		/*
 			note that we need to deposit more collateral here because to post an order it must be fully collateralised
 		*/
-		await exchangeInstance.depositFunds(amount*(price+satUnits), 0, {from: defaultAccount});
-		await exchangeInstance.depositFunds(amount*(price+satUnits), 0, {from: receiverAccount});
+		await depositFunds(amount*(price+satUnits), 0, {from: defaultAccount});
+		await depositFunds(amount*(price+satUnits), 0, {from: receiverAccount});
 		//fist defaultAccount sells to receiver account
 		await mintHandler.postOrder(newMaturity, strike, price, amount, false, true, {from: defaultAccount});
 		await exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: receiverAccount});
 		//second defaultAccount sells back to receiver account
 		await mintHandler.postOrder(newMaturity, strike, price, amount, false, true, {from: receiverAccount});
 		await exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, true, {from: defaultAccount});
-		} catch(err) {process.exit();}
 	});
 
 	it('does not require excessive amount of collateral for puts', async () => {
 		//----------------------------------------------test with puts--------------------------------------------
 		price = strike - 1;
-		await exchangeInstance.depositFunds(0, price*amount, {from: defaultAccount});
-		await exchangeInstance.depositFunds(0, amount*strike*scUnits, {from: receiverAccount});
+		await depositFunds(0, price*amount, {from: defaultAccount});
+		await depositFunds(0, amount*strike*scUnits, {from: receiverAccount});
 		//Test market sell
 		//fist defaultAccount buys from receiver account
 		await mintHandler.postOrder(newMaturity, strike, price, amount, true, false, {from: defaultAccount});
@@ -454,8 +458,8 @@ contract('exchange', async function(accounts) {
 		/*
 			note that we need to deposit more collateral here because to post an order it must be fully collateralised
 		*/
-		await exchangeInstance.depositFunds(0, amount*(price+scUnits*strike), {from: defaultAccount});
-		await exchangeInstance.depositFunds(0, amount*(price+scUnits*strike), {from: receiverAccount});
+		await depositFunds(0, amount*(price+scUnits*strike), {from: defaultAccount});
+		await depositFunds(0, amount*(price+scUnits*strike), {from: receiverAccount});
 		//fist defaultAccount sells to receiver account
 		await mintHandler.postOrder(newMaturity, strike, price, amount, false, false, {from: defaultAccount});
 		await exchangeInstance.marketBuy(newMaturity, strike, price+1, amount, false, {from: receiverAccount});	
@@ -474,12 +478,12 @@ contract('exchange', async function(accounts) {
 		scBal = (await strikeAssetInstance.balanceOf(defaultAccount)).toNumber();
 		await tokenInstance.approve(exchangeInstance.address, satBal, {from: defaultAccount});
 		await strikeAssetInstance.approve(exchangeInstance.address, scBal, {from: defaultAccount});
-		await exchangeInstance.depositFunds(satBal, scBal, {from: defaultAccount});
+		await depositFunds(satBal, scBal, {from: defaultAccount});
 		satBal = (await tokenInstance.balanceOf(receiverAccount)).toNumber();
 		scBal = (await strikeAssetInstance.balanceOf(receiverAccount)).toNumber();
 		await tokenInstance.approve(exchangeInstance.address, satBal, {from: receiverAccount});
 		await strikeAssetInstance.approve(exchangeInstance.address, scBal, {from: receiverAccount});
-		await exchangeInstance.depositFunds(satBal, scBal, {from: receiverAccount});
+		await depositFunds(satBal, scBal, {from: receiverAccount});
 		//test for index 0 calls buys
 		await mintHandler.postOrder(maturity, strike, price, 1, true, true, {from: defaultAccount});
 		await mintHandler.postOrder(maturity, strike, price, 2, true, true, {from: defaultAccount});

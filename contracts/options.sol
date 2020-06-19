@@ -17,6 +17,9 @@ contract options is Ownable {
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint scUnits;
+    //previously recorded balances
+    uint satReserves;
+    uint scReserves;
     /*
         addresses that are approved do not have to pay fees
         addresses that are approved are usually market makers/liquidity providers
@@ -196,23 +199,23 @@ contract options is Ownable {
         strikeAsset = claimedStable[msg.sender];
         claimedStable[msg.sender] = 0;
         sa.transfer(msg.sender, strikeAsset);
+        satReserves -= underlyingAsset;
+        scReserves -= strikeAsset;
     }
 
     /*
         @Description: allows for users to deposit funds that are not tided up as collateral
             these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
     */
-    function depositFunds(uint _sats, uint _sc) public returns(bool success){
-        if (_sats > 0){
-            ERC20 ua = ERC20(underlyingAssetAddress);
-            require(ua.transferFrom(msg.sender, address(this), _sats));
-            claimedTokens[msg.sender] += _sats;
-        }
-        if (_sc > 0){
-            ERC20 sa = ERC20(strikeAssetAddress);
-            require(sa.transferFrom(msg.sender, address(this), _sc));
-            claimedStable[msg.sender] += _sc;
-        }
+    function depositFunds(address _to) public returns(bool success){
+    	uint balance = ERC20(underlyingAssetAddress).balanceOf(address(this));
+    	uint sats = balance - satReserves;
+    	satReserves = balance;
+    	balance = ERC20(strikeAssetAddress).balanceOf(address(this));
+    	uint sc = balance - scReserves;
+    	scReserves = balance;
+    	claimedTokens[_to] += sats;
+    	claimedStable[_to] += sc;
         success = true;
     }
 
@@ -553,8 +556,10 @@ contract options is Ownable {
             assert(claimedTokens[msg.sender] > transferAmtHolder+transferAmtDebtor);
             claimedTokens[msg.sender] -= transferAmtHolder+transferAmtDebtor;
         }
-        else
+        else{
             ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
+            satReserves += transferAmtHolder+transferAmtDebtor;
+        }
     }
 
 
@@ -593,8 +598,10 @@ contract options is Ownable {
             assert(claimedStable[msg.sender] > transferAmtHolder+transferAmtDebtor);
             claimedStable[msg.sender] -= transferAmtHolder+transferAmtDebtor;
         }
-        else 
+        else {
             ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
+            scReserves += transferAmtHolder+transferAmtDebtor;
+        }
     }
 
 

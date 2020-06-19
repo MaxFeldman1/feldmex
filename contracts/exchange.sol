@@ -91,8 +91,9 @@ contract exchange{
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint scUnits;
-    //variable occasionally used for testing purposes should not be present in production
-    //uint public testing;
+    //previously recorded balances of this contract
+    uint satReserves;
+    uint scReserves;
     
     /*  
         @Description: initialise globals and preform initial processes with the underlying asset and strike asset contracts
@@ -116,29 +117,22 @@ contract exchange{
     /*
         @Description: deposit funds in this contract, funds tracked by the claimedToken and claimedStable mappings
 
-        @param uint _amount: the amount of the token to be deposited
-        @param uint _amountStable: the amount of the strike asset to be deposited
+        @param uint _to: the address to which to credit deposited funds
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function depositFunds(uint _amount, uint _amountStable) public returns(bool success){
-        if (_amount != 0){
-            ERC20 ua = ERC20(underlyingAssetAddress);
-            if (ua.transferFrom(msg.sender, address(this), _amount))
-                claimedToken[msg.sender]+=_amount;
-            else 
-                return false;
-        }
-        if (_amountStable != 0){
-            ERC20 sa = ERC20(strikeAssetAddress);
-            if (sa.transferFrom(msg.sender, address(this), _amountStable))
-                claimedStable[msg.sender]+=_amountStable;
-            else 
-                return false;
-        }
+    function depositFunds(address _to) public returns(bool success){
+        uint balance = ERC20(underlyingAssetAddress).balanceOf(address(this));
+        uint sats = balance - satReserves;
+        satReserves = balance;
+        balance = ERC20(strikeAssetAddress).balanceOf(address(this));
+        uint sc = balance - scReserves;
+        scReserves = balance;
+        claimedToken[_to] += sats;
+        claimedStable[_to] += sc;
         success = true;
     }
-    
+
     /*
         @Description: send back all funds tracked in the claimedToken and claimedStable mappings of the caller to the callers address
 
@@ -153,6 +147,7 @@ contract exchange{
             ERC20 ua = ERC20(underlyingAssetAddress);
             claimedToken[msg.sender] = 0;
             success = ua.transfer(msg.sender, val);
+            satReserves -= val;
         }
         else {
             uint val = claimedStable[msg.sender];
@@ -160,6 +155,7 @@ contract exchange{
             ERC20 sa = ERC20(strikeAssetAddress);
             claimedStable[msg.sender] = 0;
             success = sa.transfer(msg.sender, val);
+            scReserves -= val;
         }
 
     }
@@ -446,6 +442,7 @@ contract exchange{
                 offer.price*offer.amount - transferAmount
             */
             claimedToken[_seller] += offer.price * offer.amount  >= expectedAmt ? offer.price * offer.amount - transferAmt : expectedAmt-transferAmt;
+            satReserves -= transferAmt;
         }
         else{            
             uint transferAmt = mintPut(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, expectedAmt);
@@ -456,6 +453,7 @@ contract exchange{
                 offer.price*offer.amount - transferAmount
             */
             claimedStable[_seller] += offer.price * offer.amount  >= expectedAmt ? offer.price * offer.amount - transferAmt : expectedAmt-transferAmt;
+            scReserves -= transferAmt;
         }
         //clean storage
         delete linkedNodes[_name];
@@ -520,11 +518,13 @@ contract exchange{
             uint transferAmount = mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, _satUnitsTimesAmount);
             //redeem the seller collateral that was not required
             claimedToken[offer.offerer] += (_satUnitsTimesAmount) - transferAmount;
+            satReserves -= transferAmount;
         }
         else{
             uint transferAmount = mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.amount*offer.strike);
             //redeem the seller collateral that was not required
             claimedStable[offer.offerer] += (offer.amount * offer.strike) - transferAmount;
+            scReserves -= transferAmount;
         }
         //clean storage
         delete linkedNodes[_name];
@@ -576,6 +576,7 @@ contract exchange{
                         offer.price*offer.amount - transferAmount
                     */
                     claimedToken[msg.sender] += offer.price * _amount >= expectedAmt ? offer.price * _amount - transferAmount : expectedAmt-transferAmount;
+                    satReserves -= transferAmount;
                 }
                 else {
                     uint expectedAmt = optionsContract.transferAmount(false, msg.sender, offer.maturity, -int(_amount), offer.strike);
@@ -590,6 +591,7 @@ contract exchange{
                         offer.price*offer.amount - transferAmount
                     */
                     claimedStable[msg.sender] += offer.price * _amount >= expectedAmt ? offer.price * _amount - transferAmount : expectedAmt-transferAmount;
+                    scReserves -= transferAmount;
                 }
                 offers[node.hash].amount -= _amount;
                 emit offerAccepted(node.name, _amount);
@@ -641,6 +643,7 @@ contract exchange{
                     uint transferAmount = mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
                     //redeem the seller collateral that was not required
                     claimedToken[offer.offerer] += (limit) - transferAmount;
+                    satReserves -= transferAmount;
                 }//*
                 else { //!call && msg.sender != offer.offerer
                     if (claimedStable[msg.sender] < offer.price * _amount) return _amount;
@@ -649,6 +652,7 @@ contract exchange{
                     uint transferAmount = mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, limit);
                     //redeem the seller collateral that was not used
                     claimedStable[offer.offerer] += (_amount * _strike) - transferAmount;
+                    scReserves -= transferAmount;
                 }
                 offers[node.hash].amount -= _amount;
                 emit offerAccepted(node.name, _amount);

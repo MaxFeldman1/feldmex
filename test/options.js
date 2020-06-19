@@ -180,6 +180,11 @@ contract('options', async function(accounts){
 			if (call) await optionsInstance.assignCallPosition(params.from, to, maturity, params);
 			else await optionsInstance.assignPutPosition(params.from, to, maturity, params);
 		}
+		async function depositFunds(sats, sc, params) {
+			await tokenInstance.transfer(optionsInstance.address, sats, params);
+			await strikeAssetInstance.transfer(optionsInstance.address, sc, params);
+			return optionsInstance.depositFunds(params.from);
+		}
 
 		await tokenInstance.transfer(debtor, 1000*satUnits, {from: defaultAccount});
 		await strikeAssetInstance.transfer(debtor, 1000*strike*scUnits, {from: defaultAccount});
@@ -187,8 +192,8 @@ contract('options', async function(accounts){
 		await strikeAssetInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: defaultAccount});
 		await tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: debtor});
 		await strikeAssetInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: debtor});
-		await optionsInstance.depositFunds(900*satUnits, 1000*strike*scUnits, {from: defaultAccount});
-		await optionsInstance.depositFunds(1000*satUnits, 1000*strike*scUnits, {from: debtor});
+		await depositFunds(900*satUnits, 1000*strike*scUnits, {from: defaultAccount});
+		await depositFunds(1000*satUnits, 1000*strike*scUnits, {from: debtor});
 		amount = 10;
 		//debtor must accept transfers on a strike before recieving them
 		await optionTransfer(debtor, amount, maturity, strike, amount*satUnits, true, {from: defaultAccount});
