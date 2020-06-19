@@ -152,7 +152,7 @@ contract options is Ownable {
 
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
-    */
+    *//*
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
         if (_debtor == _holder) return 0;
         clearPositions();
@@ -179,7 +179,7 @@ contract options is Ownable {
 
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of strike asset that was transfered from the message sender to act as collateral for the debtor
-    */
+    *//*
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) public returns(uint transferAmt){
         if (_debtor == _holder) return 0;
         clearPositions();
@@ -540,11 +540,7 @@ contract options is Ownable {
     //store positions in call/putAmounts[helperAddress][helperMaturity] to allow us to calculate collateral requirements
 
     //make helper maturities extremely far out, Dec 4th, 292277026596 A.D
-    /*
-        first helper maturity is where positions are added
-    */
     uint helperMaturity = 10**20;
-
     address helperAddress = address(0);
 
     function addPosition(uint _strike, int _amount, bool _call) public {
@@ -614,7 +610,7 @@ contract options is Ownable {
     function setUseDeposits(bool _set) public {useDeposits[msg.sender] = _set;}
 
 
-    function assignCallPosition(address _debtor, address _holder, uint _maturity) internal returns (uint transferAmtDebtor, uint transferAmtHolder) {
+    function assignCallPosition(address _debtor, address _holder, uint _maturity) public returns (uint transferAmtDebtor, uint transferAmtHolder) {
         combinePosition(_holder, _maturity, true);
         (uint minCollateral, uint liabilities) = minSats(_holder, _maturity);
 
@@ -645,7 +641,7 @@ contract options is Ownable {
     }
 
 
-    function assignPutPosition(address _debtor, address _holder, uint _maturity) internal returns (uint transferAmtDebtor, uint transferAmtHolder) {
+    function assignPutPosition(address _debtor, address _holder, uint _maturity) public returns (uint transferAmtDebtor, uint transferAmtHolder) {
         combinePosition(_holder, _maturity, false);
         (uint minCollateral, uint liabilities) = minSc(_holder, _maturity);
         

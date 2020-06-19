@@ -42,12 +42,18 @@ contract('options', async function(accounts){
 		inflatorObj.mintCall = async (debtor, holder, maturity, strike, amount, limit, params) => {
 			await addStrike(debtor, maturity, strike);
 			await addStrike(holder, maturity, strike);
-			return optionsInstance.mintCall(debtor, holder, maturity, strike*inflator, amount, limit, params);
+			await optionsInstance.clearPositions();
+			await optionsInstance.addPosition(strike*inflator, amount, true);
+			return optionsInstance.assignCallPosition(debtor, holder, maturity, params);
+			//return optionsInstance.mintCall(debtor, holder, maturity, strike*inflator, amount, limit, params);
 		};
 		inflatorObj.mintPut = async (debtor, holder, maturity, strike, amount, limit, params) => {
 			await addStrike(debtor, maturity, strike);
 			await addStrike(holder, maturity, strike);
-			return optionsInstance.mintPut(debtor, holder, maturity, strike*inflator, amount, limit, params);
+			await optionsInstance.clearPositions();
+			await optionsInstance.addPosition(strike*inflator, amount, false);
+			return optionsInstance.assignPutPosition(debtor, holder, maturity, params);
+			//return optionsInstance.mintPut(debtor, holder, maturity, strike*inflator, amount, limit, params);
 		};
 		inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
 		inflatorObj.transfer = async (to, value, maturity, strike, maxTransfer, callPut, params) => {

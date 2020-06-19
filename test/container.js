@@ -62,6 +62,24 @@ contract('container', async function(accounts){
 		else await secondOptionsInstance.addStrike(maturity, strike, index, {from});
 	}
 
+	async function mintCall(debtor, holder, maturity, strike, amount, limit, params, first) {
+		await addStrike(debtor, maturity, strike, first);
+		await addStrike(holder, maturity, strike, first);
+		var instance = first ? optionsInstance : secondOptionsInstance;
+		await instance.clearPositions();
+		await instance.addPosition(strike, amount, true);
+		return instance.assignCallPosition(debtor, holder, maturity, params);
+	}
+
+	async function mintPut(debtor, holder, maturity, strike, amount, limit, params, first) {
+		await addStrike(debtor, maturity, strike, first);
+		await addStrike(holder, maturity, strike, first);
+		var instance = first ? optionsInstance : secondOptionsInstance;
+		await instance.clearPositions();
+		await instance.addPosition(strike, amount, false);
+		return instance.assignPutPosition(debtor, holder, maturity, params);
+	}
+
 	it('implements erc20', async () => {
 			//allows token transfer
 		decimals = (await containerInstance.decimals()).toNumber()
@@ -236,9 +254,7 @@ contract('container', async function(accounts){
 		expectedTransfer = amount * satUnits;
 		expectedFee = Math.floor(expectedTransfer/feeDenominator);
 		await tokenInstance.approve(optionsInstance.address, expectedTransfer, {from: deployerAccount});
-		await addStrike(accounts[1], maturity, strike, true);
-		await addStrike(accounts[2], maturity, strike, true);
-		await optionsInstance.mintCall(accounts[1], accounts[2], maturity, 100, amount, expectedTransfer, {from: deployerAccount});
+		await mintCall(accounts[1], accounts[2], maturity, 100, amount, expectedTransfer, {from: deployerAccount}, true);
 		await helper.advanceTime(2);
 		await optionsInstance.claim(maturity, {from: accounts[1]});
 		await optionsInstance.claim(maturity, {from: accounts[2]});
@@ -279,10 +295,8 @@ contract('container', async function(accounts){
 		prevSecondUnderlyingBalance = (await containerInstance.viewAsset2Balance({from: accounts[2]})).toNumber();
 
 		await strikeAssetInstance.approve(secondOptionsInstance.address, expectedTransfer, {from: deployerAccount});
-		await addStrike(accounts[1], maturity, strike, false);
-		await addStrike(accounts[2], maturity, strike, false)
 		//second option contract flips trading pair so calls payout in strike asset
-		await secondOptionsInstance.mintCall(accounts[1], accounts[2], maturity, 100, amount, expectedTransfer, {from: deployerAccount});
+		await mintCall(accounts[1], accounts[2], maturity, 100, amount, expectedTransfer, {from: deployerAccount}, false);
 		//advance 1 day and 1 second (1 day * 24hrs/day + 1 sec* 60min/hr * 60sec/min  + 1sec == 86400sec + 1 sec == 86401sec)
 		await helper.advanceTime(86401);
 		rec = await secondOptionsInstance.claim(maturity, {from: accounts[1]});
@@ -337,9 +351,7 @@ contract('container', async function(accounts){
 		await helper.advanceTime(1);
 		await tokenInstance.approve(optionsInstance.address, maxTransfer, {from: deployerAccount});
 		assert.equal((await tokenInstance.balanceOf(deployerAccount)).toNumber() >= maxTransfer, true, "balance is large enough");
-		await addStrike(deployerAccount, maturity, strike, true);
-		await addStrike(accounts[1], maturity, strike, true);
-		await optionsInstance.mintCall(deployerAccount, accounts[1], maturity, strike, amount, maxTransfer, {from: deployerAccount});
+		await mintCall(deployerAccount, accounts[1], maturity, strike, amount, maxTransfer, {from: deployerAccount}, true);
 		feeDenominator = 1000;
 		await containerInstance.setFee(1000, {from: deployerAccount});
 		prevBalance = (await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber();
@@ -353,9 +365,7 @@ contract('container', async function(accounts){
 		maxTransfer = amount*strike;
 		helper.advanceTime(1);
 		await strikeAssetInstance.approve(optionsInstance.address, maxTransfer, {from: deployerAccount});
-		await addStrike(deployerAccount, maturity, strike, true);
-		await addStrike(accounts[1], maturity, strike, true);
-		await optionsInstance.mintPut(accounts[1], deployerAccount, maturity, strike, amount, maxTransfer, {from: deployerAccount});
+		await mintPut(accounts[1], deployerAccount, maturity, strike, amount, maxTransfer, {from: deployerAccount}, true);
 		prevBalance = (await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber();
 		//option expired worthless first account gets back all collateral
 		await optionsInstance.claim(maturity, {from: accounts[1]});
