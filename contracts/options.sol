@@ -412,78 +412,14 @@ contract options is Ownable {
         strikes[msg.sender][_maturity][_index] = _strike;
     }
 
-    //------------------------------------------------------------------------------------E-R-C---2-0---I-m-p-l-e-m-e-n-t-a-t-i-o-n---------------------------
-    
-    event Transfer(
-        address indexed _from,
-        address indexed _to,
-        uint256 _value,
-        uint256 _maturity,
-        uint256 _strike,
-        bool _call
-    );
 
-    event Approval(
-        address indexed _owner,
-        address indexed _spender,
-        uint256 _value,
-        uint256 _maturity,
-        uint256 _strike,
-        bool _call
-    );
-
-    //approver => spender => maturity => strike => amount of calls
-    mapping(address => mapping(address => mapping(uint => mapping(uint => uint)))) callAllowance;
-    
-    //approver => spender => strike => amount of puts
-    mapping(address => mapping(address => mapping(uint => mapping(uint => uint)))) putAllowance;
-
-    function transfer(address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(uint transferAmt){
-        clearPositions();
-        addPosition(_strike, int(_value), _call);
-        useDeposits[msg.sender] = true;
-        if (_call)
-            (transferAmt, ) = assignCallPosition(msg.sender, _to, _maturity);
-        else
-            (transferAmt, ) = assignPutPosition(msg.sender, _to, _maturity); 
-        assert(transferAmt <= _maxTransfer);
-        emit Transfer(msg.sender, _to, _value, _maturity, _strike, _call);
-    }
-
-    function approve(address _spender, uint256 _value, uint _maturity, uint _strike, bool _call) public returns(bool success){
-        require(_strike != 0, "ensure strike != 0");
-        emit Approval(msg.sender, _spender, _value, _maturity, _strike, _call);
-        if (_call) callAllowance[msg.sender][_spender][_maturity][_strike] = _value;
-        else putAllowance[msg.sender][_spender][_maturity][_strike] = _value;
-        success = true;
-    }
-
-    function transferFrom(address _from, address _to, uint256 _value, uint _maturity, uint _strike, uint _maxTransfer, bool _call) public returns(uint transferAmt){
-        require(_value <= (_call ? callAllowance[_from][msg.sender][_maturity][_strike]: putAllowance[_from][msg.sender][_maturity][_strike]));
-        clearPositions();
-        addPosition(_strike, int(_value), _call);
-        useDeposits[msg.sender] = true;
-        if (_call) {
-            callAllowance[_from][msg.sender][_maturity][_strike] -= _value;
-            (transferAmt, ) = assignCallPosition(_from, _to, _maturity);
-        }
-        else {
-            putAllowance[_from][msg.sender][_maturity][_strike] -= _value;
-            (transferAmt, ) = assignPutPosition(_from, _to, _maturity);
-        }
-        assert(transferAmt <= _maxTransfer);
-        emit Transfer(_from, _to, _value, _maturity, _strike, _call);
-    }
-
-    function allowance(address _owner, address _spender, uint _maturity, uint _strike, bool _call) public view returns(uint256 remaining){
-        remaining = _call ? callAllowance[_owner][_spender][_maturity][_strike] : putAllowance[_owner][_spender][_maturity][_strike];
-    }
-
+    /*
+        @Description: view function for both callAmounts and putAmounts
+    */
     function balanceOf(address _owner, uint _maturity, uint _strike, bool _call) public view returns(int256 balance){
         balance = _call ? callAmounts[_owner][_maturity][_strike] : putAmounts[_owner][_maturity][_strike];
     }
 
-    //---------------------allow for complex positions to have limit orders-----------------
     //store positions in call/putAmounts[helperAddress][helperMaturity] to allow us to calculate collateral requirements
     //make helper maturities extremely far out, Dec 4th, 292277026596 A.D
     uint helperMaturity = 10**20;
