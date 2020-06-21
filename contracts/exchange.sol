@@ -683,12 +683,15 @@ contract exchange{
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns (uint transferAmt){        
-        options optionsContract = options(optionsAddress);
+    function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns (uint transferAmt){
+        address _optionsAddress = optionsAddress; //gas savings
+        options optionsContract = options(_optionsAddress);
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), true);
-        (transferAmt, ) = optionsContract.assignCallPosition(_debtor, _holder, _maturity);
-        assert(transferAmt <= _maxTransfer);
+        optionsContract.setParams(_debtor,_holder,_maturity);
+        (bool success,) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
+        transferAmt = optionsContract.transferAmountDebtor();
+        assert(success && transferAmt <= _maxTransfer);
     }
 
     /*
@@ -707,12 +710,15 @@ contract exchange{
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of strike asset that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns (uint transferAmt){        
-        options optionsContract = options(optionsAddress);
+    function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _maxTransfer) internal returns (uint transferAmt){
+        address _optionsAddress = optionsAddress; //gas savings
+        options optionsContract = options(_optionsAddress);
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), false);
-        (transferAmt, ) = optionsContract.assignPutPosition(_debtor, _holder, _maturity);
-        assert(transferAmt <= _maxTransfer);
+        optionsContract.setParams(_debtor,_holder,_maturity);
+        (bool success,) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
+        transferAmt = optionsContract.transferAmountDebtor();
+        assert(success && transferAmt <= _maxTransfer);
     }
 
 }

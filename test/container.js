@@ -68,7 +68,8 @@ contract('container', async function(accounts){
 		var instance = first ? optionsInstance : secondOptionsInstance;
 		await instance.clearPositions();
 		await instance.addPosition(strike, amount, true);
-		return instance.assignCallPosition(debtor, holder, maturity, params);
+		await instance.setParams(debtor, holder, maturity);
+		return instance.assignCallPosition(params);
 	}
 
 	async function mintPut(debtor, holder, maturity, strike, amount, limit, params, first) {
@@ -77,7 +78,8 @@ contract('container', async function(accounts){
 		var instance = first ? optionsInstance : secondOptionsInstance;
 		await instance.clearPositions();
 		await instance.addPosition(strike, amount, false);
-		return instance.assignPutPosition(debtor, holder, maturity, params);
+		await instance.setParams(debtor, holder, maturity);
+		return instance.assignPutPosition(params);
 	}
 
 	it('implements erc20', async () => {

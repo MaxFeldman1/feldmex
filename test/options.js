@@ -45,7 +45,8 @@ contract('options', async function(accounts){
 			await optionsInstance.setUseDeposits(false);
 			await optionsInstance.clearPositions();
 			await optionsInstance.addPosition(strike*inflator, amount, true);
-			return optionsInstance.assignCallPosition(debtor, holder, maturity, params);
+			await optionsInstance.setParams(debtor, holder, maturity);
+			return optionsInstance.assignCallPosition(params);
 		};
 		inflatorObj.mintPut = async (debtor, holder, maturity, strike, amount, limit, params) => {
 			await addStrike(debtor, maturity, strike);
@@ -53,7 +54,8 @@ contract('options', async function(accounts){
 			await optionsInstance.setUseDeposits(false);
 			await optionsInstance.clearPositions();
 			await optionsInstance.addPosition(strike*inflator, amount, false);
-			return optionsInstance.assignPutPosition(debtor, holder, maturity, params);
+			await optionsInstance.setParams(debtor, holder, maturity);
+			return optionsInstance.assignPutPosition(params);
 		};
 		inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
 		inflatorObj.transfer = async (to, value, maturity, strike, maxTransfer, callPut, params) => {
@@ -183,8 +185,9 @@ contract('options', async function(accounts){
 			await optionsInstance.setUseDeposits(true, params);
 			await optionsInstance.clearPositions();
 			await optionsInstance.addPosition(strike*inflator, amount, call);
-			if (call) await optionsInstance.assignCallPosition(params.from, to, maturity, params);
-			else await optionsInstance.assignPutPosition(params.from, to, maturity, params);
+			await optionsInstance.setParams(params.from, to, maturity);
+			if (call) await optionsInstance.assignCallPosition(params);
+			else await optionsInstance.assignPutPosition(params);
 		}
 
 		await tokenInstance.transfer(debtor, 1000*satUnits, {from: defaultAccount});
@@ -365,7 +368,8 @@ contract('options', async function(accounts){
 		await optionsInstance.withdrawFunds({from: defaultAccount});
 		await depositFunds(0 , expectedCollateralRequirement, {from: defaultAccount});
 		await optionsInstance.setUseDeposits(true, {from: defaultAccount});
-		await optionsInstance.assignPutPosition(debtor, holder, maturity, {from: defaultAccount});
+		await optionsInstance.setParams(debtor, holder, maturity);
+		await optionsInstance.assignPutPosition({from: defaultAccount});
 		assert.equal((await optionsInstance.viewClaimedStable({from: defaultAccount})).toNumber(), 0, "correct amount of funds left over");
 		assert.equal((await optionsInstance.transferAmountDebtor()).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
 		assert.equal((await optionsInstance.viewScCollateral(maturity, {from: debtor})).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
@@ -401,7 +405,8 @@ contract('options', async function(accounts){
 		await optionsInstance.withdrawFunds({from: defaultAccount});
 		await depositFunds(expectedCollateralRequirement, 0, {from: defaultAccount});
 		await optionsInstance.setUseDeposits(true, {from: defaultAccount});
-		await optionsInstance.assignCallPosition(debtor, holder, maturity, {from: defaultAccount});
+		await optionsInstance.setParams(debtor, holder, maturity);
+		await optionsInstance.assignCallPosition({from: defaultAccount});
 		assert.equal((await optionsInstance.viewClaimedTokens({from: defaultAccount})).toNumber(), 0, "correct amount of funds left over");
 		assert.equal((await optionsInstance.transferAmountDebtor()).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
 		assert.equal((await optionsInstance.viewSatCollateral(maturity, {from: debtor})).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");

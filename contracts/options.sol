@@ -536,11 +536,14 @@ contract options is Ownable {
         @Description: assign the call position stored at helperAddress at helperMaturity to a specitied address
             and assign the inverse to another specified address
 
-        @param address _debtor: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
-        @param address _holder: the address that will gain the opposide payoff profile of the position stored at helperAddress at helperMaturity
+        @param address _debtor: the address that will gain the opposite payoff profile of the position stored at helperAddress at helperMaturity
+        @param address _holder: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
         @param uint _maturity: the timestamp at which the calls may be exercised
     */
-    function assignCallPosition(address _debtor, address _holder, uint _maturity) public returns (uint transferAmtDebtor, uint transferAmtHolder) {
+    function assignCallPosition() public returns (uint transferAmtDebtor, uint transferAmtHolder) {
+        address _debtor = debtor;   //gas savings
+        address _holder = holder;   //gas savings
+        uint _maturity = maturity; //gas savings
         combinePosition(_holder, _maturity, true);
         (uint minCollateral, uint liabilities) = minSats(_holder, _maturity);
 
@@ -579,11 +582,14 @@ contract options is Ownable {
         @Description: assign the put position stored at helperAddress at helperMaturity to a specitied address
             and assign the inverse to another specified address
 
-        @param address _debtor: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
-        @param address _holder: the address that will gain the opposide payoff profile of the position stored at helperAddress at helperMaturity
+        @param address _debtor: the address that will gain the opposite payoff profile of the position stored at helperAddress at helperMaturity
+        @param address _holder: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
         @param uint _maturity: the timestamp at which the puts may be exercised
     */
-    function assignPutPosition(address _debtor, address _holder, uint _maturity) public returns (uint transferAmtDebtor, uint transferAmtHolder) {
+    function assignPutPosition() public returns (uint transferAmtDebtor, uint transferAmtHolder) {
+        address _debtor = debtor;   //gas savings
+        address _holder = holder;   //gas savings
+        uint _maturity = maturity; //gas savings
         combinePosition(_holder, _maturity, false);
         (uint minCollateral, uint liabilities) = minSc(_holder, _maturity);
         
@@ -618,6 +624,22 @@ contract options is Ownable {
         transferAmountHolder = transferAmtHolder;
     }
 
+    //allow external contracts to use .call to mint ositions
+    address debtor;
+    address holder;
+    uint maturity;    
+    /*
+        @Description: set the values of debtor, holder, and maturity before calling assignCallPosition or assignPutPosition
+
+        @param address _debtor: the address that will gain the opposite payoff profile of the position stored at helperAddress at helperMaturity
+        @param address _holder: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
+        @param uint _maturity: the timestamp at which the puts may be exercised    
+    */
+    function setParams(address _debtor, address _holder, uint _maturity) public {
+        debtor = _debtor;
+        holder = _holder;
+        maturity = _maturity;
+    }
 
     //---------------------view functions---------------
     function viewClaimedTokens() public view returns(uint){return claimedTokens[msg.sender];}
