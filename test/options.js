@@ -46,6 +46,7 @@ contract('options', async function(accounts){
 			await optionsInstance.clearPositions();
 			await optionsInstance.addPosition(strike*inflator, amount, true);
 			await optionsInstance.setParams(debtor, holder, maturity);
+			await optionsInstance.setLimits(limit, 0);
 			return optionsInstance.assignCallPosition(params);
 		};
 		inflatorObj.mintPut = async (debtor, holder, maturity, strike, amount, limit, params) => {
@@ -55,6 +56,7 @@ contract('options', async function(accounts){
 			await optionsInstance.clearPositions();
 			await optionsInstance.addPosition(strike*inflator, amount, false);
 			await optionsInstance.setParams(debtor, holder, maturity);
+			await optionsInstance.setLimits(limit, 0);
 			return optionsInstance.assignPutPosition(params);
 		};
 		inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
@@ -186,6 +188,7 @@ contract('options', async function(accounts){
 			await optionsInstance.clearPositions();
 			await optionsInstance.addPosition(strike*inflator, amount, call);
 			await optionsInstance.setParams(params.from, to, maturity);
+			await optionsInstance.setLimits(maxTransfer, 0);
 			if (call) await optionsInstance.assignCallPosition(params);
 			else await optionsInstance.assignPutPosition(params);
 		}
@@ -369,6 +372,7 @@ contract('options', async function(accounts){
 		await depositFunds(0 , expectedCollateralRequirement, {from: defaultAccount});
 		await optionsInstance.setUseDeposits(true, {from: defaultAccount});
 		await optionsInstance.setParams(debtor, holder, maturity);
+		await optionsInstance.setLimits(expectedDebtorRequirement, expectedHolderRequirement);
 		await optionsInstance.assignPutPosition({from: defaultAccount});
 		assert.equal((await optionsInstance.viewClaimedStable({from: defaultAccount})).toNumber(), 0, "correct amount of funds left over");
 		assert.equal((await optionsInstance.transferAmountDebtor()).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
@@ -406,6 +410,7 @@ contract('options', async function(accounts){
 		await depositFunds(expectedCollateralRequirement, 0, {from: defaultAccount});
 		await optionsInstance.setUseDeposits(true, {from: defaultAccount});
 		await optionsInstance.setParams(debtor, holder, maturity);
+		await optionsInstance.setLimits(expectedDebtorRequirement, expectedHolderRequirement);
 		await optionsInstance.assignCallPosition({from: defaultAccount});
 		assert.equal((await optionsInstance.viewClaimedTokens({from: defaultAccount})).toNumber(), 0, "correct amount of funds left over");
 		assert.equal((await optionsInstance.transferAmountDebtor()).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");

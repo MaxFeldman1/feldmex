@@ -547,8 +547,10 @@ contract options is Ownable {
         combinePosition(_holder, _maturity, true);
         (uint minCollateral, uint liabilities) = minSats(_holder, _maturity);
 
-        if (minCollateral > satCollateral[_holder][_maturity])
+        if (minCollateral > satCollateral[_holder][_maturity]){
             transferAmtHolder = minCollateral - satCollateral[_holder][_maturity];
+            assert(transferAmtHolder <= maxHolderTransfer);
+        }
         else 
             claimedTokens[_holder] += satCollateral[_holder][_maturity] - minCollateral;
         satCollateral[_holder][_maturity] = minCollateral;
@@ -559,8 +561,10 @@ contract options is Ownable {
         combinePosition(_debtor, _maturity, true);        
         (minCollateral, liabilities) = minSats(_debtor, _maturity);
 
-        if (minCollateral > satCollateral[_debtor][_maturity])
+        if (minCollateral > satCollateral[_debtor][_maturity]){
             transferAmtDebtor = minCollateral - satCollateral[_debtor][_maturity];
+            assert(transferAmtDebtor <= maxDebtorTransfer);
+        }
         else
             claimedTokens[_debtor] += satCollateral[_debtor][_maturity] - minCollateral;
         satCollateral[_debtor][_maturity] = minCollateral;
@@ -593,8 +597,10 @@ contract options is Ownable {
         combinePosition(_holder, _maturity, false);
         (uint minCollateral, uint liabilities) = minSc(_holder, _maturity);
         
-        if (minCollateral > scCollateral[_holder][_maturity])
+        if (minCollateral > scCollateral[_holder][_maturity]){
             transferAmtHolder = minCollateral - scCollateral[_holder][_maturity];
+            assert(transferAmtHolder <= maxHolderTransfer);
+        }
         else
             claimedStable[_holder] += scCollateral[_holder][_maturity] - minCollateral;
         scCollateral[_holder][_maturity] = minCollateral;
@@ -606,8 +612,10 @@ contract options is Ownable {
         combinePosition(_debtor, _maturity, false);        
         (minCollateral, liabilities) = minSc(_debtor, _maturity);
 
-        if (minCollateral > scCollateral[_debtor][_maturity])
+        if (minCollateral > scCollateral[_debtor][_maturity]){
             transferAmtDebtor = minCollateral - scCollateral[_debtor][_maturity];
+            assert(transferAmtDebtor <= maxDebtorTransfer);
+        }
         else
             claimedStable[_debtor] += scCollateral[_debtor][_maturity] - minCollateral;
         scCollateral[_debtor][_maturity] = minCollateral;
@@ -627,18 +635,32 @@ contract options is Ownable {
     //allow external contracts to use .call to mint ositions
     address debtor;
     address holder;
-    uint maturity;    
+    uint maturity;
+    uint maxDebtorTransfer;
+    uint maxHolderTransfer;
+
     /*
         @Description: set the values of debtor, holder, and maturity before calling assignCallPosition or assignPutPosition
 
         @param address _debtor: the address that will gain the opposite payoff profile of the position stored at helperAddress at helperMaturity
         @param address _holder: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
-        @param uint _maturity: the timestamp at which the puts may be exercised    
+        @param uint _maturity: the timestamp at which the puts may be exercised 
     */
     function setParams(address _debtor, address _holder, uint _maturity) public {
         debtor = _debtor;
         holder = _holder;
         maturity = _maturity;
+    }
+
+    /*
+        @Description: set the maximum values for the transfer amounts
+
+        @param uint _maxDebtorTransfer: the maximum amount for transferAmountDebtor if this limit is breached assignPosition transactions will revert
+        @param uint _maxHolderTransfer: the maximum amount for transferAmountHolder if this limit is breached assignPosition transactions will revert
+    */
+    function setLimits(uint _maxDebtorTransfer, uint _maxHolderTransfer) public {
+        maxDebtorTransfer = _maxDebtorTransfer;
+        maxHolderTransfer = _maxHolderTransfer;
     }
 
     //---------------------view functions---------------

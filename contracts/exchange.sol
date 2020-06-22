@@ -399,6 +399,7 @@ contract exchange{
             */
             if (offer.index < 2) claimedToken[_seller] += offer.price * offer.amount;
             else claimedStable[_seller] += offer.price * offer.amount;
+            success = true;
         }
         else if (offer.index < 2){
             (success, ) = mintCall(_seller, offer.offerer, offer.maturity, offer.strike, offer.amount, offer.price,  true);
@@ -430,7 +431,6 @@ contract exchange{
         //clean storage
         delete linkedNodes[_name];
         delete offers[node.hash];
-        success = true;
     }
 
     /*
@@ -454,7 +454,8 @@ contract exchange{
                 therefore we do not need to call options.mintCall/Put
             */
             if (offer.index < 2) claimedToken[_buyer] += offer.amount * (satUnits - offer.price);
-            else claimedStable[_buyer] += offer.amount * (offer.strike - offer.price); 
+            else claimedStable[_buyer] += offer.amount * (offer.strike - offer.price);
+            success = true;
         }
         else if (offer.index < 2){
             (success, ) = mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.price, false);
@@ -486,7 +487,6 @@ contract exchange{
         //clean storage
         delete linkedNodes[_name];
         delete offers[node.hash];
-        success = true;
     }
 
     /*
@@ -601,28 +601,33 @@ contract exchange{
         @param uint _maturity: the evm and unix timestamp at which the call contract matures and settles
         @param uint _strike: the spot price of the underlying in terms of the strike asset at which this option contract settles at the maturity timestamp
         @param uint _amount: the amount of calls that the debtor is adding as short and the holder is adding as long
-        @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in satUnits
-            if this limit needs to be broken to mint the call the transaction will return (true, 0)
+        @param uint _price: the amount of funds per call option that is to be paid in premium
+        @param bool _debtorPays: == (order.index == 0)
 
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
     */
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _price, bool _debtorPays) internal returns (bool success, uint transferAmt){
+        _price*=_amount;    //price is now equal to total option premium
+        if (!_debtorPays && claimedToken[_holder] < _price) return (false, 0);
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), true);
         optionsContract.setParams(_debtor,_holder,_maturity);
+        if (_debtorPays)
+            optionsContract.setLimits(claimedToken[_debtor]+_price, 0);
+        else
+            optionsContract.setLimits(_amount * satUnits, 0);
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return (false, 0);
         transferAmt = optionsContract.transferAmountDebtor();
-        if (_debtorPays) {
-            claimedToken[_debtor] += _price * _amount;
-            assert(claimedToken[_debtor] >= transferAmt);
+        if (_debtorPays){
+            claimedToken[_debtor] += _price;
             claimedToken[_debtor] -= transferAmt;
-        } else {
-            assert(claimedToken[_holder] >= _price * _amount);
-            claimedToken[_holder] -= _price * _amount;
+        }
+        else{
+            claimedToken[_holder] -= _price;
             claimedToken[_debtor] += _amount * satUnits - transferAmt;
         }
         satReserves -= transferAmt;
@@ -638,28 +643,33 @@ contract exchange{
         @param uint _maturity: the evm and unix timestamp at which the put contract matures and settles
         @param uint _strike: the spot price of the underlying in terms of the strike asset at which this option contract settles at the maturity timestamp
         @param uint _amount: the amount of puts that the debtor is adding as short and the holder is adding as long
-        @param uint _maxTransfer: the maximum amount of collateral that this function can take on behalf of the debtor from the message sender denominated in scUnits
-            if this limit needs to be broken to mint the put the transaction will return (false, 0)
+        @param uint _price: the amount of funds per put option that is to be paid in premium
+        @param bool _debtorPays: == (order.index == 2)
 
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of strike asset that was transfered from the message sender to act as collateral for the debtor
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _price, bool _debtorPays) internal returns (bool success, uint transferAmt){
+        _price*=_amount;    //price is now equal to total option premium
+        if (!_debtorPays && claimedStable[_holder] < _price) return (false, 0);
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), false);
         optionsContract.setParams(_debtor,_holder,_maturity);
+        if (_debtorPays)
+            optionsContract.setLimits(claimedStable[_debtor]+_price, 0);
+        else
+            optionsContract.setLimits(_amount * _strike, 0);
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return (false, 0);
         transferAmt = optionsContract.transferAmountDebtor();
-        if (_debtorPays) {
-            claimedStable[_debtor] += _price * _amount;
-            assert(claimedStable[_debtor] >= transferAmt);
+        if (_debtorPays){
+            claimedStable[_debtor] += _price;
             claimedStable[_debtor] -= transferAmt;
-        } else {
-            assert(claimedStable[_holder] >= _price * _amount);
-            claimedStable[_holder] -= _price * _amount;
+        }
+        else{
+            claimedStable[_holder] -= _price;
             claimedStable[_debtor] += _amount * _strike - transferAmt;
         }
         scReserves -= transferAmt;

@@ -69,6 +69,7 @@ contract('container', async function(accounts){
 		await instance.clearPositions();
 		await instance.addPosition(strike, amount, true);
 		await instance.setParams(debtor, holder, maturity);
+		await instance.setLimits(amount * satUnits, 0);
 		return instance.assignCallPosition(params);
 	}
 
@@ -79,6 +80,7 @@ contract('container', async function(accounts){
 		await instance.clearPositions();
 		await instance.addPosition(strike, amount, false);
 		await instance.setParams(debtor, holder, maturity);
+		await instance.setLimits(amount * strike, 0);
 		return instance.assignPutPosition(params);
 	}
 
