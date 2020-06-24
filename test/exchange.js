@@ -82,14 +82,10 @@ contract('exchange', async function(accounts) {
 		receiverAccount = accounts[2];
 		satUnits = Math.pow(10, (await tokenInstance.decimals()).toNumber());
 		scUnits = Math.pow(10, (await strikeAssetInstance.decimals()).toNumber());
-		await tokenInstance.transfer(defaultAccount, 21000000*satUnits, {from: originAccount});
-		await strikeAssetInstance.transfer(defaultAccount, 21000000*scUnits, {from: originAccount});
+		await tokenInstance.transfer(defaultAccount, 2100000*satUnits, {from: originAccount});
+		await strikeAssetInstance.transfer(defaultAccount, 2100000*scUnits, {from: originAccount});
 		await tokenInstance.transfer(receiverAccount, 10*transferAmount*satUnits, {from: defaultAccount});
-		await tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: defaultAccount});
-		await tokenInstance.approve(exchangeInstance.address, 10*transferAmount*satUnits, {from: receiverAccount});
 		await strikeAssetInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
-		await strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: defaultAccount});
-		await strikeAssetInstance.approve(exchangeInstance.address, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		await depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		await depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, {from: receiverAccount});
 		res = (await exchangeInstance.viewClaimed(true, {from: defaultAccount})).toNumber();
@@ -476,13 +472,9 @@ contract('exchange', async function(accounts) {
 
 		satBal = (await tokenInstance.balanceOf(defaultAccount)).toNumber();
 		scBal = (await strikeAssetInstance.balanceOf(defaultAccount)).toNumber();
-		await tokenInstance.approve(exchangeInstance.address, satBal, {from: defaultAccount});
-		await strikeAssetInstance.approve(exchangeInstance.address, scBal, {from: defaultAccount});
 		await depositFunds(satBal, scBal, {from: defaultAccount});
 		satBal = (await tokenInstance.balanceOf(receiverAccount)).toNumber();
 		scBal = (await strikeAssetInstance.balanceOf(receiverAccount)).toNumber();
-		await tokenInstance.approve(exchangeInstance.address, satBal, {from: receiverAccount});
-		await strikeAssetInstance.approve(exchangeInstance.address, scBal, {from: receiverAccount});
 		await depositFunds(satBal, scBal, {from: receiverAccount});
 		//test for index 0 calls buys
 		await mintHandler.postOrder(maturity, strike, price, 1, true, true, {from: defaultAccount});
@@ -649,4 +641,153 @@ contract('exchange', async function(accounts) {
 			assert.equal(res, "OOF", "can't marketBuy without first adding maturity strike combo on options smart contract");
 		});
 	});
+
+	it('fills all possible orders in exchange with posted order index 0', async () => {
+		maturity++;
+		strike = 5;
+		amount = 3;
+		//send ample amount of funds for defaultAccount
+		await optionsInstance.withdrawFunds({from: defaultAccount});
+		await optionsInstance.withdrawFunds({from: receiverAccount});
+		await tokenInstance.transfer(defaultAccount, (await tokenInstance.balanceOf(originAccount)).toNumber(), {from: originAccount});
+		//because of 53 bit limit we cannot get strike asset balance of origin account
+		await strikeAssetInstance.transfer(defaultAccount, 100*strike*amount*satUnits, {from: originAccount});
+		await depositFunds(10*amount*satUnits, 10*amount*strike*scUnits, {from: defaultAccount});
+		await exchangeInstance.withdrawAllFunds(true, {from: receiverAccount});
+		//market orders that end not able to fuffil second call to acceptBuyOffer
+		await depositFunds((2*amount-1)*(satUnits-price), 0, {from: receiverAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+		await addStrike(receiverAccount, maturity, strike);
+		//should not revert
+		await exchangeInstance.marketSell(maturity, strike, price, 2*amount, true, {from: receiverAccount});
+		//correct amount of orders left
+		var headName = await exchangeInstance.listHeads(maturity, strike, 0);
+		var headNode = await exchangeInstance.linkedNodes(headName);
+		var headOffer = await exchangeInstance.offers(headNode.hash);
+		assert.equal(headOffer.amount.toNumber(), 1, "correct amount left after market sell");
+		assert.equal(headNode.next, defaultBytes32, "no next offer");
+		assert.equal((await exchangeInstance.viewClaimed(true, {from: receiverAccount})).toNumber(), 0, "correct balance for receiverAccount");
+		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
+		//now try setting amount to less than the amount in the market order to less than the amount in the second order so that this acceptBuyOffer is only called once
+		//we expect the second order in the linked list to not be affected
+		await depositFunds(amount*(satUnits-price), 0, {from: receiverAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
+		await exchangeInstance.marketSell(maturity, strike, price, 2*amount-1, true, {from: receiverAccount});		
+		headName = await exchangeInstance.listHeads(maturity, strike, 0);
+		headNode = await exchangeInstance.linkedNodes(headName);
+		headOffer = await exchangeInstance.offers(headNode.hash);
+		assert.equal(headOffer.amount.toNumber(), amount, "correct amount left after market sell");
+		assert.equal(headNode.next, defaultBytes32, "no next offer");
+		assert.equal((await exchangeInstance.viewClaimed(true, {from: receiverAccount})).toNumber(), 0, "correct balance for receiverAccount");
+		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
+	});
+
+	it('fills all possible orders in exchange with posted order index 1', async () => {
+		maturity++;
+
+		await exchangeInstance.withdrawAllFunds(true, {from: receiverAccount});
+		//market orders that end not able to fuffil second call to acceptBuyOffer
+		await depositFunds((2*amount-1)*price, 0, {from: receiverAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
+		await addStrike(receiverAccount, maturity, strike);
+		//should not revert
+		await exchangeInstance.marketBuy(maturity, strike, price, 2*amount, true, {from: receiverAccount});
+		//correct amount of orders left
+		var headName = await exchangeInstance.listHeads(maturity, strike, 1);
+		var headNode = await exchangeInstance.linkedNodes(headName);
+		var headOffer = await exchangeInstance.offers(headNode.hash);
+		assert.equal(headOffer.amount.toNumber(), 1, "correct amount left after market buy");
+		assert.equal(headNode.next, defaultBytes32, "no next offer");
+		assert.equal((await exchangeInstance.viewClaimed(true, {from: receiverAccount})).toNumber(), 0, "correct balance for receiverAccount");
+		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
+
+		await depositFunds(amount*price, 0, {from: receiverAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
+		await exchangeInstance.marketBuy(maturity, strike, price, 2*amount-1, true, {from: receiverAccount});		
+		headName = await exchangeInstance.listHeads(maturity, strike, 1);
+		headNode = await exchangeInstance.linkedNodes(headName);
+		headOffer = await exchangeInstance.offers(headNode.hash);
+		assert.equal(headOffer.amount.toNumber(), amount, "correct amount left after market buy");
+		assert.equal(headNode.next, defaultBytes32, "no next offer");
+		assert.equal((await exchangeInstance.viewClaimed(true, {from: receiverAccount})).toNumber(), 0, "correct balance for receiverAccount");
+		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
+	});
+
+	it('fills all possible orders in exchange with posted order index 2', async () => {
+		maturity++;
+		strike = 5;
+		//price must be lower than strike
+		price = strike-2;
+		//send ample amount of funds for defaultAccount
+		await optionsInstance.withdrawFunds({from: defaultAccount});
+		await optionsInstance.withdrawFunds({from: receiverAccount});
+		await strikeAssetInstance.transfer(receiverAccount, 100*strike*amount*scUnits, {from: originAccount});
+
+		await exchangeInstance.withdrawAllFunds(false, {from: receiverAccount});
+		//market orders that end not able to fuffil second call to acceptBuyOffer
+		await depositFunds(0, (2*amount-1)*(strike-price), {from: receiverAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
+		await addStrike(receiverAccount, maturity, strike);
+		await exchangeInstance.marketSell(maturity, strike, price, 2*amount, false, {from: receiverAccount});
+		var headName = await exchangeInstance.listHeads(maturity, strike, 2);
+		var headNode = await exchangeInstance.linkedNodes(headName);
+		var headOffer = await exchangeInstance.offers(headNode.hash);
+		assert.equal(headOffer.amount.toNumber(), 1, "correct amount left after market sell");
+		assert.equal(headNode.next, defaultBytes32, "no next offer");
+		assert.equal((await exchangeInstance.viewClaimed(false, {from: receiverAccount})).toNumber(), 0, "correct balance for receiverAccount");
+		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
+
+		await depositFunds(0, amount*(strike-price), {from: receiverAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
+		await exchangeInstance.marketSell(maturity, strike, price, 2*amount-1, false, {from: receiverAccount});		
+		headName = await exchangeInstance.listHeads(maturity, strike, 2);
+		headNode = await exchangeInstance.linkedNodes(headName);
+		headOffer = await exchangeInstance.offers(headNode.hash);
+		assert.equal(headOffer.amount.toNumber(), amount, "correct amount left after market sell");
+		assert.equal(headNode.next, defaultBytes32, "no next offer");
+		assert.equal((await exchangeInstance.viewClaimed(false, {from: receiverAccount})).toNumber(), 0, "correct balance for receiverAccount");
+		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
+	});
+
+
+	it('fills all possible orders in exchange with posted order index 3', async () => {
+		maturity++;
+		strike = 5;
+		//price must be lower than strike
+		price = strike-2;
+
+		await exchangeInstance.withdrawAllFunds(false, {from: receiverAccount});
+		//market orders that end not able to fuffil second call to acceptBuyOffer
+		await depositFunds(0, (2*amount-1)*price, {from: receiverAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
+		await addStrike(receiverAccount, maturity, strike);
+		await exchangeInstance.marketBuy(maturity, strike, price, 2*amount, false, {from: receiverAccount});
+		var headName = await exchangeInstance.listHeads(maturity, strike, 3);
+		var headNode = await exchangeInstance.linkedNodes(headName);
+		var headOffer = await exchangeInstance.offers(headNode.hash);
+		assert.equal(headOffer.amount.toNumber(), 1, "correct amount left after market buy");
+		assert.equal(headNode.next, defaultBytes32, "no next offer");
+		assert.equal((await exchangeInstance.viewClaimed(false, {from: receiverAccount})).toNumber(), 0, "correct balance for receiverAccount");
+		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
+
+		await depositFunds(0, amount*price, {from: receiverAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
+		await mintHandler.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
+		await exchangeInstance.marketBuy(maturity, strike, price, 2*amount-1, false, {from: receiverAccount});		
+		headName = await exchangeInstance.listHeads(maturity, strike, 3);
+		headNode = await exchangeInstance.linkedNodes(headName);
+		headOffer = await exchangeInstance.offers(headNode.hash);
+		assert.equal(headOffer.amount.toNumber(), amount, "correct amount left after market buy");
+		assert.equal(headNode.next, defaultBytes32, "no next offer");
+		assert.equal((await exchangeInstance.viewClaimed(false, {from: receiverAccount})).toNumber(), 0, "correct balance for receiverAccount");
+		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
+	});
+
 });

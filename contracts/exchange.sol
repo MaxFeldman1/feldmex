@@ -143,7 +143,6 @@ contract exchange{
     function withdrawAllFunds(bool _token) public returns(bool success){
         if (_token){
             uint val = claimedToken[msg.sender];
-            require(val > 0);
             ERC20 ua = ERC20(underlyingAssetAddress);
             claimedToken[msg.sender] = 0;
             success = ua.transfer(msg.sender, val);
@@ -151,7 +150,6 @@ contract exchange{
         }
         else {
             uint val = claimedStable[msg.sender];
-            require(val > 0);
             ERC20 sa = ERC20(strikeAssetAddress);
             claimedStable[msg.sender] = 0;
             success = sa.transfer(msg.sender, val);
@@ -504,13 +502,15 @@ contract exchange{
     function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public returns(uint unfilled){
         require(_strike != 0);
         require((options(optionsAddress)).contains(msg.sender, _maturity, _strike));
+        uint _satUnits = satUnits;  //gas savings
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
         require(listHeads[_maturity][_strike][index] != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
-            if (offer.amount > _amount){
+            if (offer.amount > _amount || ((_call?_satUnits:offer.strike)-offer.price)*offer.amount > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])){
+                uint maxAmt;
                 if (msg.sender == offer.offerer) {
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
@@ -518,18 +518,25 @@ contract exchange{
                     */
                     if (offer.index < 2) claimedToken[msg.sender] += offer.price * _amount;
                     else claimedStable[msg.sender] += offer.price * _amount;
+                    maxAmt = _amount;
                 }
                 else if (_call){
-                    (bool success, ) = mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, offer.price, true);
+                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
+                    if ((_satUnits-offer.price)*maxAmt > claimedToken[msg.sender]) maxAmt = claimedToken[msg.sender]/(_satUnits-offer.price);
+                    if (maxAmt == 0) return _amount;
+                    (bool success, ) = mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, maxAmt, offer.price, true);
                     if (!success) return _amount;
                 }
                 else {
-                    (bool success, ) = mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, offer.price, true);
+                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
+                    if ((offer.strike-offer.price)*maxAmt > claimedStable[msg.sender]) maxAmt = claimedStable[msg.sender]/(offer.strike-offer.price);
+                    if (maxAmt == 0) return _amount;
+                    (bool success, ) = mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, maxAmt, offer.price, true);
                     if (!success) return _amount;
                 }
-                offers[node.hash].amount -= _amount;
-                emit offerAccepted(node.name, _amount);
-                return 0;
+                offers[node.hash].amount -= maxAmt;
+                emit offerAccepted(node.name, maxAmt);
+                return _amount-maxAmt;
             }
             if (!takeBuyOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
@@ -560,27 +567,35 @@ contract exchange{
         Offer memory offer = offers[node.hash];
         require(listHeads[_maturity][_strike][index] != 0);
         //in each iteration we call options.mintCall/Put once
-        while (_amount > 0 && node.name != 0 && (_call ? claimedToken[msg.sender] : claimedStable[msg.sender]) >= offer.price && offer.price <= _limitPrice){
-            if (offer.amount > _amount){
+        while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice){
+            if (offer.amount > _amount || offer.price*offer.amount > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])){
+                uint maxAmt;
                 if (offer.offerer == msg.sender){
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                         therefore we do not need to call options.mintCall/Put
                     */
                     if (_call) claimedToken[msg.sender] += _amount * (satUnits - offer.price);
-                    else claimedStable[msg.sender] += _amount * (offer.strike - offer.price); 
+                    else claimedStable[msg.sender] += _amount * (offer.strike - offer.price);
+                    maxAmt = _amount;
                 }
                 else if (_call){
-                    (bool success, ) = mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, offer.price, false);
+                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
+                    if (offer.price*maxAmt > claimedToken[msg.sender]) maxAmt = claimedToken[msg.sender]/offer.price;
+                    if (maxAmt == 0) return _amount;
+                    (bool success, ) = mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, maxAmt, offer.price, false);
                     if (!success) return _amount;
                 }
                 else { //!call && msg.sender != offer.offerer
-                    (bool success, ) = mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, offer.price, false);
+                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
+                    if (offer.price*maxAmt > claimedStable[msg.sender]) maxAmt = claimedStable[msg.sender]/offer.price;
+                    if (maxAmt == 0) return _amount;
+                    (bool success, ) = mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, maxAmt, offer.price, false);
                     if (!success) return _amount;
                 }
-                offers[node.hash].amount -= _amount;
-                emit offerAccepted(node.name, _amount);
-                return 0;
+                offers[node.hash].amount -= maxAmt;
+                emit offerAccepted(node.name, maxAmt);
+                return _amount-maxAmt;
             }
             if (!takeSellOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
