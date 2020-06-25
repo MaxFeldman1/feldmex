@@ -507,7 +507,18 @@ contract options is Ownable {
         uint counter1; //counter for strikes[_addr][_maturity]
         uint counter2; //counter for strikes[_helperAddress][_helperMaturity]
         for (; counter2 < size2; counter1++) {
-            if (counter1 == size1 || strikes[_addr][_maturity][counter1] > strikes[_helperAddress][_helperMaturity][counter2])  revert(); //not all strikes have been added
+            //positions at unadded strikes may only be of positive amount
+            if (counter1 == size1 || strikes[_addr][_maturity][counter1] > strikes[_helperAddress][_helperMaturity][counter2]){
+                uint strike = strikes[_helperAddress][_helperMaturity][counter2];
+                int amount = _call ? callAmounts[_helperAddress][_helperMaturity][strike] : putAmounts[_helperAddress][_helperMaturity][strike];
+                assert(amount > 0);
+                if (_call)
+                    callAmounts[_addr][_maturity][strike] += amount;
+                else
+                    putAmounts[_addr][_maturity][strike] += amount;
+                counter2++;
+                counter1--;
+            }
             else if (strikes[_addr][_maturity][counter1] == strikes[_helperAddress][_helperMaturity][counter2]) {
                 uint strike = strikes[_helperAddress][_helperMaturity][counter2];
                 if (_call)
