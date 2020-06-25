@@ -463,7 +463,7 @@ contract options is Ownable {
 
         @param bool _call: true if the position is for calls false if it is for puts
     */
-    function inversePosition(bool _call) internal {
+    function inversePosition(bool _call) public {
         address _helperAddress = helperAddress;
         uint _helperMaturity = helperMaturity;
         uint size = strikes[_helperAddress][_helperMaturity].length;
