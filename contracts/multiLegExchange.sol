@@ -14,9 +14,6 @@ contract multiLegExchange {
 
     //------------functions to view balances----------------
     function viewClaimed(bool _token) public view returns(uint ret){ret = _token? claimedToken[msg.sender] : claimedStable[msg.sender];}
-    //function viewClaimedToken() public view returns(uint){return claimedToken[msg.sender];}
-
-    //function viewClaimedStable() public view returns(uint){return claimedStable[msg.sender];}
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{
@@ -61,12 +58,16 @@ contract multiLegExchange {
         uint amount
     );
 
+    event legsHashCreated(
+        bytes32 legsHash
+    );
+
     /*
         listHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
         the linked lists are ordered by price with the most enticing offers at the top near the head
     */
-    //maturity => legsHash => headNode.name [longCall, shortCall, longPut, shortPut]
-    mapping(uint => mapping(bytes32 => bytes32[2])) public listHeads;
+    //maturity => legsHash => headNode.name [buy w/ UnderlyingAsset, sell w/ UnderlyingAsset, buy w/ StrikeAsset, sell w/ StrikeAsset]
+    mapping(uint => mapping(bytes32 => bytes32[4])) public listHeads;
     
     //holds all nodes node.name is the identifier for the location in this mapping
     mapping (bytes32 => linkedNode) public linkedNodes;
@@ -92,6 +93,14 @@ contract multiLegExchange {
 
     mapping(bytes32 => position) public positions;
 
+    function positionInfo(bytes32 _legsHash) public view returns(int[] memory callAmounts, uint[] memory callStrikes, int[] memory putAmounts, uint[] memory putStrikes){
+        position memory pos = positions[_legsHash];
+        callAmounts = pos.callAmounts;
+        callStrikes = pos.callStrikes;
+        putAmounts = pos.putAmounts;
+        putStrikes = pos.putStrikes;
+    }
+
     function addLegHash(uint[] memory _callStrikes, int[] memory _callAmounts, uint[] memory _putStrikes, int[] memory _putAmounts) public {
         //make sure that this is a multi leg order
         require(_callAmounts.length > 0 && _putAmounts.length > 0);
@@ -106,9 +115,7 @@ contract multiLegExchange {
             prevStrike = _callStrikes[i];
             optionsContract.addPosition(_callStrikes[i], _callAmounts[i], true);
         }
-        uint maxUnderlyingAssetDebtor = optionsContract.transferAmountPosition(address(0), 1, true);
-        optionsContract.inversePosition(true);
-        uint maxUnderlyingAssetHolder = optionsContract.transferAmountPosition(address(0), 1, true);
+        (uint maxUnderlyingAssetDebtor, uint maxUnderlyingAssetHolder) = optionsContract.transferAmount(true);
 
         prevStrike = 0;
         optionsContract.clearPositions();
@@ -117,11 +124,10 @@ contract multiLegExchange {
             prevStrike = _putStrikes[i];
             optionsContract.addPosition(_putStrikes[i], _putAmounts[i], false);
         }
-        uint maxStrikeAssetDebtor = optionsContract.transferAmountPosition(address(0), 1, false);
-        optionsContract.inversePosition(false);
-        uint maxStrikeAssetHolder = optionsContract.transferAmountPosition(address(0), 1, false);
+        (uint maxStrikeAssetDebtor, uint maxStrikeAssetHolder) = optionsContract.transferAmount(false);
         position memory pos = position(_callAmounts, _callStrikes, _putAmounts, _putStrikes, maxUnderlyingAssetDebtor, maxUnderlyingAssetHolder, maxStrikeAssetDebtor, maxStrikeAssetHolder);
         positions[hash] = pos;
+        emit legsHashCreated(hash);
     }
     
     //address of the contract of the underlying digital asset such as WBTC or WETH
@@ -546,7 +552,7 @@ contract multiLegExchange {
         if (offer.offerer == _buyer){
             /*
                 state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                therefore we do not need to call options.mintCall/Put
+                therefore we do not need to call options.assignPosition
             */
             cancelOrderInternal(_name);
             return true;
@@ -605,7 +611,7 @@ contract multiLegExchange {
                 if (msg.sender == offer.offerer) {
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                        therefore we do not need to call options.mintCall/Put
+                        therefore we do not need to call options.assignPosition
                     */
                     position memory pos = positions[offer.legsHash];
                     if (offer.index == 0){
@@ -626,7 +632,7 @@ contract multiLegExchange {
                     if (offer.price < 0 && uint(-offer.price)*maxAmt > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender]))
                         maxAmt = (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])/uint(-offer.price);
                     if (maxAmt == 0) return _amount;
-                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, offer.amount, offer.price, offer.index);
+                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, maxAmt, offer.price, offer.index);
                     if (!success) return _amount;
 
                 }
@@ -690,7 +696,7 @@ contract multiLegExchange {
                     if (offer.price > 0 && uint(offer.price)*offer.amount > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender]))
                         maxAmt = (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])/uint(offer.price);
                     if (maxAmt == 0) return _amount;
-                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, offer.amount, offer.price, offer.index);
+                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, maxAmt, offer.price, offer.index);
                     if (!success) return _amount;
                 }
                 offers[node.hash].amount -= maxAmt;
@@ -722,16 +728,16 @@ contract multiLegExchange {
         //load call position
         optionsContract.clearPositions();
         for (uint i = 0; i < pos.callAmounts.length; i++)
-            optionsContract.addPosition(pos.callStrikes[i], pos.callAmounts[i], true);
+            optionsContract.addPosition(pos.callStrikes[i], int(_amount)*pos.callAmounts[i], true);
         if (_index%2==0){
             uint limit = claimedToken[_debtor];
             limit = uint(int(limit)+(_index<2 ? _price : 0));
-            optionsContract.setLimits(limit, pos.maxUnderlyingAssetHolder);
+            optionsContract.setLimits(limit, _amount * pos.maxUnderlyingAssetHolder);
         }
         else{
-            uint limit = claimedToken[_debtor];
+            uint limit = claimedToken[_holder];
             limit = uint(int(limit)-(_index<2 ? _price : 0));
-            optionsContract.setLimits(pos.maxUnderlyingAssetDebtor, limit);
+            optionsContract.setLimits(_amount * pos.maxUnderlyingAssetDebtor, limit);
         }
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return false;
@@ -740,16 +746,16 @@ contract multiLegExchange {
         //load put position
         optionsContract.clearPositions();
         for (uint i = 0; i < pos.putAmounts.length; i++)
-            optionsContract.addPosition(pos.putStrikes[i], pos.putAmounts[i], false);
+            optionsContract.addPosition(pos.putStrikes[i], int(_amount)*pos.putAmounts[i], false);
         if (_index%2==0){
             uint limit = claimedStable[_debtor];
             limit = uint(int(limit)+(_index>1 ? _price : 0));
-            optionsContract.setLimits(limit, pos.maxStrikeAssetHolder);
+            optionsContract.setLimits(limit, _amount * pos.maxStrikeAssetHolder);
         }
         else{
-            uint limit = claimedStable[_debtor];
+            uint limit = claimedStable[_holder];
             limit = uint(int(limit)-(_index>1 ? _price : 0));
-            optionsContract.setLimits(pos.maxStrikeAssetDebtor, limit);
+            optionsContract.setLimits(_amount * pos.maxStrikeAssetDebtor, limit);
         }
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return false;
@@ -761,12 +767,12 @@ contract multiLegExchange {
             if (_index < 2 && _price > 0) claimedToken[_debtor] += uint(_price);
             else if(_index < 2) claimedToken[_debtor] -= uint(-_price);
             claimedToken[_debtor] -= transferAmountDebtor;
-            claimedToken[_holder] += pos.maxUnderlyingAssetHolder - transferAmountHolder;
+            claimedToken[_holder] += _amount * pos.maxUnderlyingAssetHolder - transferAmountHolder;
         } else {
             if (_index < 2 && _price > 0) claimedToken[_holder] -= uint(_price);
             else if (_index < 2) claimedToken[_holder] += uint(-_price);
             claimedToken[_holder] -= transferAmountHolder;
-            claimedToken[_debtor] += pos.maxUnderlyingAssetDebtor - transferAmountDebtor;
+            claimedToken[_debtor] += _amount * pos.maxUnderlyingAssetDebtor - transferAmountDebtor;
         }
         satReserves -= transferAmountDebtor+transferAmountHolder;
         //update transfer amounts and handle distribution of funds in claimedStable mapping
@@ -774,14 +780,14 @@ contract multiLegExchange {
         transferAmountHolder = optionsContract.transferAmountHolder();
         if (_index%2==0){
             if (_index > 1 && _price > 0) claimedStable[_debtor] += uint(_price);
-            else if (_index < 2) claimedStable[_debtor] -= uint(-_price);
+            else if (_index > 1) claimedStable[_debtor] -= uint(-_price);
             claimedStable[_debtor] -= transferAmountDebtor;
-            claimedStable[_holder] += pos.maxStrikeAssetHolder - transferAmountHolder;
+            claimedStable[_holder] += _amount * pos.maxStrikeAssetHolder - transferAmountHolder;
         } else {
             if (_index > 1 && _price > 0) claimedStable[_holder] -= uint(_price);
-            else if (_index < 2) claimedStable[_holder] += uint(-_price);
+            else if (_index > 1) claimedStable[_holder] += uint(-_price);
             claimedStable[_holder] -= transferAmountHolder;
-            claimedStable[_debtor] += pos.maxStrikeAssetDebtor - transferAmountDebtor;
+            claimedStable[_debtor] += _amount * pos.maxStrikeAssetDebtor - transferAmountDebtor;
         }
         scReserves -= transferAmountDebtor+transferAmountHolder;
     }

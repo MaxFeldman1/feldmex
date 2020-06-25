@@ -367,36 +367,6 @@ contract options is Ownable {
 
 
     /*
-        @Description: used to find the amount by which a user's account would need to be funded for a user to make an order
-
-        @param bool _call: true if inquiry regards calls false if pretaining to puts
-        @param address _addr: the user in question
-        @param uint _maturity: the maturity timestamp in question
-        @param int _amount: the amount of calls or puts in the order, positive amount means buy, negative amount means sell
-        @param uint _strike: the strike price in question
-
-        @return uint: the amount of satUnits or scUnits that must be sent as collateral for the order described to go through
-    */
-    function transferAmount(bool _call, address _addr, uint _maturity, int _amount, uint _strike) public returns (uint value){
-        require(msg.sender == _addr || msg.sender == exchangeAddress);
-        if (_amount >= 0) return 0;
-        if (_call){
-            int amt = callAmounts[_addr][_maturity][_strike];
-            callAmounts[_addr][_maturity][_strike] += _amount;
-            (uint minCollateral, ) = minSats(_addr, _maturity);
-            value = minCollateral-satCollateral[_addr][_maturity];
-            callAmounts[_addr][_maturity][_strike] = amt;
-        }
-        else {
-            int amt = putAmounts[_addr][_maturity][_strike];
-            putAmounts[_addr][_maturity][_strike] += _amount;
-            (uint minCollateral, ) = minSc(_addr, _maturity);
-            value = minCollateral-scCollateral[_addr][_maturity];
-            putAmounts[_addr][_maturity][_strike] = amt;
-        }
-    }
-
-    /*
         @Description: The function was created for positions at a strike to be inclueded in calculation of collateral requirements for a user
             User calls this instead of smart contract adding strikes automatically when funds are transfered to an address by the transfer or transferFrom functions
             because it prevents a malicious actor from overloading a user with many different strikes thus making it impossible to claim funds because of the gas limit
@@ -477,19 +447,16 @@ contract options is Ownable {
     }
 
     /*
-        @Description:finds the amount of collateral needed for an address to take on a position
+        @Description:finds the maximum amount of collateral needed to take on a position
 
-        @param address _addr: the address of the account for which to find collateral requirements
-        @param uint _maturity: the maturity for which to find collateral requirements
         @param bool _call: true if the position is for calls false if it is for puts
     */
-    function transferAmountPosition(address _addr, uint _maturity, bool _call) public returns (uint value) {
-        combinePosition(_addr, _maturity, _call);
-        (uint minCollateral, ) = _call ? minSats(_addr, _maturity) : minSc(_addr, _maturity);
-        value = minCollateral - (_call ? satCollateral : scCollateral)[_addr][_maturity];
+    function transferAmount(bool _call) public returns (uint _debtorTransfer, uint _holderTransfer) {
+        address _helperAddress = helperAddress; //gas savings
+        uint _helperMaturity = helperMaturity;  //gas savings
+        (_holderTransfer, ) = _call ? minSats(_helperAddress, _helperMaturity) : minSc(_helperAddress, _helperMaturity);
         inversePosition(_call);
-        combinePosition(_addr, _maturity, _call);
-        transferAmountHolder = value;
+        (_debtorTransfer, ) = _call ? minSats(_helperAddress, _helperMaturity) : minSc(_helperAddress, _helperMaturity);
     }
 
     /*
