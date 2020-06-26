@@ -126,8 +126,8 @@ contract('multi leg exchange', function(accounts){
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], true)).toNumber(), (amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], true)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance first account");
 		}
 
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetDebtor-price)+ amount*(maxUnderlyingAssetDebtor-secondPrice), "correct underlying asset balance after market sell");
@@ -145,8 +145,8 @@ contract('multi leg exchange', function(accounts){
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], true)).toNumber(), 2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], true)).toNumber(), -2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance first account");
 		}
 
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after all orders");
@@ -202,8 +202,8 @@ contract('multi leg exchange', function(accounts){
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], true)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], true)).toNumber(), (amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance first account");
 		}
 
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetHolder+price)+ amount*(maxUnderlyingAssetHolder+secondPrice), "correct underlying asset balance after market sell");
@@ -221,8 +221,8 @@ contract('multi leg exchange', function(accounts){
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], true)).toNumber(), -2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], true)).toNumber(), 2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance first account");
 		}
 
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after all orders");
@@ -280,8 +280,8 @@ contract('multi leg exchange', function(accounts){
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], true)).toNumber(), (amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], true)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance first account");
 		}
 
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: accounts[1]})).toNumber(), (amount+5)*maxUnderlyingAssetDebtor, "correct underlying asset balance after market sell");
@@ -299,8 +299,8 @@ contract('multi leg exchange', function(accounts){
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], true)).toNumber(), 2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], true)).toNumber(), -2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance first account");
 		}
 
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after all orders");
@@ -357,8 +357,8 @@ contract('multi leg exchange', function(accounts){
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], true)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], true)).toNumber(), (amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance first account");
 		}
 
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: accounts[1]})).toNumber(), (amount+5)*maxUnderlyingAssetHolder, "correct underlying asset balance after market sell");
@@ -377,8 +377,8 @@ contract('multi leg exchange', function(accounts){
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], true)).toNumber(), -2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], true)).toNumber(), 2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance first account");
 		}
 
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after all orders");
