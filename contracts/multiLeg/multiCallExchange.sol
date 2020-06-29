@@ -1,6 +1,6 @@
 pragma solidity ^0.5.12;
-import "./interfaces/ERC20.sol";
-import "./options.sol";
+import "../interfaces/ERC20.sol";
+import "../options.sol";
 
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract

@@ -1,7 +1,7 @@
 var oracle = artifacts.require("./oracle.sol");
 var token = artifacts.require("./UnderlyingAsset.sol");
 var options = artifacts.require("./options.sol");
-var multiPutExchange = artifacts.require("./multiPutExchange.sol");
+var multiPutExchange = artifacts.require("./multiLeg/multiPutExchange.sol");
 
 const helper = require("../helper/helper.js");
 

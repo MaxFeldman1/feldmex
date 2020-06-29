@@ -162,8 +162,8 @@ contract options is Ownable {
             uint strike = strikes[msg.sender][_maturity][i];
             int callAmount = callAmounts[msg.sender][_maturity][strike];
             int putAmount = putAmounts[msg.sender][_maturity][strike];
-            callAmounts[msg.sender][_maturity][strike] = 0;
-            putAmounts[msg.sender][_maturity][strike] = 0;
+            delete callAmounts[msg.sender][_maturity][strike];
+            delete putAmounts[msg.sender][_maturity][strike];
             callValue += satValueOf(callAmount, strike, spot);
             putValue += scValueOf(putAmount, strike, spot);
             delete containedStrikes[msg.sender][_maturity][strike];
