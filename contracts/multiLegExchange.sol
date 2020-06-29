@@ -224,6 +224,18 @@ contract multiLegExchange {
     }
 
 
+    function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
+        position memory pos = positions[_legsHash];
+        options optionsContract = options(optionsAddress);
+        for (uint i = 0; i < pos.callStrikes.length; i++){
+            if (!optionsContract.containedStrikes(msg.sender, _maturity, pos.callStrikes[i])) return false;
+        }
+        for (uint i = 0; i < pos.putStrikes.length; i++){
+            if (!optionsContract.containedStrikes(msg.sender, _maturity, pos.putStrikes[i])) return false;
+        }
+        contains = true;
+    }
+
     /*
         @Description: creates an order and posts it in one of the 4 linked lists depending on if it is a buy or sell order and if it is for calls or puts
             unless this is the first order of its kind functionality is outsourced to insertOrder
@@ -239,13 +251,14 @@ contract multiLegExchange {
         require(_maturity != 0 && _legsHash != 0 && _amount != 0);
         position memory pos = positions[_legsHash];
 
-        //check that the neccesary strikes have been added
-
         if (listHeads[_maturity][_legsHash][_index] != 0) {
             insertOrder(_maturity, _legsHash, _price, _amount, _index, listHeads[_maturity][_legsHash][_index]);
             return;
         }
         //only continue execution here if listHead[_maturity][_legsHash][index] == 0
+
+        require(containsStrikes(_maturity, _legsHash));
+
         if (_index == 0){
             uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price));
             if (int(req) < 0) req = 0;
@@ -310,9 +323,10 @@ contract multiLegExchange {
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].legsHash == _legsHash && _maturity != 0 &&  _legsHash != 0);
         require(offers[linkedNodes[_name].hash].index == _index);
 
-        //ensure that the neccesary strikes have been added
+        require(containsStrikes(_maturity, _legsHash));
 
         position memory pos = positions[_legsHash];
+
 
         if (_index == 0){
             uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price));
@@ -600,6 +614,7 @@ contract multiLegExchange {
     */
     function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, bool _call) public returns(uint unfilled){
         require(_legsHash != 0);
+        require(containsStrikes(_maturity, _legsHash));
         //ensure all strikes are contained
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][index]];
@@ -664,6 +679,7 @@ contract multiLegExchange {
     */
     function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, bool _call) public returns (uint unfilled){
         require(_legsHash != 0);
+        require(containsStrikes(_maturity, _legsHash));
         //ensure all strikes are contained
         uint8 index = (_call ? 1 : 3);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][index]];

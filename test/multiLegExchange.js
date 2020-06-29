@@ -21,7 +21,7 @@ contract('multi leg exchange', function(accounts){
 		asset2 = await token.new(0);
 		oracleInstance = await oracle.new(asset1.address, asset2.address);
 		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address);
-		multiLegExchangeInstance = await multiLegExchange.new(asset1.address, asset2.address, optionsInstance.address);
+		multiLegExchangeInstance = await multiLegExchange.new(asset1.address, asset2.address, optionsInstance.address, {gas: 10000000});
 		asset1SubUnits = Math.pow(10, await asset1.decimals());
 		asset2SubUnits = Math.pow(10, await asset2.decimals());
 		inflator = await oracleInstance.inflator();

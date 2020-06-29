@@ -12,7 +12,7 @@ var amount = 10;
 
 
 
-contract('multi leg exchange', function(accounts){
+contract('multi call exchange', function(accounts){
 
 	var deployerAccount = accounts[0];
 

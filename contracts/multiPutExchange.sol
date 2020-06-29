@@ -178,6 +178,15 @@ contract multiPutExchange {
     }
 
 
+    function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
+        position memory pos = positions[_legsHash];
+        options optionsContract = options(optionsAddress);
+        for (uint i = 0; i < pos.putStrikes.length; i++){
+            if (!optionsContract.containedStrikes(msg.sender, _maturity, pos.putStrikes[i])) return false;
+        }
+        contains = true;
+    }
+
     /*
         @Description: creates an order and posts it in one of the 4 linked lists depending on if it is a buy or sell order and if it is for calls or puts
             unless this is the first order of its kind functionality is outsourced to insertOrder
@@ -199,6 +208,9 @@ contract multiPutExchange {
             return;
         }
         //only continue execution here if listHead[_maturity][_legsHash][index] == 0
+
+        require(containsStrikes(_maturity, _legsHash));
+
         if (_index == 0){
             uint req = uint(int(_amount) * (int(pos.maxStrikeAssetHolder) + _price));
             if (int(req) < 0) req = 0;
@@ -238,7 +250,7 @@ contract multiPutExchange {
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].legsHash == _legsHash && _maturity != 0 &&  _legsHash != 0);
         require(offers[linkedNodes[_name].hash].index == _index);
 
-        //ensure that the neccesary strikes have been added
+        require(containsStrikes(_maturity, _legsHash));
 
         position memory pos = positions[_legsHash];
 
@@ -487,7 +499,8 @@ contract multiPutExchange {
     */
     function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount) public returns(uint unfilled){
         require(_legsHash != 0);
-        //ensure all strikes are contained
+        require(containsStrikes(_maturity, _legsHash));
+
         linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][0]];
         Offer memory offer = offers[node.hash];
         require(node.name != 0);
@@ -541,7 +554,8 @@ contract multiPutExchange {
     */
     function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount) public returns (uint unfilled){
         require(_legsHash != 0);
-        //ensure all strikes are contained
+        require(containsStrikes(_maturity, _legsHash));
+
         linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][1]];
         Offer memory offer = offers[node.hash];
         require(node.name != 0);

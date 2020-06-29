@@ -130,6 +130,8 @@ contract options is Ownable {
     */
     //address => maturity => array of strikes
     mapping(address => mapping(uint => uint[])) strikes;
+    //address => maturity => strike => contained
+    mapping(address => mapping(uint => mapping(uint => bool))) public containedStrikes;
 
     /*
         satDeduction is the amount of underlying asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for calls
@@ -156,7 +158,7 @@ contract options is Ownable {
         uint callValue = 0;
         uint putValue = 0;
         //calls & puts
-        for (uint i = 0; i < strikes[msg.sender][_maturity].length; i++){
+        for (uint i = strikes[msg.sender][_maturity].length-1; i != uint(-1); i--){
             uint strike = strikes[msg.sender][_maturity][i];
             int callAmount = callAmounts[msg.sender][_maturity][strike];
             int putAmount = putAmounts[msg.sender][_maturity][strike];
@@ -164,6 +166,7 @@ contract options is Ownable {
             putAmounts[msg.sender][_maturity][strike] = 0;
             callValue += satValueOf(callAmount, strike, spot);
             putValue += scValueOf(putAmount, strike, spot);
+            delete containedStrikes[msg.sender][_maturity][strike];
         }
         //satValueOf is inflated by _price parameter and scValueOf thus only divide out spot from callValue not putValue
         callValue /= spot;
@@ -386,6 +389,7 @@ contract options is Ownable {
         for (uint i = size-1; i >= _index && i != uint(-1); i--)
             strikes[msg.sender][_maturity][i+1] = strikes[msg.sender][_maturity][i];
         strikes[msg.sender][_maturity][_index] = _strike;
+        containedStrikes[msg.sender][_maturity][_strike] = true;
     }
 
 
