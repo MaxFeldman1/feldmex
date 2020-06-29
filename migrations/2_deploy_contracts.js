@@ -9,6 +9,9 @@ const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
 const cHelper = artifacts.require("cHelper");
 const orcHelper = artifacts.require("orcHelper");
+const mCallHelper = artifacts.require("mCallHelper");
+const mPutHelper = artifacts.require("mPutHelper");
+const mOrganizer = artifacts.require("mOrganizer");
 
 module.exports = function(deployer) {
   deployer.deploy(underlyingAsset, 0).then((res) => {
@@ -37,5 +40,15 @@ module.exports = function(deployer) {
     organiserInstance = res;
     organiserAddress = res.address;
     return cHelperInstance.transferOwnership(organiserAddress);
+  }).then(() => {
+    return mCallHelper.new();
+  }).then((res) => {
+    mCallHelperInstance = res;
+    return mPutHelper.new();
+  }).then((res) => {
+    mPutHelperInstance = res;
+    return mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address);
+  }).then((res) => {
+    mOrganizerInstance = res;
   });
 }
