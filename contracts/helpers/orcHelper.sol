@@ -1,6 +1,6 @@
 pragma solidity ^0.5.12;
-import "./interfaces/Ownable.sol";
-import "./oracle.sol";
+import "../interfaces/Ownable.sol";
+import "../oracle.sol";
 
 
 contract orcHelper {

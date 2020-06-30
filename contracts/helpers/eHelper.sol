@@ -1,5 +1,5 @@
 pragma solidity ^0.5.12;
-import "./exchange.sol";
+import "../exchange.sol";
 
 /*
 	This contract allows us to deploy the options smart contract without going over gas limit
