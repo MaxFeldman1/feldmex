@@ -7,6 +7,7 @@ const container = artifacts.require("container");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
 const orcHelper = artifacts.require("orcHelper");
+const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 const helper = require("../helper/helper.js");
 
@@ -20,10 +21,11 @@ contract('container', async function(accounts){
 	it('before each', async () => {
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
-		oHelperInstance = await oHelper.new();
+		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
+		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address);
 		eHelperInstance = await eHelper.new();
 		orcHelperInstance = await orcHelper.new();
-		containerInstance = await container.new(tokenInstance.address, strikeAssetInstance.address, oHelperInstance.address, eHelperInstance.address, orcHelperInstance.address, 0, 0);
+		containerInstance = await container.new(tokenInstance.address, strikeAssetInstance.address, oHelperInstance.address, eHelperInstance.address, orcHelperInstance.address);
 		await containerInstance.depOptions();
 		await containerInstance.depExchange();
 		assert.equal(await containerInstance.progress(), 2, "first options chain setup has been sucessfully completed");

@@ -9,6 +9,7 @@ const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
 const cHelper = artifacts.require("cHelper");
 const orcHelper = artifacts.require("orcHelper");
+const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 const nullAddress = "0x0000000000000000000000000000000000000000";
 
@@ -16,7 +17,8 @@ contract('organiser', async function(accounts){
 	it('before each', async () => {
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
-		oHelperInstance = await oHelper.new();
+		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
+		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address);
 		eHelperInstance = await eHelper.new();
 		cHelperInstance = await cHelper.new();
 		orcHelperInstance = await orcHelper.new();

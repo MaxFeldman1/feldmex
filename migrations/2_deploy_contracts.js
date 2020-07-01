@@ -11,11 +11,14 @@ const orcHelper = artifacts.require("orcHelper");
 const mCallHelper = artifacts.require("mCallHelper");
 const mPutHelper = artifacts.require("mPutHelper");
 const mOrganizer = artifacts.require("mOrganizer");
+const FeldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 module.exports = async function(deployer) {
   underlyingAssetAddress  = await deployer.deploy(underlyingAsset, 0);
   strikeAssetAddress = await deployer.deploy(underlyingAsset, 0);
-  oHelperInstance = await deployer.deploy(oHelper);
+  FeldmexERC20HelperInstance = await deployer.deploy(FeldmexERC20Helper);
+  FeldmexERC20HelperAddress = FeldmexERC20HelperInstance.address;
+  oHelperInstance = await deployer.deploy(oHelper, FeldmexERC20HelperAddress);
   oHelperAddress = oHelperInstance.address;
   eHelperInstance = await deployer.deploy(eHelper);
   eHelperAddress = eHelperInstance.address;

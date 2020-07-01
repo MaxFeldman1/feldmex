@@ -1,7 +1,8 @@
-var oracle = artifacts.require("./oracle.sol");
-var underlyingAsset = artifacts.require("./UnderlyingAsset.sol");
-var options = artifacts.require("./options.sol");
-var strikeAsset = artifacts.require("./strikeAsset.sol");
+const oracle = artifacts.require("oracle");
+const underlyingAsset = artifacts.require("UnderlyingAsset");
+const options = artifacts.require("options");
+const strikeAsset = artifacts.require("strikeAsset");
+const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 const helper = require("../helper/helper.js");
 
@@ -29,7 +30,8 @@ contract('options', async function(accounts){
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
-		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address);
+		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
+		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address, feldmexERC20HelperInstance.address);
 		feeDenominator = 1000;
 		await optionsInstance.setFee(1000, {from: accounts[0]});
 		inflatorObj = {};

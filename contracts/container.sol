@@ -26,6 +26,8 @@ contract container is ERC20, Ownable, yieldEnabled {
 	ERC20 public Asset1Contract;
 	//smart contract of the asset in the denominator of oracle price
 	ERC20 public Asset2Contract;
+    //address of the FeldmexERC20Helper contract that is responsible for providing ERC20 interfaces for options
+    address feldmexERC20HelperAddress;
 
 	//address of the smart contract that helps deploy optionsContract
 	address oHelperAddress;
@@ -48,9 +50,9 @@ contract container is ERC20, Ownable, yieldEnabled {
 
 
 	//total amount of smallest denomination units of coin in this smart contract
-	uint public totalSupply;
-	//10 ** decimals == the number of sub units in a whole coin
-	uint8 public decimals;
+	uint public totalSupply = 10 ** uint(10);
+	//10 ** decimals == the amount of sub units in a whole coin
+	uint8 public decimals = 4;
 	//each user's balance of coins
 	mapping(address => uint) public balanceOf;
 	//the amount of funds each address has allowed other addresses to spend on the first address's behalf
@@ -65,15 +67,8 @@ contract container is ERC20, Ownable, yieldEnabled {
 		@param address _asset2Address: the address of the ERC20 contract of asset2
 		@param address _oHelperAddress: the address of the oHelper contract that helps with deployment of the options contract
 		@param address _eHelperAddress: the address of the eHelper contract that helps with deployment of the exchange contract
-		@param uint _totalCoins: the number of full coins to be included in the total supply
-		@param uint _decimals: the number of digits to which each full unit of coin is divisible
 	*/
-	constructor (address _asset1Address, address _asset2Address, address _oHelperAddress, address _eHelperAddress, address _orcHelperAddress, uint _totalCoins, uint8 _decimals) public {
-		if (_totalCoins == 0) _totalCoins = 1000000;
-		if (_decimals == 0) _decimals = 4;
-		owner = msg.sender;
-		decimals = _decimals;
-		totalSupply = _totalCoins * (uint(10) ** decimals);
+	constructor (address _asset1Address, address _asset2Address, address _oHelperAddress, address _eHelperAddress, address _orcHelperAddress) public {
 		balanceOf[owner] = totalSupply;
 		yieldDistribution[msg.sender][msg.sender] = totalSupply;
 		totalYield[msg.sender] = totalSupply;

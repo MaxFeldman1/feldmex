@@ -11,7 +11,7 @@ contract cHelper is Ownable {
 	mapping(address => mapping(address => address)) public containerAddress;
 
 	function deploy(address _underlyingAssetAddress, address _strikeAssetAddress, address _oHelperAddress, address _eHelperAddress, address _orcHelperAddress) onlyOwner public {
-		containerAddress[_underlyingAssetAddress][_strikeAssetAddress] = address(new container(_underlyingAssetAddress, _strikeAssetAddress, _oHelperAddress, _eHelperAddress, _orcHelperAddress, 0, 0));
+		containerAddress[_underlyingAssetAddress][_strikeAssetAddress] = address(new container(_underlyingAssetAddress, _strikeAssetAddress, _oHelperAddress, _eHelperAddress, _orcHelperAddress));
 		container(containerAddress[_underlyingAssetAddress][_strikeAssetAddress]).transferOwnership(msg.sender);
 		containerAddress[_strikeAssetAddress][_underlyingAssetAddress] = containerAddress[_underlyingAssetAddress][_strikeAssetAddress];
 	}

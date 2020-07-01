@@ -2,6 +2,7 @@ var oracle = artifacts.require("./oracle.sol");
 var token = artifacts.require("./UnderlyingAsset.sol");
 var options = artifacts.require("./options.sol");
 var multiCallExchange = artifacts.require("./multiLeg/multiCallExchange.sol");
+const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 const helper = require("../helper/helper.js");
 
@@ -20,7 +21,8 @@ contract('multi call exchange', function(accounts){
 		asset1 = await token.new(0);
 		asset2 = await token.new(0);
 		oracleInstance = await oracle.new(asset1.address, asset2.address);
-		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address);
+		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
+		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address, feldmexERC20HelperInstance.address);
 		multiCallExchangeInstance = await multiCallExchange.new(asset1.address, optionsInstance.address);
 		asset1SubUnits = Math.pow(10, await asset1.decimals());
 		inflator = await oracleInstance.inflator();

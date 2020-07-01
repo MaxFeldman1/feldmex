@@ -3,6 +3,7 @@ import "./interfaces/ITimeSeriesOracle.sol";
 import "./oracle.sol";
 import "./interfaces/ERC20.sol";
 import "./interfaces/Ownable.sol";
+import "./FeldmexERC20Helper.sol";
 
 contract options is Ownable {
     //address of the contract of the price oracle for the underlying asset in terms of the strike asset such as a price oracle for WBTC/DAI
@@ -13,6 +14,8 @@ contract options is Ownable {
     address public strikeAssetAddress;
     //address of the exchange is allowed to see collateral requirements for all users
     address exchangeAddress;
+    //address of the FeldmexERC20Helper contract that is responsible for providing ERC20 interfaces for options
+    address feldmexERC20HelperAddress;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
@@ -42,13 +45,14 @@ contract options is Ownable {
         @param address _oracleAddress: address that shall be assigned to oracleAddress
         @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
         @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
+        @param address _feldmexERC20HelperAddress: address that will be assigned to feldmexERC20HelperAddress
     */
-    constructor (address _oracleAddress, address _underlyingAssetAddress, address _strikeAssetAddress) public {
+    constructor (address _oracleAddress, address _underlyingAssetAddress, address _strikeAssetAddress, address _feldmexERC20HelperAddress) public {
         oracleAddress = _oracleAddress;
         underlyingAssetAddress = _underlyingAssetAddress;
         strikeAssetAddress = _strikeAssetAddress;
         exchangeAddress = msg.sender;
-        //ITimeSeriesOracle orc = ITimeSeriesOracle(oracleAddress);
+        feldmexERC20HelperAddress = _feldmexERC20HelperAddress;
         oracle orc = oracle(oracleAddress);
         inflator = orc.inflator();
         ERC20 ua = ERC20(underlyingAssetAddress);
@@ -473,31 +477,20 @@ contract options is Ownable {
     function combinePosition(address _addr, uint _maturity, bool _call) internal {
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity; //gas savings
-        uint size1 = strikes[_addr][_maturity].length;
-        uint size2 = strikes[_helperAddress][_helperMaturity].length;
-        uint counter1; //counter for strikes[_addr][_maturity]
-        uint counter2; //counter for strikes[_helperAddress][_helperMaturity]
-        for (; counter2 < size2; counter1++) {
-            //positions at unadded strikes may only be of positive amount
-            if (counter1 == size1 || strikes[_addr][_maturity][counter1] > strikes[_helperAddress][_helperMaturity][counter2]){
-                uint strike = strikes[_helperAddress][_helperMaturity][counter2];
-                int amount = _call ? callAmounts[_helperAddress][_helperMaturity][strike] : putAmounts[_helperAddress][_helperMaturity][strike];
-                assert(amount > 0);
-                if (_call)
-                    callAmounts[_addr][_maturity][strike] += amount;
-                else
-                    putAmounts[_addr][_maturity][strike] += amount;
-                counter2++;
-                counter1--;
+        uint size = strikes[_helperAddress][_helperMaturity].length;
+        for (uint i; i < size; i++) {
+            uint strike = strikes[_helperAddress][_helperMaturity][i];
+            int amount = _call ? callAmounts[_helperAddress][_helperMaturity][strike] : putAmounts[_helperAddress][_helperMaturity][strike];
+            if (!containedStrikes[_addr][_maturity][strike] && amount <= 0) {
+                address ERC20WrapperAddress  = _call ?
+                    FeldmexERC20Helper(feldmexERC20HelperAddress).callERC20s(address(this), _maturity, strike) :
+                    FeldmexERC20Helper(feldmexERC20HelperAddress).putERC20s(address(this), _maturity, strike);
+                assert(msg.sender == ERC20WrapperAddress);
             }
-            else if (strikes[_addr][_maturity][counter1] == strikes[_helperAddress][_helperMaturity][counter2]) {
-                uint strike = strikes[_helperAddress][_helperMaturity][counter2];
-                if (_call)
-                    callAmounts[_addr][_maturity][strike] += callAmounts[_helperAddress][_helperMaturity][strike];
-                else
-                    putAmounts[_addr][_maturity][strike] += putAmounts[_helperAddress][_helperMaturity][strike];
-                counter2++;
-            }
+            if (_call)
+                callAmounts[_addr][_maturity][strike] += amount;
+            else
+                putAmounts[_addr][_maturity][strike] += amount;
         }
     }
 
@@ -532,6 +525,10 @@ contract options is Ownable {
         if (minCollateral > satCollateral[_holder][_maturity]){
             transferAmtHolder = minCollateral - satCollateral[_holder][_maturity];
             assert(transferAmtHolder <= maxHolderTransfer);
+            if (msg.sender == trustedAddress && !useDebtorInternalFunds) {
+                assert(claimedTokens[_holder] >= transferAmtHolder);
+                claimedTokens[_holder] -= transferAmtHolder;
+            }
         }
         else 
             claimedTokens[_holder] += satCollateral[_holder][_maturity] - minCollateral;
@@ -546,18 +543,23 @@ contract options is Ownable {
         if (minCollateral > satCollateral[_debtor][_maturity]){
             transferAmtDebtor = minCollateral - satCollateral[_debtor][_maturity];
             assert(transferAmtDebtor <= maxDebtorTransfer);
+            if (msg.sender == trustedAddress && useDebtorInternalFunds) {
+                assert(claimedTokens[_debtor] >= transferAmtHolder);
+                claimedTokens[_debtor] -= transferAmtHolder;
+            }
         }
         else
             claimedTokens[_debtor] += satCollateral[_debtor][_maturity] - minCollateral;
         satCollateral[_debtor][_maturity] = minCollateral;
         satDeduction[_debtor][_maturity] = liabilities - minCollateral;
+        uint senderTransfer = (msg.sender == trustedAddress ? (useDebtorInternalFunds? transferAmtHolder: transferAmtDebtor) : transferAmtHolder+transferAmtDebtor);
         if (useDeposits[msg.sender]){
-            assert(claimedTokens[msg.sender] >= transferAmtHolder+transferAmtDebtor);
-            claimedTokens[msg.sender] -= transferAmtHolder+transferAmtDebtor;
+            assert(claimedTokens[msg.sender] >= senderTransfer);
+            claimedTokens[msg.sender] -= senderTransfer;
         }
         else{
-            ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
-            satReserves += transferAmtHolder+transferAmtDebtor;
+            ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), senderTransfer);
+            satReserves += senderTransfer;
         }
         transferAmountDebtor = transferAmtDebtor;
         transferAmountHolder = transferAmtHolder;
@@ -582,6 +584,10 @@ contract options is Ownable {
         if (minCollateral > scCollateral[_holder][_maturity]){
             transferAmtHolder = minCollateral - scCollateral[_holder][_maturity];
             assert(transferAmtHolder <= maxHolderTransfer);
+            if (msg.sender == trustedAddress && !useDebtorInternalFunds) {
+                assert(claimedStable[_holder] >= transferAmtHolder);
+                claimedStable[_holder] -= transferAmtHolder;
+            }
         }
         else
             claimedStable[_holder] += scCollateral[_holder][_maturity] - minCollateral;
@@ -597,18 +603,23 @@ contract options is Ownable {
         if (minCollateral > scCollateral[_debtor][_maturity]){
             transferAmtDebtor = minCollateral - scCollateral[_debtor][_maturity];
             assert(transferAmtDebtor <= maxDebtorTransfer);
+            if (msg.sender == trustedAddress && useDebtorInternalFunds) {
+                assert(claimedStable[_debtor] >= transferAmtHolder);
+                claimedStable[_debtor] -= transferAmtHolder;
+            }
         }
         else
             claimedStable[_debtor] += scCollateral[_debtor][_maturity] - minCollateral;
         scCollateral[_debtor][_maturity] = minCollateral;
         scDeduction[_debtor][_maturity] = liabilities - minCollateral;
+        uint senderTransfer = (msg.sender == trustedAddress ? (useDebtorInternalFunds? transferAmtHolder: transferAmtDebtor) : transferAmtHolder+transferAmtDebtor);
         if (useDeposits[msg.sender]){
-            assert(claimedStable[msg.sender] >= transferAmtHolder+transferAmtDebtor);
-            claimedStable[msg.sender] -= transferAmtHolder+transferAmtDebtor;
+            assert(claimedStable[msg.sender] >= senderTransfer);
+            claimedStable[msg.sender] -= senderTransfer;
         }
         else {
-            ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), transferAmtHolder+transferAmtDebtor);
-            scReserves += transferAmtHolder+transferAmtDebtor;
+            ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), senderTransfer);
+            scReserves += senderTransfer;
         }
         transferAmountDebtor = transferAmtDebtor;
         transferAmountHolder = transferAmtHolder;
@@ -620,6 +631,9 @@ contract options is Ownable {
     uint maturity;
     uint maxDebtorTransfer;
     uint maxHolderTransfer;
+
+    address trustedAddress;
+    bool useDebtorInternalFunds;
 
     /*
         @Description: set the values of debtor, holder, and maturity before calling assignCallPosition or assignPutPosition
@@ -633,6 +647,26 @@ contract options is Ownable {
         holder = _holder;
         maturity = _maturity;
     }
+
+    /*
+        @Description: sets the method by which funds will be aquired to fuffil collateral requirements
+
+        @param bool _useDebtorInternalFunds: when msg.sender in assignCall/PutPosition is trusted address
+            if false debtor funds stored in this contract will be used to fuffil debtor collateral requirements
+            if true holder funds stored in this contract will be used to fuffil holder collateral requirements
+    */
+    function setPaymentParams(bool _useDebtorInternalFunds) public {
+        useDebtorInternalFunds = _useDebtorInternalFunds;
+    }
+
+    //trusted address may be set to any FeldmexERC20Helper contract address
+    function setTrustedAddress(uint _maturity, uint _strike, bool _call) public {
+        trustedAddress = _call ? 
+            FeldmexERC20Helper(feldmexERC20HelperAddress).callERC20s(address(this), _maturity, _strike) :
+            FeldmexERC20Helper(feldmexERC20HelperAddress).putERC20s(address(this), _maturity, _strike);
+    }
+    //set the trusted address to the exchange address
+    function setTrustedAddressMainExchange() public {trustedAddress = exchangeAddress;}
 
     /*
         @Description: set the maximum values for the transfer amounts
