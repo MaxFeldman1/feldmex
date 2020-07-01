@@ -11,14 +11,18 @@ const orcHelper = artifacts.require("orcHelper");
 const mCallHelper = artifacts.require("mCallHelper");
 const mPutHelper = artifacts.require("mPutHelper");
 const mOrganizer = artifacts.require("mOrganizer");
-const FeldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
+const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 module.exports = async function(deployer) {
   underlyingAssetAddress  = await deployer.deploy(underlyingAsset, 0);
   strikeAssetAddress = await deployer.deploy(underlyingAsset, 0);
-  FeldmexERC20HelperInstance = await deployer.deploy(FeldmexERC20Helper);
-  FeldmexERC20HelperAddress = FeldmexERC20HelperInstance.address;
-  oHelperInstance = await deployer.deploy(oHelper, FeldmexERC20HelperAddress);
+  feldmexERC20HelperInstance = await deployer.deploy(feldmexERC20Helper);
+  feldmexERC20HelperAddress = feldmexERC20HelperInstance.address;
+  mCallHelperInstance = await deployer.deploy(mCallHelper);
+  mPutHelperInstance = await deployer.deploy(mPutHelper);
+  mOrganizerInstance = await deployer.deploy(mOrganizer, mCallHelperInstance.address, mPutHelperInstance.address);
+  mOrganizerAddress = mOrganizerInstance.address;
+  oHelperInstance = await deployer.deploy(oHelper, feldmexERC20HelperAddress, mOrganizerAddress);
   oHelperAddress = oHelperInstance.address;
   eHelperInstance = await deployer.deploy(eHelper);
   eHelperAddress = eHelperInstance.address;
@@ -29,7 +33,4 @@ module.exports = async function(deployer) {
   organiserInstance = await deployer.deploy(organiser, cHelperAddress, oHelperAddress, eHelperAddress, orcHelperAddress);
   organiserAddress = organiserInstance.address;
   await cHelperInstance.transferOwnership(organiserAddress);
-  mCallHelperInstance = await mCallHelper.new();
-  mPutHelperInstance = await mPutHelper.new();
-  mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address);
 }

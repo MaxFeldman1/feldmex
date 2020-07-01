@@ -31,7 +31,7 @@ contract('options', async function(accounts){
 		strikeAssetInstance = await strikeAsset.new(0);
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address, feldmexERC20HelperInstance.address);
+		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address, feldmexERC20HelperInstance.address,  /*this param does not matter*/accounts[0]);
 		feeDenominator = 1000;
 		await optionsInstance.setFee(1000, {from: accounts[0]});
 		inflatorObj = {};

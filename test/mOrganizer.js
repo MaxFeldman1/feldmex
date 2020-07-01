@@ -17,10 +17,10 @@ contract('mOrganizer', async function(accounts){
 		strikeAssetInstance = await underlyingAsset.new(0);
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address, feldmexERC20HelperInstance.address);
 		mCallHelperInstance = await mCallHelper.new();
 		mPutHelperInstance = await mPutHelper.new();
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address);
+		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address, feldmexERC20HelperInstance.address, mOrganizerInstance.address);
 	});
 
 	it('contains correct contract addresses', async () => {

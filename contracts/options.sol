@@ -4,6 +4,7 @@ import "./oracle.sol";
 import "./interfaces/ERC20.sol";
 import "./interfaces/Ownable.sol";
 import "./FeldmexERC20Helper.sol";
+import "./multiLeg/mOrganizer.sol";
 
 contract options is Ownable {
     //address of the contract of the price oracle for the underlying asset in terms of the strike asset such as a price oracle for WBTC/DAI
@@ -16,6 +17,8 @@ contract options is Ownable {
     address exchangeAddress;
     //address of the FeldmexERC20Helper contract that is responsible for providing ERC20 interfaces for options
     address feldmexERC20HelperAddress;
+    //address of the multi leg exchange organizer
+    address mOrganizerAddress;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
@@ -47,12 +50,13 @@ contract options is Ownable {
         @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
         @param address _feldmexERC20HelperAddress: address that will be assigned to feldmexERC20HelperAddress
     */
-    constructor (address _oracleAddress, address _underlyingAssetAddress, address _strikeAssetAddress, address _feldmexERC20HelperAddress) public {
+    constructor (address _oracleAddress, address _underlyingAssetAddress, address _strikeAssetAddress, address _feldmexERC20HelperAddress, address _mOrganizerAddress) public {
         oracleAddress = _oracleAddress;
         underlyingAssetAddress = _underlyingAssetAddress;
         strikeAssetAddress = _strikeAssetAddress;
         exchangeAddress = msg.sender;
         feldmexERC20HelperAddress = _feldmexERC20HelperAddress;
+        mOrganizerAddress = _mOrganizerAddress;
         oracle orc = oracle(oracleAddress);
         inflator = orc.inflator();
         ERC20 ua = ERC20(underlyingAssetAddress);
@@ -660,13 +664,15 @@ contract options is Ownable {
     }
 
     //trusted address may be set to any FeldmexERC20Helper contract address
-    function setTrustedAddress(uint _maturity, uint _strike, bool _call) public {
+    function setTrustedAddressFeldmexERC20(uint _maturity, uint _strike, bool _call) public {
         trustedAddress = _call ? 
             FeldmexERC20Helper(feldmexERC20HelperAddress).callERC20s(address(this), _maturity, _strike) :
             FeldmexERC20Helper(feldmexERC20HelperAddress).putERC20s(address(this), _maturity, _strike);
     }
     //set the trusted address to the exchange address
     function setTrustedAddressMainExchange() public {trustedAddress = exchangeAddress;}
+    //set the trusted address to a multi leg exchange
+    function setTrustedAddressMultiLegExchange(bool _callExchange) public {trustedAddress = mOrganizer(mOrganizerAddress).exchangeAddresses(address(this), _callExchange ? 0 : 1);}
 
     /*
         @Description: set the maximum values for the transfer amounts

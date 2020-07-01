@@ -7,6 +7,9 @@ const container = artifacts.require("container");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
 const orcHelper = artifacts.require("orcHelper");
+const mCallHelper = artifacts.require("mCallHelper");
+const mPutHelper = artifacts.require("mPutHelper");
+const mOrganizer = artifacts.require("mOrganizer");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 const helper = require("../helper/helper.js");
@@ -21,8 +24,11 @@ contract('container', async function(accounts){
 	it('before each', async () => {
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
+		mCallHelperInstance = await mCallHelper.new();
+		mPutHelperInstance = await mPutHelper.new();
+		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address);
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address);
+		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address, mOrganizerInstance.address);
 		eHelperInstance = await eHelper.new();
 		orcHelperInstance = await orcHelper.new();
 		containerInstance = await container.new(tokenInstance.address, strikeAssetInstance.address, oHelperInstance.address, eHelperInstance.address, orcHelperInstance.address);
