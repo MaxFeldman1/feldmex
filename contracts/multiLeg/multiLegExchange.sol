@@ -758,8 +758,8 @@ contract multiLegExchange {
         }
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return false;
-        uint transferAmountDebtor = optionsContract.transferAmountDebtor();
-        uint transferAmountHolder = optionsContract.transferAmountHolder();
+        uint transferAmountDebtor = uint(optionsContract.transferAmountDebtor());
+        uint transferAmountHolder = uint(optionsContract.transferAmountHolder());
         //load put position
         optionsContract.clearPositions();
         for (uint i = 0; i < pos.putAmounts.length; i++)
@@ -793,8 +793,8 @@ contract multiLegExchange {
         }
         satReserves -= transferAmountDebtor+transferAmountHolder;
         //update transfer amounts and handle distribution of funds in claimedStable mapping
-        transferAmountDebtor = optionsContract.transferAmountDebtor();
-        transferAmountHolder = optionsContract.transferAmountHolder();
+        transferAmountDebtor = uint(optionsContract.transferAmountDebtor());
+        transferAmountHolder = uint(optionsContract.transferAmountHolder());
         if (_index%2==0){
             if (_index > 1 && _price > 0) claimedStable[_debtor] += uint(_price);
             else if (_index > 1) claimedStable[_debtor] -= uint(-_price);

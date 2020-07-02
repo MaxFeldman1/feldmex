@@ -36,10 +36,13 @@ contract('multi call exchange', function(accounts){
 		inflator = await oracleInstance.inflator();
 	});
 
-	async function depositFunds(to, amount){
+	async function depositFunds(to, amount, exchange){
 		if (amount > 0)
-			await asset1.transfer(multiCallExchangeInstance.address, amount, {from: deployerAccount});
-		return multiCallExchangeInstance.depositFunds(to);
+			await asset1.transfer(exchange ? multiCallExchangeInstance.address : optionsInstance.address, amount, {from: deployerAccount});
+		if (exchange)
+			return multiCallExchangeInstance.depositFunds(to);
+		else
+			await optionsInstance.depositFunds(to);
 	}
 
 	async function postOrder(maturity, legsHash, price, amount, index, params) {
@@ -87,8 +90,8 @@ contract('multi call exchange', function(accounts){
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
 
-		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetHolder+price));
-		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-price));
+		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetHolder+price), true);
+		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-price), false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 0, {from: deployerAccount});
 		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting order");
@@ -102,8 +105,8 @@ contract('multi call exchange', function(accounts){
 		await postOrder(maturity, legsHash, price, amount, 0, {from: deployerAccount});
 		//deposit more funds to load a second order
 		secondPrice = -2;
-		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetHolder+secondPrice));
-		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-secondPrice));
+		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetHolder+secondPrice), true);
+		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-secondPrice), false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 0, {from: deployerAccount});
 
 		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
@@ -121,7 +124,7 @@ contract('multi call exchange', function(accounts){
 			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), -(amount-5)*callAmounts[i], "correct call balance first account");
 		}
 
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetDebtor-price)+ amount*(maxUnderlyingAssetDebtor-secondPrice), "correct underlying asset balance after market sell");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetDebtor-price)+ amount*(maxUnderlyingAssetDebtor-secondPrice), "correct underlying asset balance after market sell");
 
 		await multiCallExchangeInstance.marketSell(maturity, legsHash, secondPrice, 5+amount, {from: accounts[1]});
 
@@ -147,8 +150,8 @@ contract('multi call exchange', function(accounts){
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
 		price = -2;
-		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetDebtor-price));
-		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+price));
+		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetDebtor-price), true);
+		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+price), false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 1, {from: deployerAccount});
 		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting order");
@@ -162,8 +165,8 @@ contract('multi call exchange', function(accounts){
 		await postOrder(maturity, legsHash, price, amount, 1, {from: deployerAccount});
 		//deposit more funds to load a second order
 		secondPrice = 6;
-		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetDebtor-secondPrice));
-		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+secondPrice));
+		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetDebtor-secondPrice), true);
+		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+secondPrice), false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 1, {from: deployerAccount});
 
 		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
@@ -181,7 +184,7 @@ contract('multi call exchange', function(accounts){
 			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), (amount-5)*callAmounts[i], "correct call balance first account");
 		}
 
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetHolder+price)+ amount*(maxUnderlyingAssetHolder+secondPrice), "correct underlying asset balance after market sell");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetHolder+price)+ amount*(maxUnderlyingAssetHolder+secondPrice), "correct underlying asset balance after market sell");
 
 		await multiCallExchangeInstance.marketBuy(maturity, legsHash, secondPrice, 5+amount, {from: accounts[1]});
 

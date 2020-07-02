@@ -101,8 +101,8 @@ contract FeldmexOptionsData {
     /*
         store most recent transfer amounts
     */
-    uint public transferAmountDebtor;
-    uint public transferAmountHolder;
+    int public transferAmountDebtor;
+    int public transferAmountHolder;
 
 
     address debtor;

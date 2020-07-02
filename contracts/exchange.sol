@@ -262,8 +262,9 @@ contract exchange{
             claimedStable[msg.sender] -= _price * _amount;
         }
         else {
-            require(claimedStable[msg.sender] >= _amount * (_strike - _price));
-            claimedStable[msg.sender] -= _amount * (_strike - _price);
+            uint req = _amount * (_strike - _price);
+            require(claimedStable[msg.sender] >= req);
+            claimedStable[msg.sender] -= req;
         }
 
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, index);
@@ -502,15 +503,13 @@ contract exchange{
     function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, bool _call) public returns(uint unfilled){
         require(_strike != 0);
         require((options(optionsAddress)).containedStrikes(msg.sender, _maturity, _strike));
-        uint _satUnits = satUnits;  //gas savings
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
         require(listHeads[_maturity][_strike][index] != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
-            if (offer.amount > _amount || ((_call?_satUnits:offer.strike)-offer.price)*offer.amount > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])){
-                uint maxAmt;
+            if (offer.amount > _amount){
                 if (msg.sender == offer.offerer) {
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
@@ -518,25 +517,18 @@ contract exchange{
                     */
                     if (offer.index < 2) claimedToken[msg.sender] += offer.price * _amount;
                     else claimedStable[msg.sender] += offer.price * _amount;
-                    maxAmt = _amount;
                 }
                 else if (_call){
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
-                    if ((_satUnits-offer.price)*maxAmt > claimedToken[msg.sender]) maxAmt = claimedToken[msg.sender]/(_satUnits-offer.price);
-                    if (maxAmt == 0) return _amount;
-                    (bool success, ) = mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, maxAmt, offer.price, true);
+                    (bool success, ) = mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, offer.price, true);
                     if (!success) return _amount;
                 }
                 else {
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
-                    if ((offer.strike-offer.price)*maxAmt > claimedStable[msg.sender]) maxAmt = claimedStable[msg.sender]/(offer.strike-offer.price);
-                    if (maxAmt == 0) return _amount;
-                    (bool success, ) = mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, maxAmt, offer.price, true);
+                    (bool success, ) = mintPut(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, offer.price, true);
                     if (!success) return _amount;
                 }
-                offers[node.hash].amount -= maxAmt;
-                emit offerAccepted(node.name, maxAmt);
-                return _amount-maxAmt;
+                offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                return 0;
             }
             if (!takeBuyOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
@@ -568,8 +560,7 @@ contract exchange{
         require(listHeads[_maturity][_strike][index] != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice){
-            if (offer.amount > _amount || offer.price*offer.amount > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])){
-                uint maxAmt;
+            if (offer.amount > _amount){
                 if (offer.offerer == msg.sender){
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
@@ -577,25 +568,18 @@ contract exchange{
                     */
                     if (_call) claimedToken[msg.sender] += _amount * (satUnits - offer.price);
                     else claimedStable[msg.sender] += _amount * (offer.strike - offer.price);
-                    maxAmt = _amount;
                 }
                 else if (_call){
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
-                    if (offer.price*maxAmt > claimedToken[msg.sender]) maxAmt = claimedToken[msg.sender]/offer.price;
-                    if (maxAmt == 0) return _amount;
-                    (bool success, ) = mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, maxAmt, offer.price, false);
+                    (bool success, ) = mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, offer.price, false);
                     if (!success) return _amount;
                 }
                 else { //!call && msg.sender != offer.offerer
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
-                    if (offer.price*maxAmt > claimedStable[msg.sender]) maxAmt = claimedStable[msg.sender]/offer.price;
-                    if (maxAmt == 0) return _amount;
-                    (bool success, ) = mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, maxAmt, offer.price, false);
+                    (bool success, ) = mintPut(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, offer.price, false);
                     if (!success) return _amount;
                 }
-                offers[node.hash].amount -= maxAmt;
-                emit offerAccepted(node.name, maxAmt);
-                return _amount-maxAmt;
+                offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                return 0;
             }
             if (!takeSellOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
@@ -622,30 +606,25 @@ contract exchange{
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of the underlying that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _price, bool _debtorPays) internal returns (bool success, uint transferAmt){
+    function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _price, bool _debtorPays) internal returns (bool success, int transferAmt){
         _price*=_amount;    //price is now equal to total option premium
-        if (!_debtorPays && claimedToken[_holder] < _price) return (false, 0);
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), true);
         optionsContract.setParams(_debtor,_holder,_maturity);
-        if (_debtorPays)
-            optionsContract.setLimits(claimedToken[_debtor]+_price, 0);
-        else
-            optionsContract.setLimits(_amount * satUnits, 0);
+        optionsContract.setPaymentParams(_debtorPays, int(_price));
+        optionsContract.setTrustedAddressMainExchange();
+        optionsContract.setLimits(_amount * satUnits - _price, _price);
+
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return (false, 0);
-        transferAmt = optionsContract.transferAmountDebtor();
-        if (_debtorPays){
-            claimedToken[_debtor] += _price;
-            claimedToken[_debtor] -= transferAmt;
+        if (_debtorPays) transferAmt = int(_price);
+        else {
+            transferAmt = optionsContract.transferAmountDebtor();
+            claimedToken[_debtor] += uint(int(_amount * satUnits - _price) - transferAmt);
         }
-        else{
-            claimedToken[_holder] -= _price;
-            claimedToken[_debtor] += _amount * satUnits - transferAmt;
-        }
-        satReserves -= transferAmt;
+        satReserves = uint(int(satReserves)-transferAmt);
     }
 
     /*
@@ -664,30 +643,25 @@ contract exchange{
         @return bool success: if an error occurs returns false if no error return true
         @return uint transferAmt: returns the amount of strike asset that was transfered from the message sender to act as collateral for the debtor
     */
-    function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _price, bool _debtorPays) internal returns (bool success, uint transferAmt){
+    function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _price, bool _debtorPays) internal returns (bool success, int transferAmt){
         _price*=_amount;    //price is now equal to total option premium
-        if (!_debtorPays && claimedStable[_holder] < _price) return (false, 0);
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), false);
         optionsContract.setParams(_debtor,_holder,_maturity);
-        if (_debtorPays)
-            optionsContract.setLimits(claimedStable[_debtor]+_price, 0);
-        else
-            optionsContract.setLimits(_amount * _strike, 0);
+        optionsContract.setPaymentParams(_debtorPays, int(_price));
+        optionsContract.setTrustedAddressMainExchange();
+        optionsContract.setLimits(_amount * _strike - _price, _price);
+
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return (false, 0);
-        transferAmt = optionsContract.transferAmountDebtor();
-        if (_debtorPays){
-            claimedStable[_debtor] += _price;
-            claimedStable[_debtor] -= transferAmt;
+        if (_debtorPays) transferAmt = int(_price);
+        else {
+            transferAmt = optionsContract.transferAmountDebtor();
+            claimedStable[_debtor] += uint(int(_amount * _strike - _price) - transferAmt);
         }
-        else{
-            claimedStable[_holder] -= _price;
-            claimedStable[_debtor] += _amount * _strike - transferAmt;
-        }
-        scReserves -= transferAmt;
+        scReserves = uint(int(scReserves)-transferAmt);
     }
 
 }

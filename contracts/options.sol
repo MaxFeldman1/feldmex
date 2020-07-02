@@ -313,8 +313,8 @@ contract options is FeldmexOptionsData, Ownable {
     function transferAmount(bool _call) public returns (uint _debtorTransfer, uint _holderTransfer) {
         (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("transferAmount(bool)", _call));
         assert(success);
-        _debtorTransfer = transferAmountDebtor;
-        _holderTransfer = transferAmountHolder;
+        _debtorTransfer = uint(transferAmountDebtor);
+        _holderTransfer = uint(transferAmountHolder);
     }
 
 

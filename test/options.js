@@ -24,6 +24,7 @@ var inflator;
 var strikes = {};
 var inflatorObj = {};
 var setWithInflator;
+var allMaturities = [];
 
 contract('options', async function(accounts){
 
@@ -108,6 +109,7 @@ contract('options', async function(accounts){
 		debtor = accounts[1];
 		holder = accounts[2];
 		maturity = (await web3.eth.getBlock('latest')).timestamp;
+		allMaturities.push(maturity);
 		await helper.advanceTime(2);
 		//add strikes to allow for minting of options
 		await addStrike(debtor, maturity, strike);
@@ -142,13 +144,14 @@ contract('options', async function(accounts){
 		await optionsInstance.withdrawFunds({from: debtor});
 		await optionsInstance.withdrawFunds({from: holder});
 		//we add 1 to total fees because we always subtract 1 from payout from sellers of calls
-		assert.equal((await tokenInstance.balanceOf(optionsInstance.address)).toNumber() == 1+totalFees, true, "non excessive amount of funds left");
+		assert.equal((await tokenInstance.balanceOf(optionsInstance.address)).toNumber(), 1+totalFees, "non excessive amount of funds left");
 	});
 
 	it('mints and exercizes put options', async () => {
 		difference = 30;
 		await setWithInflator(strike-difference);
 		maturity = (await web3.eth.getBlock('latest')).timestamp+1;
+		allMaturities.push(maturity);
 		//add strikes to allow for minting of options
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
@@ -186,6 +189,7 @@ contract('options', async function(accounts){
 
 	it('Correct collateral requirements with multi leg option positions', async () => {
 		maturity *= 2;
+		allMaturities.push(maturity);
 		strike = 50;
 		//here we will use funds alreay deposited in the options smart contract
 		async function optionTransfer(to, amount, maturity, strike, maxTransfer, call, params) {
@@ -261,7 +265,8 @@ contract('options', async function(accounts){
 
 	it('requires strike to be added before minting contract', async () => {
 		//get new maturity strike combination that has not been added
-		maturity += 1;
+		maturity++;
+		allMaturities.push(maturity);
 		//test for calls with neither adding the maturity strike combo
 		return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount}).then(() => {
 			return "OK";
@@ -295,7 +300,8 @@ contract('options', async function(accounts){
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OOF", 'could not mint put without adding maturity strike combo for holder account');
-			maturity +=1;
+			maturity++;
+			allMaturities.push(maturity);
 			//test for calls with only holder adding the maturity strike combo
 			return addStrike(holder, maturity, strike);
 		}).then(() => {
@@ -322,6 +328,7 @@ contract('options', async function(accounts){
 		spot = strike+10;
 		await setWithInflator(spot);
 		maturity = (await web3.eth.getBlock('latest')).timestamp;
+		allMaturities.push(maturity);
 		maxTransfer = satUnits*amount;
 		//wait one second to allow for maturity to pass
 		await helper.advanceTime(1);
@@ -340,6 +347,7 @@ contract('options', async function(accounts){
 		await optionsInstance.changeFeeStatus(reciverAccount, {from: defaultAccount});
 		assert.equal(await optionsInstance.feeImmunity(reciverAccount), false, "fee immunity revoked for receiver account");
 		maturity++;
+		allMaturities.push(maturity);
 		maxTransfer = scUnits*amount*strike;
 		await helper.advanceTime(1);
 		await strikeAssetInstance.approve(optionsInstance.address, maxTransfer, {from: defaultAccount});
@@ -353,6 +361,7 @@ contract('options', async function(accounts){
 	it('mints 4+ leg put positions with correct collateral requirements', async () => {
 		//get new maturity
 		maturity++;
+		allMaturities.push(maturity);
 		await optionsInstance.clearPositions();
 		//iorn condor made of puts
 		await optionsInstance.addPosition(strike*inflator, amount, false);
@@ -391,6 +400,7 @@ contract('options', async function(accounts){
 	it('mints 4+ leg call positions with correct collateral requirements', async () => {
 		//get new maturity
 		maturity++;
+		allMaturities.push(maturity);
 		await optionsInstance.clearPositions();
 		//iorn condor made of calls
 		await optionsInstance.addPosition(strike*inflator, amount, true);
@@ -424,5 +434,20 @@ contract('options', async function(accounts){
 		assert.equal((await optionsInstance.viewSatCollateral(maturity, {from: debtor})).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
 		assert.equal((await optionsInstance.transferAmountHolder()).toNumber(), expectedHolderRequirement, "correct holder fund requirement");
 		assert.equal((await optionsInstance.viewSatCollateral(maturity, {from: holder})).toNumber(), expectedHolderRequirement, "correct holder fund requirement");
+	});
+
+	it('withdraws funds sucessfully after asigning complex orders', async () => {
+		await helper.advanceTime(allMaturities[allMaturities.length-1]);
+		for (let i = 0; i < allMaturities.length; i++){
+			await optionsInstance.claim(allMaturities[i], {from: accounts[0]});
+			await optionsInstance.claim(allMaturities[i], {from: accounts[1]});
+			await optionsInstance.claim(allMaturities[i], {from: accounts[2]});
+		}
+		allMaturities.push(maturity);
+		await optionsInstance.withdrawFunds({from: accounts[1]});
+		await optionsInstance.withdrawFunds({from: accounts[2]});
+		//withdraw fees with owner key
+		await optionsInstance.withdrawFunds({from: accounts[0]});
+		assert.equal((await tokenInstance.balanceOf(optionsInstance.address)).toNumber(), 5, "non excessive amount of funds left");
 	});
 });

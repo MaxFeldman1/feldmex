@@ -212,7 +212,8 @@ contract multiCallExchange {
         }
         //only continue execution here if listHead[_maturity][_legsHash][index] == 0
 
-        require(containsStrikes(_maturity, _legsHash));
+        require(_price < int(pos.maxUnderlyingAssetDebtor) && _price > int(-pos.maxUnderlyingAssetHolder));
+        require(containsStrikes(_maturity, _legsHash) && _price > int(-pos.maxUnderlyingAssetDebtor));
 
         if (_index == 0){
             uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price));
@@ -256,6 +257,8 @@ contract multiCallExchange {
         require(containsStrikes(_maturity, _legsHash));
 
         position memory pos = positions[_legsHash];
+
+        require(_price < int(pos.maxUnderlyingAssetDebtor) && _price > int(-pos.maxUnderlyingAssetHolder));
 
         if (_index == 0){
             uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price));
@@ -510,8 +513,7 @@ contract multiCallExchange {
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
-            if (offer.amount > _amount || offer.price < 0 && uint(-offer.price)*offer.amount > claimedToken[msg.sender]){
-                uint maxAmt;
+            if (offer.amount > _amount){
                 if (msg.sender == offer.offerer) {
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
@@ -521,20 +523,14 @@ contract multiCallExchange {
                     uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
                     if (int(req) < 0) req = 0;
                     claimedToken[msg.sender] += req;
-                    maxAmt = _amount;
                 }
                 else {
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
-                    if (offer.price < 0 && uint(-offer.price)*maxAmt > claimedToken[msg.sender])
-                        maxAmt = claimedToken[msg.sender]/uint(-offer.price);
-                    if (maxAmt == 0) return _amount;
-                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, maxAmt, offer.price, offer.index);
+                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) return _amount;
-
                 }
-                offers[node.hash].amount -= maxAmt;
-                emit offerAccepted(node.name, maxAmt);
-                return _amount-maxAmt;
+                offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                return 0;
             }
             if (!takeBuyOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
@@ -565,8 +561,7 @@ contract multiCallExchange {
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice){
-            if (offer.amount > _amount || offer.price > 0 && uint(offer.price)*offer.amount > claimedToken[msg.sender]){
-                uint maxAmt;
+            if (offer.amount > _amount){
                 if (offer.offerer == msg.sender){
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
@@ -576,19 +571,14 @@ contract multiCallExchange {
                     uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
                     if (int(req) < 0) req = 0;
                     claimedToken[msg.sender] += req;
-                    maxAmt = _amount;
                 }
                 else {
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
-                    if (offer.price > 0 && uint(offer.price)*offer.amount > claimedToken[msg.sender])
-                        maxAmt = claimedToken[msg.sender]/uint(offer.price);
-                    if (maxAmt == 0) return _amount;
-                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, maxAmt, offer.price, offer.index);
+                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) return _amount;
                 }
-                offers[node.hash].amount -= maxAmt;
-                emit offerAccepted(node.name, maxAmt);
-                return _amount-maxAmt;
+                offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                return 0;
             }
             if (!takeSellOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
@@ -606,8 +596,6 @@ contract multiCallExchange {
                 this means that the debtor recieves the price premium
         */
         _price *= int(_amount);
-        if (_index==1 && _price > 0 && claimedToken[_holder] < uint(_price)) return false;
-        else if (_index==0 && _price < 0 && claimedToken[_debtor] < uint(-_price)) return false;
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
         position memory pos = positions[_legsHash];
@@ -616,36 +604,22 @@ contract multiCallExchange {
         optionsContract.clearPositions();
         for (uint i = 0; i < pos.callAmounts.length; i++)
             optionsContract.addPosition(pos.callStrikes[i], int(_amount)*pos.callAmounts[i], true);
-        if (_index==0){
-            uint limit = claimedToken[_debtor];
-            limit = uint(int(limit)+_price);
-            optionsContract.setLimits(limit, _amount * pos.maxUnderlyingAssetHolder);
-        }
-        else{
-            uint limit = claimedToken[_holder];
-            limit = uint(int(limit)-_price);
-            optionsContract.setLimits(_amount * pos.maxUnderlyingAssetDebtor, limit);
-        }
+        optionsContract.setPaymentParams(_index==0, _price);
+        optionsContract.setTrustedAddressMultiLegExchange(true);
+        optionsContract.setLimits(uint(int(_amount * pos.maxUnderlyingAssetDebtor) - _price), uint(int(_amount * pos.maxUnderlyingAssetHolder) + _price));
+
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return false;
-        uint transferAmountDebtor = optionsContract.transferAmountDebtor();
-        uint transferAmountHolder = optionsContract.transferAmountHolder();
-        /*
-            We have minted the put position but we still have data from the call position stored in transferAmountDebtor and transferAmountHolder
-            handle distribution of funds in claimedToken mapping
-        */
+
+        int transferAmount;
         if (_index==0){
-            if (_price > 0) claimedToken[_debtor] += uint(_price);
-            else claimedToken[_debtor] -= uint(-_price);
-            claimedToken[_debtor] -= transferAmountDebtor;
-            claimedToken[_holder] += _amount * pos.maxUnderlyingAssetHolder - transferAmountHolder;
+            transferAmount = optionsContract.transferAmountHolder();
+            claimedToken[_holder] += uint(int(_amount * pos.maxUnderlyingAssetHolder) + _price - transferAmount);
         } else {
-            if (_price > 0) claimedToken[_holder] -= uint(_price);
-            else claimedToken[_holder] += uint(-_price);
-            claimedToken[_holder] -= transferAmountHolder;
-            claimedToken[_debtor] += _amount * pos.maxUnderlyingAssetDebtor - transferAmountDebtor;
+            transferAmount = optionsContract.transferAmountDebtor();
+            claimedToken[_debtor] += uint(int(_amount * pos.maxUnderlyingAssetDebtor) - _price - transferAmount);
         }
-        satReserves -= transferAmountDebtor+transferAmountHolder;
+        satReserves = uint(int(satReserves)-transferAmount);
     }
 
 

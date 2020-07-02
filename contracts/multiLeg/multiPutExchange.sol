@@ -506,8 +506,7 @@ contract multiPutExchange {
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
-            if (offer.amount > _amount || offer.price < 0 && uint(-offer.price)*offer.amount > claimedStable[msg.sender]){
-                uint maxAmt;
+            if (offer.amount > _amount){
                 if (msg.sender == offer.offerer) {
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
@@ -517,20 +516,15 @@ contract multiPutExchange {
                     uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetHolder) + offer.price));
                     if (int(req) < 0) req = 0;
                     claimedStable[msg.sender] += req;
-                    maxAmt = _amount;
                 }
                 else {
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
-                    if (offer.price < 0 && uint(-offer.price)*maxAmt > claimedStable[msg.sender])
-                        maxAmt = claimedStable[msg.sender]/uint(-offer.price);
-                    if (maxAmt == 0) return _amount;
-                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, maxAmt, offer.price, offer.index);
+                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) return _amount;
 
                 }
-                offers[node.hash].amount -= maxAmt;
-                emit offerAccepted(node.name, maxAmt);
-                return _amount-maxAmt;
+                offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                return 0;
             }
             if (!takeBuyOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
@@ -561,8 +555,7 @@ contract multiPutExchange {
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice){
-            if (offer.amount > _amount || offer.price > 0 && uint(offer.price)*offer.amount > claimedStable[msg.sender]){
-                uint maxAmt;
+            if (offer.amount > _amount){
                 if (offer.offerer == msg.sender){
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
@@ -572,19 +565,14 @@ contract multiPutExchange {
                     uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetDebtor) - offer.price));
                     if (int(req) < 0) req = 0;
                     claimedStable[msg.sender] += req;
-                    maxAmt = _amount;
                 }
                 else {
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount;
-                    if (offer.price > 0 && uint(offer.price)*offer.amount > claimedStable[msg.sender])
-                        maxAmt = claimedStable[msg.sender]/uint(offer.price);
-                    if (maxAmt == 0) return _amount;
-                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, maxAmt, offer.price, offer.index);
+                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) return _amount;
                 }
-                offers[node.hash].amount -= maxAmt;
-                emit offerAccepted(node.name, maxAmt);
-                return _amount-maxAmt;
+                offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                return 0;
             }
             if (!takeSellOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
@@ -602,8 +590,6 @@ contract multiPutExchange {
                 this means that the debtor recieves the price premium
         */
         _price *= int(_amount);
-        if (_index%2==1 && _price > 0 && claimedStable[_holder] < uint(_price)) return false;
-        else if (_index%2==0 && _price < 0 && claimedStable[_debtor] < uint(-_price)) return false;
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
         position memory pos = positions[_legsHash];
@@ -612,34 +598,22 @@ contract multiPutExchange {
         optionsContract.clearPositions();
         for (uint i = 0; i < pos.putAmounts.length; i++)
             optionsContract.addPosition(pos.putStrikes[i], int(_amount)*pos.putAmounts[i], false);
-        if (_index%2==0){
-            uint limit = claimedStable[_debtor];
-            limit = uint(int(limit)+(_index>1 ? _price : 0));
-            optionsContract.setLimits(limit, _amount * pos.maxStrikeAssetHolder);
-        }
-        else{
-            uint limit = claimedStable[_holder];
-            limit = uint(int(limit)-(_index>1 ? _price : 0));
-            optionsContract.setLimits(_amount * pos.maxStrikeAssetDebtor, limit);
-        }
+        optionsContract.setPaymentParams(_index==0, _price);
+        optionsContract.setTrustedAddressMultiLegExchange(false);
+        optionsContract.setLimits(uint(int(_amount * pos.maxStrikeAssetDebtor) - _price), uint(int(_amount * pos.maxStrikeAssetHolder) + _price));
+
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return false;
 
-        //update transfer amounts and handle distribution of funds in claimedStable mapping
-        uint transferAmountDebtor = optionsContract.transferAmountDebtor();
-        uint transferAmountHolder = optionsContract.transferAmountHolder();
+        int transferAmount;
         if (_index==0){
-            if (_price > 0) claimedStable[_debtor] += uint(_price);
-            else claimedStable[_debtor] -= uint(-_price);
-            claimedStable[_debtor] -= transferAmountDebtor;
-            claimedStable[_holder] += _amount * pos.maxStrikeAssetHolder - transferAmountHolder;
+            transferAmount = optionsContract.transferAmountHolder();
+            claimedStable[_holder] += uint(int(_amount * pos.maxStrikeAssetHolder) + _price - transferAmount);
         } else {
-            if (_price > 0) claimedStable[_holder] -= uint(_price);
-            else claimedStable[_holder] += uint(-_price);
-            claimedStable[_holder] -= transferAmountHolder;
-            claimedStable[_debtor] += _amount * pos.maxStrikeAssetDebtor - transferAmountDebtor;
+            transferAmount = optionsContract.transferAmountDebtor();
+            claimedStable[_debtor] += uint(int(_amount * pos.maxStrikeAssetDebtor) - _price - transferAmount);
         }
-        scReserves -= transferAmountDebtor+transferAmountHolder;
+        scReserves = uint(int(scReserves)-transferAmount);
     }
 
 
