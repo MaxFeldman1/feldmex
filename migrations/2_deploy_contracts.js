@@ -1,5 +1,6 @@
 const oracle = artifacts.require("oracle");
 const underlyingAsset = artifacts.require("UnderlyingAsset");
+const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
 const container = artifacts.require("container");
@@ -22,7 +23,9 @@ module.exports = async function(deployer) {
   mPutHelperInstance = await deployer.deploy(mPutHelper);
   mOrganizerInstance = await deployer.deploy(mOrganizer, mCallHelperInstance.address, mPutHelperInstance.address);
   mOrganizerAddress = mOrganizerInstance.address;
-  oHelperInstance = await deployer.deploy(oHelper, feldmexERC20HelperAddress, mOrganizerAddress);
+  assignOptionsDelegateInstance = await deployer.deploy(assignOptionsDelegate);
+  assignOptionsDelegateAddress = assignOptionsDelegateInstance.address;
+  oHelperInstance = await deployer.deploy(oHelper, feldmexERC20HelperAddress, mOrganizerAddress, assignOptionsDelegateAddress);
   oHelperAddress = oHelperInstance.address;
   eHelperInstance = await deployer.deploy(eHelper);
   eHelperAddress = eHelperInstance.address;

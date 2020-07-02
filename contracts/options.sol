@@ -5,57 +5,30 @@ import "./interfaces/ERC20.sol";
 import "./interfaces/Ownable.sol";
 import "./FeldmexERC20Helper.sol";
 import "./multiLeg/mOrganizer.sol";
+import "./FeldmexOptionsData.sol";
 
-contract options is Ownable {
-    //address of the contract of the price oracle for the underlying asset in terms of the strike asset such as a price oracle for WBTC/DAI
-    address oracleAddress;
-    //address of the contract of the underlying digital asset such as WBTC or WETH
-    address public underlyingAssetAddress;
-    //address of a digital asset that represents a unit of account such as DAI
-    address public strikeAssetAddress;
-    //address of the exchange is allowed to see collateral requirements for all users
-    address exchangeAddress;
-    //address of the FeldmexERC20Helper contract that is responsible for providing ERC20 interfaces for options
-    address feldmexERC20HelperAddress;
-    //address of the multi leg exchange organizer
-    address mOrganizerAddress;
-    //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
-    uint satUnits;
-    //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
-    uint scUnits;
-    //previously recorded balances
-    uint satReserves;
-    uint scReserves;
-    /*
-        addresses that are approved do not have to pay fees
-        addresses that are approved are usually market makers/liquidity providers
-        addresses are approved by the owner
-    */
-    mapping(address => bool) public feeImmunity;
-    /*
-        number by which the oracle multiplies all spot prices
-        also used to inflate strike prices here
-    */
-    uint public inflator;
-    //fee == (pricePaid)/feeDenominator
-    uint public feeDenominator = 2**255;
-    //variable occasionally used for testing purposes should not be present in production
-    //uint public testing;
-    
-    /*
+contract options is FeldmexOptionsData, Ownable {
+
+        /*
         @Description: assigns the addesses of external contracts
 
         @param address _oracleAddress: address that shall be assigned to oracleAddress
         @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
         @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
         @param address _feldmexERC20HelperAddress: address that will be assigned to feldmexERC20HelperAddress
+        @param address _mOrganizerAddress: address that will be assigned to mOrganizerAddress
+        @param address _assignOptionsDelegateAddress: address that will be assigned to assignOptionsDelegateAddress
     */
-    constructor (address _oracleAddress, address _underlyingAssetAddress, address _strikeAssetAddress, address _feldmexERC20HelperAddress, address _mOrganizerAddress) public {
+    constructor (address _oracleAddress, address _underlyingAssetAddress, 
+        address _strikeAssetAddress, address _feldmexERC20HelperAddress, 
+        address _mOrganizerAddress, address _assignOptionsDelegateAddress) public {
+        
         oracleAddress = _oracleAddress;
         underlyingAssetAddress = _underlyingAssetAddress;
         strikeAssetAddress = _strikeAssetAddress;
         exchangeAddress = msg.sender;
         feldmexERC20HelperAddress = _feldmexERC20HelperAddress;
+        assignOptionsDelegateAddress = _assignOptionsDelegateAddress;
         mOrganizerAddress = _mOrganizerAddress;
         oracle orc = oracle(oracleAddress);
         inflator = orc.inflator();
@@ -106,49 +79,7 @@ contract options is Ownable {
         super.transferOwnership(_newOwner);
     }
 
-    /*
-        callAmounts and putAmounts store the net position of each type of calls and puts respectively for each user at each matirity and strike
-    */
-    //address => maturity => strike => amount of calls
-    mapping(address => mapping(uint => mapping(uint => int))) callAmounts;
-    
-    //address => maturity => strike => amount of puts
-    mapping(address => mapping(uint => mapping(uint => int))) putAmounts;
 
-    /*
-        claimedTokens and claimedStable refers to the amount of the underlying and strike asset respectively that each user may withdraw
-    */
-    //denominated in satUnits
-    mapping(address => uint) claimedTokens;
-    //denominated in scUnits
-    mapping(address => uint) claimedStable;
-
-    /*
-        satCollateral maps each user to the amount of collateral in the underlying that they have locked at each maturuty for calls
-        scCollateral maps each user to the amount of collateral in strike asset that they have locked at each maturity for puts
-    */
-    //address => maturity => amount (denominated in satUnits)
-    mapping(address => mapping(uint => uint)) satCollateral;
-    //address => maturity => amount (denominated in scUnits)
-    mapping(address => mapping(uint => uint)) scCollateral;
-
-
-    /*
-        strikes maps each user to the strikes that they have traded calls or puts on for each maturity
-    */
-    //address => maturity => array of strikes
-    mapping(address => mapping(uint => uint[])) strikes;
-    //address => maturity => strike => contained
-    mapping(address => mapping(uint => mapping(uint => bool))) public containedStrikes;
-
-    /*
-        satDeduction is the amount of underlying asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for calls
-        scDeduction is the amount of strike asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for puts
-    */
-    //address => maturity => amount of collateral not required //denominated in satUnits
-    mapping(address => mapping(uint => uint)) satDeduction;
-    //address => maturity => amount of collateral not required //denominated in scUnits
-    mapping(address => mapping(uint => uint)) scDeduction;
 
     /*
         @Description: after the maturity holders of contracts to claim the value of the contracts and allows debtors to claim the unused collateral
@@ -306,78 +237,6 @@ contract options is Ownable {
     }
 
     /*
-        @Description: used to find the minimum amount of collateral that is required to to support call positions for a certain user at a given maturity
-            also takes into account an extra position that is entered in the last two parameters
-            The purpose of adding having the extra position in the last two parameters is that it allows for 
-
-        @param address _addr: address in question
-        @param uint _maturity: maturity in question
-        @param int _amount: the amount of the added position
-        @param uint _strike: the strike price of the added position
-
-        @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in the underlying
-        @return uint: sum of all short call positions multiplied by satUnits
-    */
-    function minSats(address _addr, uint _maturity) internal view returns (uint minCollateral, uint liabilities) {
-        uint _satUnits = satUnits; //gas savings
-        int delta = 0;
-        int value = 0;
-        int cumulativeStrike;
-        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            int strike = int(strikes[_addr][_maturity][i]);
-            int amt = callAmounts[_addr][_maturity][uint(strike)];
-            /*
-                value = satUnits * sigma((delta*strike-cumulativeStrike)/strike)
-            */
-            int numerator = int(satUnits) * (delta*strike-cumulativeStrike);
-            value = numerator/strike;
-            cumulativeStrike += amt*int(strike);
-            delta += amt;
-            if (value < 0 && uint(-value) >= minCollateral) {
-                if (numerator%strike != 0) value--;
-                minCollateral = uint(-value);
-            }
-            if (amt < 0) liabilities+=uint(-amt);
-        }
-        //value at inf
-        value = int(_satUnits)*delta;
-        if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
-        liabilities *= _satUnits;
-    }
-
-    /*
-        @Description: used to find the minimum amount of collateral that is required to to support put positions for a certain user at a given maturity
-            also takes into account an extra position that is entered in the last two parameters
-
-        @param address _addr: address in question
-        @param uint _maturity: maturity in question
-        @param int _amount: the amount of the added position
-        @param uint _strike: the strike price of the added position
-
-        @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in strike asset
-        @return uint: negative value denominated in scUnits of all short put postions at a spot price of 0
-    */
-    function minSc(address _addr, uint _maturity) internal view returns(uint minCollateral, uint liabilities){
-        int delta = 0;
-        int value = 0;
-        uint prevStrike;
-        uint lastIndex = strikes[_addr][_maturity].length-1;
-        for(uint i = lastIndex; i != uint(-1); i--) {
-            uint strike = strikes[_addr][_maturity][i];
-            int amt = putAmounts[_addr][_maturity][strike];
-            value += delta * int(prevStrike-strike);
-            delta += amt;
-            prevStrike = strike;
-            if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
-            if (amt < 0) liabilities+=uint(-amt)*strike;
-        }
-        //value at 0
-        value += delta * int(prevStrike);
-        if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
-    }
-
-
-    /*
         @Description: The function was created for positions at a strike to be inclueded in calculation of collateral requirements for a user
             User calls this instead of smart contract adding strikes automatically when funds are transfered to an address by the transfer or transferFrom functions
             because it prevents a malicious actor from overloading a user with many different strikes thus making it impossible to claim funds because of the gas limit
@@ -408,10 +267,6 @@ contract options is Ownable {
         balance = _call ? callAmounts[_owner][_maturity][_strike] : putAmounts[_owner][_maturity][_strike];
     }
 
-    //store positions in call/putAmounts[helperAddress][helperMaturity] to allow us to calculate collateral requirements
-    //make helper maturities extremely far out, Dec 4th, 292277026596 A.D
-    uint helperMaturity = 10**20;
-    address helperAddress = address(0);
 
     /*
         @Description: add a strike to strikes[helperAddress][helperMaturity] and an amount to either callAmounts or putAmounts
@@ -446,16 +301,8 @@ contract options is Ownable {
         @param bool _call: true if the position is for calls false if it is for puts
     */
     function inversePosition(bool _call) public {
-        address _helperAddress = helperAddress;
-        uint _helperMaturity = helperMaturity;
-        uint size = strikes[_helperAddress][_helperMaturity].length;
-        if (_call){
-            for (uint i = 0; i < size; i++)
-                callAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
-        } else {
-            for (uint i = 0; i < size; i++)
-                putAmounts[_helperAddress][_helperMaturity][strikes[_helperAddress][_helperMaturity][i]]*= -1;
-        }
+        (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("inversePosition(bool)", _call));
+        assert(success);
     }
 
     /*
@@ -464,180 +311,32 @@ contract options is Ownable {
         @param bool _call: true if the position is for calls false if it is for puts
     */
     function transferAmount(bool _call) public returns (uint _debtorTransfer, uint _holderTransfer) {
-        address _helperAddress = helperAddress; //gas savings
-        uint _helperMaturity = helperMaturity;  //gas savings
-        (_holderTransfer, ) = _call ? minSats(_helperAddress, _helperMaturity) : minSc(_helperAddress, _helperMaturity);
-        inversePosition(_call);
-        (_debtorTransfer, ) = _call ? minSats(_helperAddress, _helperMaturity) : minSc(_helperAddress, _helperMaturity);
+        (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("transferAmount(bool)", _call));
+        assert(success);
+        _debtorTransfer = transferAmountDebtor;
+        _holderTransfer = transferAmountHolder;
     }
 
-    /*
-        @Description: combine position stored at helperAddress at helperMaturity with another address at a specified maturity
-
-        @param address _addr: the address of the account for which to combine the position stored at helperAddress at helperMaturity
-        @param uint _maturity: the maturity for which to combine the position stored at helperAddress at helperMaturity
-        @param bool _call: true if the position is for calls false if it is for puts        
-    */
-    function combinePosition(address _addr, uint _maturity, bool _call) internal {
-        address _helperAddress = helperAddress; //gas savings
-        uint _helperMaturity = helperMaturity; //gas savings
-        uint size = strikes[_helperAddress][_helperMaturity].length;
-        for (uint i; i < size; i++) {
-            uint strike = strikes[_helperAddress][_helperMaturity][i];
-            int amount = _call ? callAmounts[_helperAddress][_helperMaturity][strike] : putAmounts[_helperAddress][_helperMaturity][strike];
-            if (!containedStrikes[_addr][_maturity][strike] && amount <= 0) {
-                address ERC20WrapperAddress  = _call ?
-                    FeldmexERC20Helper(feldmexERC20HelperAddress).callERC20s(address(this), _maturity, strike) :
-                    FeldmexERC20Helper(feldmexERC20HelperAddress).putERC20s(address(this), _maturity, strike);
-                assert(msg.sender == ERC20WrapperAddress);
-            }
-            if (_call)
-                callAmounts[_addr][_maturity][strike] += amount;
-            else
-                putAmounts[_addr][_maturity][strike] += amount;
-        }
-    }
-
-    /*
-        when true funds are taken from claimedToken and claimedSc reserves to meet collateral requirements
-        when false funds are transfered from the address to this contract to meet collateral requirements
-    */
-    mapping(address => bool) public useDeposits;
-    function setUseDeposits(bool _set) public {useDeposits[msg.sender] = _set;}
-
-    /*
-        store most recent transfer amounts
-    */
-    uint public transferAmountDebtor;
-    uint public transferAmountHolder;
 
     /*
         @Description: assign the call position stored at helperAddress at helperMaturity to a specitied address
             and assign the inverse to another specified address
-
-        @param address _debtor: the address that will gain the opposite payoff profile of the position stored at helperAddress at helperMaturity
-        @param address _holder: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
-        @param uint _maturity: the timestamp at which the calls may be exercised
     */
-    function assignCallPosition() public returns (uint transferAmtDebtor, uint transferAmtHolder) {
-        address _debtor = debtor;   //gas savings
-        address _holder = holder;   //gas savings
-        uint _maturity = maturity; //gas savings
-        combinePosition(_holder, _maturity, true);
-        (uint minCollateral, uint liabilities) = minSats(_holder, _maturity);
-
-        if (minCollateral > satCollateral[_holder][_maturity]){
-            transferAmtHolder = minCollateral - satCollateral[_holder][_maturity];
-            assert(transferAmtHolder <= maxHolderTransfer);
-            if (msg.sender == trustedAddress && !useDebtorInternalFunds) {
-                assert(claimedTokens[_holder] >= transferAmtHolder);
-                claimedTokens[_holder] -= transferAmtHolder;
-            }
-        }
-        else 
-            claimedTokens[_holder] += satCollateral[_holder][_maturity] - minCollateral;
-        satCollateral[_holder][_maturity] = minCollateral;
-        satDeduction[_holder][_maturity] = liabilities - minCollateral;
-        
-        inversePosition(true);
-
-        combinePosition(_debtor, _maturity, true);        
-        (minCollateral, liabilities) = minSats(_debtor, _maturity);
-
-        if (minCollateral > satCollateral[_debtor][_maturity]){
-            transferAmtDebtor = minCollateral - satCollateral[_debtor][_maturity];
-            assert(transferAmtDebtor <= maxDebtorTransfer);
-            if (msg.sender == trustedAddress && useDebtorInternalFunds) {
-                assert(claimedTokens[_debtor] >= transferAmtHolder);
-                claimedTokens[_debtor] -= transferAmtHolder;
-            }
-        }
-        else
-            claimedTokens[_debtor] += satCollateral[_debtor][_maturity] - minCollateral;
-        satCollateral[_debtor][_maturity] = minCollateral;
-        satDeduction[_debtor][_maturity] = liabilities - minCollateral;
-        uint senderTransfer = (msg.sender == trustedAddress ? (useDebtorInternalFunds? transferAmtHolder: transferAmtDebtor) : transferAmtHolder+transferAmtDebtor);
-        if (useDeposits[msg.sender]){
-            assert(claimedTokens[msg.sender] >= senderTransfer);
-            claimedTokens[msg.sender] -= senderTransfer;
-        }
-        else{
-            ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), senderTransfer);
-            satReserves += senderTransfer;
-        }
-        transferAmountDebtor = transferAmtDebtor;
-        transferAmountHolder = transferAmtHolder;
+    function assignCallPosition() public {
+        (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("assignCallPosition()"));
+        assert(success);
     }
 
 
     /*
         @Description: assign the put position stored at helperAddress at helperMaturity to a specitied address
             and assign the inverse to another specified address
-
-        @param address _debtor: the address that will gain the opposite payoff profile of the position stored at helperAddress at helperMaturity
-        @param address _holder: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
-        @param uint _maturity: the timestamp at which the puts may be exercised
     */
-    function assignPutPosition() public returns (uint transferAmtDebtor, uint transferAmtHolder) {
-        address _debtor = debtor;   //gas savings
-        address _holder = holder;   //gas savings
-        uint _maturity = maturity; //gas savings
-        combinePosition(_holder, _maturity, false);
-        (uint minCollateral, uint liabilities) = minSc(_holder, _maturity);
-        
-        if (minCollateral > scCollateral[_holder][_maturity]){
-            transferAmtHolder = minCollateral - scCollateral[_holder][_maturity];
-            assert(transferAmtHolder <= maxHolderTransfer);
-            if (msg.sender == trustedAddress && !useDebtorInternalFunds) {
-                assert(claimedStable[_holder] >= transferAmtHolder);
-                claimedStable[_holder] -= transferAmtHolder;
-            }
-        }
-        else
-            claimedStable[_holder] += scCollateral[_holder][_maturity] - minCollateral;
-        scCollateral[_holder][_maturity] = minCollateral;
-        scDeduction[_holder][_maturity] = liabilities - minCollateral;
-
-        //inverse positions for debtor
-        inversePosition(false);
-
-        combinePosition(_debtor, _maturity, false);        
-        (minCollateral, liabilities) = minSc(_debtor, _maturity);
-
-        if (minCollateral > scCollateral[_debtor][_maturity]){
-            transferAmtDebtor = minCollateral - scCollateral[_debtor][_maturity];
-            assert(transferAmtDebtor <= maxDebtorTransfer);
-            if (msg.sender == trustedAddress && useDebtorInternalFunds) {
-                assert(claimedStable[_debtor] >= transferAmtHolder);
-                claimedStable[_debtor] -= transferAmtHolder;
-            }
-        }
-        else
-            claimedStable[_debtor] += scCollateral[_debtor][_maturity] - minCollateral;
-        scCollateral[_debtor][_maturity] = minCollateral;
-        scDeduction[_debtor][_maturity] = liabilities - minCollateral;
-        uint senderTransfer = (msg.sender == trustedAddress ? (useDebtorInternalFunds? transferAmtHolder: transferAmtDebtor) : transferAmtHolder+transferAmtDebtor);
-        if (useDeposits[msg.sender]){
-            assert(claimedStable[msg.sender] >= senderTransfer);
-            claimedStable[msg.sender] -= senderTransfer;
-        }
-        else {
-            ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), senderTransfer);
-            scReserves += senderTransfer;
-        }
-        transferAmountDebtor = transferAmtDebtor;
-        transferAmountHolder = transferAmtHolder;
+    function assignPutPosition() public {
+        (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("assignPutPosition()"));
+        assert(success);
     }
 
-    //allow external contracts to use .call to mint ositions
-    address debtor;
-    address holder;
-    uint maturity;
-    uint maxDebtorTransfer;
-    uint maxHolderTransfer;
-
-    address trustedAddress;
-    bool useDebtorInternalFunds;
 
     /*
         @Description: set the values of debtor, holder, and maturity before calling assignCallPosition or assignPutPosition
@@ -658,9 +357,11 @@ contract options is Ownable {
         @param bool _useDebtorInternalFunds: when msg.sender in assignCall/PutPosition is trusted address
             if false debtor funds stored in this contract will be used to fuffil debtor collateral requirements
             if true holder funds stored in this contract will be used to fuffil holder collateral requirements
+        @param int _premium: the amount of premium payed by the debtor to the holder
     */
-    function setPaymentParams(bool _useDebtorInternalFunds) public {
+    function setPaymentParams(bool _useDebtorInternalFunds, int _premium) public {
         useDebtorInternalFunds = _useDebtorInternalFunds;
+        premium = _premium;
     }
 
     //trusted address may be set to any FeldmexERC20Helper contract address

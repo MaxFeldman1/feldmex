@@ -12,6 +12,7 @@ const orcHelper = artifacts.require("orcHelper");
 const mCallHelper = artifacts.require("mCallHelper");
 const mPutHelper = artifacts.require("mPutHelper");
 const mOrganizer = artifacts.require("mOrganizer");
+const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 const nullAddress = "0x0000000000000000000000000000000000000000";
@@ -20,11 +21,12 @@ contract('organiser', async function(accounts){
 	it('before each', async () => {
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
+		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		mCallHelperInstance = await mCallHelper.new();
 		mPutHelperInstance = await mPutHelper.new();
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address);
-		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address, mOrganizerInstance.address);
+		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);
 		eHelperInstance = await eHelper.new();
 		cHelperInstance = await cHelper.new();
 		orcHelperInstance = await orcHelper.new();

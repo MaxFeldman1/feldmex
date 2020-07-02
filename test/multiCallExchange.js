@@ -4,6 +4,7 @@ const options = artifacts.require("./options.sol");
 const multiCallExchange = artifacts.require("./multiLeg/multiCallExchange.sol");
 const mCallHelper = artifacts.require("mCallHelper");
 const mOrganizer = artifacts.require("mOrganizer");
+const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 const helper = require("../helper/helper.js");
@@ -23,10 +24,12 @@ contract('multi call exchange', function(accounts){
 		asset1 = await token.new(0);
 		asset2 = await token.new(0);
 		oracleInstance = await oracle.new(asset1.address, asset2.address);
+		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		mCallHelperInstance = await mCallHelper.new();
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, /*this param does not matter so we will just add the default address*/accounts[0]);
-		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address, feldmexERC20HelperInstance.address, mOrganizerInstance.address);
+		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address,
+			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);
 		await mOrganizerInstance.deployCallExchange(optionsInstance.address);
 		multiCallExchangeInstance = await multiCallExchange.at(await mOrganizerInstance.exchangeAddresses(optionsInstance.address, 0));
 		asset1SubUnits = Math.pow(10, await asset1.decimals());

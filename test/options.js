@@ -2,6 +2,7 @@ const oracle = artifacts.require("oracle");
 const underlyingAsset = artifacts.require("UnderlyingAsset");
 const options = artifacts.require("options");
 const strikeAsset = artifacts.require("strikeAsset");
+const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 
 const helper = require("../helper/helper.js");
@@ -30,8 +31,10 @@ contract('options', async function(accounts){
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
+		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address, feldmexERC20HelperInstance.address,  /*this param does not matter*/accounts[0]);
+		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
+			feldmexERC20HelperInstance.address,  /*this param does not matter*/accounts[0], assignOptionsDelegateInstance.address);
 		feeDenominator = 1000;
 		await optionsInstance.setFee(1000, {from: accounts[0]});
 		inflatorObj = {};
@@ -93,6 +96,7 @@ contract('options', async function(accounts){
 	}
 
 	it ('mints, exercizes call options', async () => {
+		try{
 		defaultAccount = accounts[0];
 		reciverAccount = accounts[1];
 		satUnits = Math.pow(10, await tokenInstance.decimals());
@@ -118,6 +122,7 @@ contract('options', async function(accounts){
 		await inflatorObj.balanceOf(debtor, maturity, strike, true);
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, true)).toNumber(), 0, "debtor's contracts have been exerciced");
 		assert.equal((await inflatorObj.balanceOf(holder, maturity, strike, true)).toNumber(), 0, "holder's contracts have been exerciced");
+		} catch (err) {process.exit();}
 	});
 
 	it('distributes funds correctly', async () => {
