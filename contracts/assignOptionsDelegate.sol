@@ -1,6 +1,6 @@
 pragma solidity >=0.5.0;
 import "./interfaces/ERC20.sol";
-import "./FeldmexERC20Helper.sol";
+import "./ERC20FeldmexOptions/FeldmexERC20Helper.sol";
 import "./FeldmexOptionsData.sol";
 
 contract assignOptionsDelegate is FeldmexOptionsData {
@@ -22,8 +22,7 @@ contract assignOptionsDelegate is FeldmexOptionsData {
                 uint strike = strikes[_helperAddress][_helperMaturity][i];
                 int amount = callAmounts[_helperAddress][_helperMaturity][strike];
                 if (!containedStrikes[_addr][_maturity][strike] && amount <= 0) {
-                    address ERC20WrapperAddress = FeldmexERC20Helper(feldmexERC20HelperAddress).callERC20s(address(this), _maturity, strike);
-                    assert(msg.sender == ERC20WrapperAddress);
+                    assert(msg.sender == trustedAddress);
                 }
                 callAmounts[_addr][_maturity][strike] += amount;
             }
@@ -32,8 +31,7 @@ contract assignOptionsDelegate is FeldmexOptionsData {
                 uint strike = strikes[_helperAddress][_helperMaturity][i];
                 int amount = putAmounts[_helperAddress][_helperMaturity][strike];
                 if (!containedStrikes[_addr][_maturity][strike] && amount <= 0) {
-                    address ERC20WrapperAddress = FeldmexERC20Helper(feldmexERC20HelperAddress).putERC20s(address(this), _maturity, strike);
-                    assert(msg.sender == ERC20WrapperAddress);
+                    assert(msg.sender == trustedAddress);
                 }
                 putAmounts[_addr][_maturity][strike] += amount;
             }
@@ -190,7 +188,7 @@ contract assignOptionsDelegate is FeldmexOptionsData {
                 ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
                 satReserves += uint(senderTransfer);
             }
-            else{
+            else if (senderTransfer < 0){
                 ERC20(underlyingAssetAddress).transfer(msg.sender, uint(-senderTransfer));            
                 satReserves -= uint(-senderTransfer);
             }
@@ -265,7 +263,7 @@ contract assignOptionsDelegate is FeldmexOptionsData {
                 ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
                 scReserves += uint(senderTransfer);
             }
-            else{
+            else if (senderTransfer < 0){
                 ERC20(strikeAssetAddress).transfer(msg.sender, uint(-senderTransfer));
                 scReserves -= uint(-senderTransfer);
             }

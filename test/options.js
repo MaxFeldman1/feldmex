@@ -66,17 +66,6 @@ contract('options', async function(accounts){
 			return optionsInstance.assignPutPosition(params);
 		};
 		inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
-		inflatorObj.transfer = async (to, value, maturity, strike, maxTransfer, callPut, params) => {
-			await addStrike(to, maturity, strike);
-			await addStrike(params.from, maturity, strike);
-			return optionsInstance.transfer(to, value, maturity, strike*inflator, maxTransfer, callPut, params);
-		};
-		inflatorObj.transferFrom = async (from, to, value, maturity, strike, maxTransfer, callPut, params) => {
-			await addStrike(to, maturity, strike);
-			await addStrike(from, maturity, strike);
-			return optionsInstance.transferFrom(from, to, value, maturity, strike*inflator, maxTransfer, callPut, params);
-		};
-		inflatorObj.approve = (spender, value, maturity, strike, callPut, params) => {return optionsInstance.approve(spender, value, maturity, strike*inflator, callPut, params);};
 	});
 
 	async function addStrike(from, maturity, strike) {

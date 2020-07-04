@@ -3,7 +3,7 @@ import "./interfaces/ITimeSeriesOracle.sol";
 import "./oracle.sol";
 import "./interfaces/ERC20.sol";
 import "./interfaces/Ownable.sol";
-import "./FeldmexERC20Helper.sol";
+import "./ERC20FeldmexOptions/FeldmexERC20Helper.sol";
 import "./multiLeg/mOrganizer.sol";
 import "./FeldmexOptionsData.sol";
 
@@ -367,8 +367,8 @@ contract options is FeldmexOptionsData, Ownable {
     //trusted address may be set to any FeldmexERC20Helper contract address
     function setTrustedAddressFeldmexERC20(uint _maturity, uint _strike, bool _call) public {
         trustedAddress = _call ? 
-            FeldmexERC20Helper(feldmexERC20HelperAddress).callERC20s(address(this), _maturity, _strike) :
-            FeldmexERC20Helper(feldmexERC20HelperAddress).putERC20s(address(this), _maturity, _strike);
+            FeldmexERC20Helper(feldmexERC20HelperAddress).callAddresses(address(this), _maturity, _strike) :
+            FeldmexERC20Helper(feldmexERC20HelperAddress).putAddresses(address(this), _maturity, _strike);
     }
     //set the trusted address to the exchange address
     function setTrustedAddressMainExchange() public {trustedAddress = exchangeAddress;}

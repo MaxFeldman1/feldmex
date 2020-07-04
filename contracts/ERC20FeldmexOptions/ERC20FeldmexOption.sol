@@ -1,6 +1,6 @@
 pragma solidity ^0.5.12;
-import "./interfaces/ERC20.sol";
-import "./options.sol";
+import "../interfaces/ERC20.sol";
+import "../options.sol";
 
 contract ERC20FeldmexOption is ERC20 {
 
@@ -45,17 +45,23 @@ contract ERC20FeldmexOption is ERC20 {
 	}
 
 	function transfer(address _to, uint _value) public returns (bool success){
+		options optionsContract = options(optionsHandlerAddress);
+		uint _maturity = maturity;	//gas savings
+		require(balanceOf(msg.sender) >= _value || optionsContract.containedStrikes(msg.sender,_maturity,strike));
 		loadPosition(_value);
-		options(optionsHandlerAddress).setParams(msg.sender, _to, maturity);
+		optionsContract.setParams(msg.sender, _to, _maturity);
 		emit Transfer(msg.sender, _to, _value);
 		success = assignPosition();
 	}
 
 	function transferFrom(address _from, address _to, uint _value) public returns (bool success){
 		require(allowance[_from][msg.sender] >= _value);
+		options optionsContract = options(optionsHandlerAddress);
+		uint _maturity = maturity;	//gas savings
+		require(balanceOf(_from) >= _value || optionsContract.containedStrikes(_from,_maturity,strike));
 		allowance[_from][msg.sender] -= _value;
 		loadPosition(_value);
-		options(optionsHandlerAddress).setParams(_from, _to, maturity);
+		optionsContract.setParams(_from, _to, maturity);
 		emit Transfer(_from, _to, _value);
 		success = assignPosition();
 	}
@@ -68,10 +74,13 @@ contract ERC20FeldmexOption is ERC20 {
 
 	function loadPosition(uint _value) internal {
 		bool _call = call; //gas savings
+		uint _strike = strike;	//gas savings
 		options optionsContract = options(optionsHandlerAddress);
 		optionsContract.clearPositions();
-		optionsContract.addPosition(strike, int(_value), _call);
-		optionsContract.setLimits(_value * (_call ? coinSubUnits : strike), 0);
+		optionsContract.addPosition(_strike, int(_value), _call);
+		optionsContract.setLimits(_value * (_call ? coinSubUnits : _strike), 0);
+		optionsContract.setPaymentParams(true, 0);
+		optionsContract.setTrustedAddressFeldmexERC20(maturity, _strike, _call);
 	}
 
 	function assignPosition() public returns (bool success) {
@@ -80,5 +89,6 @@ contract ERC20FeldmexOption is ERC20 {
 			(success, ) = _optionsHandlerAddress.call(abi.encodeWithSignature("assignCallPosition()"));
 		else
 			(success, ) = _optionsHandlerAddress.call(abi.encodeWithSignature("assignPutPosition()"));
+		assert(success);
 	}
 }
