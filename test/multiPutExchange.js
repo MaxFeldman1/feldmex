@@ -27,7 +27,7 @@ contract('multi put exchange', function(accounts){
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		mPutHelperInstance = await mPutHelper.new();
-		mOrganizerInstance = await mOrganizer.new(/*this param does not matter so we will just add the default address*/accounts[0], mPutHelperInstance.address);
+		mOrganizerInstance = await mOrganizer.new(/*this param does not matter so we will just add the default address*/accounts[0], mPutHelperInstance.address, accounts[0]);
 		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);
 		await mOrganizerInstance.deployPutExchange(optionsInstance.address);

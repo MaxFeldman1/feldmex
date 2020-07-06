@@ -27,7 +27,7 @@ contract('multi call exchange', function(accounts){
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		mCallHelperInstance = await mCallHelper.new();
-		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, /*this param does not matter so we will just add the default address*/accounts[0]);
+		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, /*this param does not matter so we will just add the default address*/accounts[0], accounts[0]);
 		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);
 		await mOrganizerInstance.deployCallExchange(optionsInstance.address);

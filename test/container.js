@@ -12,6 +12,8 @@ const mPutHelper = artifacts.require("mPutHelper");
 const mOrganizer = artifacts.require("mOrganizer");
 const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
+const mLegHelper = artifacts.require("mLegHelper");
+const mLegDelegate = artifacts.require("mLegDelegate");
 
 const helper = require("../helper/helper.js");
 
@@ -27,7 +29,9 @@ contract('container', async function(accounts){
 		strikeAssetInstance = await strikeAsset.new(0);
 		mCallHelperInstance = await mCallHelper.new();
 		mPutHelperInstance = await mPutHelper.new();
-		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address);
+		mLegDelegateInstance = await mLegDelegate.new();
+		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address);
+		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);

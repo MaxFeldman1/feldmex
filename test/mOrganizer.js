@@ -4,11 +4,14 @@ const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
 const multiCallExchange = artifacts.require("multiCallExchange");
 const multiPutExchange = artifacts.require("multiPutExchange");
+const multiLegExchange = artifacts.require("multiLegExchange");
 const mOrganizer = artifacts.require("mOrganizer");
 const mCallHelper = artifacts.require("mCallHelper");
 const mPutHelper = artifacts.require("mPutHelper");
 const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
+const mLegHelper = artifacts.require("mLegHelper");
+const mLegDelegate = artifacts.require("mLegDelegate");
 
 const nullAddress = "0x0000000000000000000000000000000000000000";
 
@@ -21,7 +24,9 @@ contract('mOrganizer', async function(accounts){
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		mCallHelperInstance = await mCallHelper.new();
 		mPutHelperInstance = await mPutHelper.new();
-		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address);
+		mLegDelegateInstance = await mLegDelegate.new();
+		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address);
+		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);
 	});
@@ -41,9 +46,16 @@ contract('mOrganizer', async function(accounts){
 
 	it('sucessfully deploys put exchange', async () => {
 		await mOrganizerInstance.deployPutExchange(optionsInstance.address);
-		putExchangeAddress = await mOrganizerInstance.exchangeAddresses(optionsInstance.address, 0);
+		putExchangeAddress = await mOrganizerInstance.exchangeAddresses(optionsInstance.address, 1);
 		assert.notEqual(putExchangeAddress, nullAddress, "call exchange address not null");
 		multiPutExchangeInstance = await multiPutExchange.at(putExchangeAddress);
+	});
+
+	it('sucessfully deploys multi leg exchange', async  () => {
+		await mOrganizerInstance.deployMultiLegExchange(optionsInstance.address);
+		mLegHelperAddress = await mOrganizerInstance.exchangeAddresses(optionsInstance.address, 2);
+		assert.notEqual(mLegHelperAddress, nullAddress, "call exchange address not null");
+		multiLegExchangeInstance = await multiLegExchange.at(mLegHelperAddress);
 	});
 
 });

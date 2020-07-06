@@ -7,6 +7,7 @@ const mCallHelper = artifacts.require("mCallHelper");
 const mPutHelper = artifacts.require("mPutHelper");
 const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
+const mLegDelegate = artifacts.require("mLegDelegate");
 
 const helper = require("../helper/helper.js");
 
@@ -27,10 +28,11 @@ contract('multi leg exchange', function(accounts){
 		oracleInstance = await oracle.new(asset1.address, asset2.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		mOrganizerInstance = await mOrganizer.new(accounts[0], accounts[0]); //the params here do not matter
+		mOrganizerInstance = await mOrganizer.new(accounts[0], accounts[0], accounts[0]); //the params here do not matter
+		mLegDelegateInstance = await mLegDelegate.new();
 		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);
-		multiLegExchangeInstance = await multiLegExchange.new(asset1.address, asset2.address, optionsInstance.address, {gas: 10000000});
+		multiLegExchangeInstance = await multiLegExchange.new(asset1.address, asset2.address, optionsInstance.address, mLegDelegateInstance.address);
 		asset1SubUnits = Math.pow(10, await asset1.decimals());
 		asset2SubUnits = Math.pow(10, await asset2.decimals());
 		inflator = await oracleInstance.inflator();
@@ -163,7 +165,6 @@ contract('multi leg exchange', function(accounts){
 
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: accounts[1]})).toNumber(), 0, "correct underlying asset balance after all orders");
 		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: accounts[1]})).toNumber(), 0, "correct strike asset balance after all orders");
-
 	});
 
 	it('posts orders with correct collateral requirements index 1', async () => {
