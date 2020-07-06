@@ -78,7 +78,7 @@ contract ERC20FeldmexOption is ERC20 {
 		options optionsContract = options(optionsHandlerAddress);
 		optionsContract.clearPositions();
 		optionsContract.addPosition(_strike, int(_value), _call);
-		optionsContract.setLimits(_value * (_call ? coinSubUnits : _strike), 0);
+		optionsContract.setLimits(int(_value * (_call ? coinSubUnits : _strike)), 0);
 		optionsContract.setPaymentParams(true, 0);
 		optionsContract.setTrustedAddressFeldmexERC20(maturity, _strike, _call);
 	}

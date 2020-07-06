@@ -406,8 +406,7 @@ contract multiLegExchange is mLegData {
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
-            if (offer.amount > _amount || offer.price < 0 && uint(-offer.price)*offer.amount > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])){
-                uint maxAmt;
+            if (offer.amount > _amount){
                 if (msg.sender == offer.offerer) {
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
@@ -415,30 +414,25 @@ contract multiLegExchange is mLegData {
                     */
                     position memory pos = positions[offer.legsHash];
                     if (offer.index == 0){
-                        uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
+                        uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
                         if (int(req) < 0) req = 0;
                         claimedToken[msg.sender] += req;
-                        claimedStable[msg.sender] += offer.amount * pos.maxStrikeAssetHolder;
+                        claimedStable[msg.sender] += _amount * pos.maxStrikeAssetHolder;
                     } else {
-                        claimedToken[msg.sender] += offer.amount * pos.maxUnderlyingAssetHolder;
-                        uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetHolder) + offer.price));
+                        claimedToken[msg.sender] += _amount * pos.maxUnderlyingAssetHolder;
+                        uint req = uint(int(_amount) * (int(pos.maxStrikeAssetHolder) + offer.price));
                         if (int(req) < 0) req = 0;
                         claimedStable[msg.sender] += req;
                     }
-                    maxAmt = _amount;
                 }
                 else {
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
-                    if (offer.price < 0 && uint(-offer.price)*maxAmt > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender]))
-                        maxAmt = (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])/uint(-offer.price);
-                    if (maxAmt == 0) return _amount;
-                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, maxAmt, offer.price, offer.index);
+                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) return _amount;
 
                 }
-                offers[node.hash].amount -= maxAmt;
-                emit offerAccepted(node.name, maxAmt);
-                return _amount-maxAmt;
+                offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                return 0;
             }
             if (!takeBuyOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
@@ -471,8 +465,7 @@ contract multiLegExchange is mLegData {
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice){
-            if (offer.amount > _amount || offer.price > 0 && uint(offer.price)*offer.amount > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])){
-                uint maxAmt;
+            if (offer.amount > _amount){
                 if (offer.offerer == msg.sender){
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
@@ -480,29 +473,24 @@ contract multiLegExchange is mLegData {
                     */
                     position memory pos = positions[offer.legsHash];
                     if (offer.index == 1){
-                        uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
+                        uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
                         if (int(req) < 0) req = 0;
                         claimedToken[msg.sender] += req;
-                        claimedStable[msg.sender] += offer.amount * pos.maxStrikeAssetDebtor;
+                        claimedStable[msg.sender] += _amount * pos.maxStrikeAssetDebtor;
                     } else {
-                        claimedToken[msg.sender] += offer.amount * pos.maxUnderlyingAssetDebtor;
-                        uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetDebtor) - offer.price));
+                        claimedToken[msg.sender] += _amount * pos.maxUnderlyingAssetDebtor;
+                        uint req = uint(int(_amount) * (int(pos.maxStrikeAssetDebtor) - offer.price));
                         if (int(req) < 0) req = 0;
                         claimedStable[msg.sender] += req;
                     }
-                    maxAmt = _amount;
                 }
                 else {
-                    maxAmt = offer.amount > _amount ? _amount : offer.amount; 
-                    if (offer.price > 0 && uint(offer.price)*offer.amount > (_call ? claimedToken[msg.sender] : claimedStable[msg.sender]))
-                        maxAmt = (_call ? claimedToken[msg.sender] : claimedStable[msg.sender])/uint(offer.price);
-                    if (maxAmt == 0) return _amount;
-                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, maxAmt, offer.price, offer.index);
+                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) return _amount;
                 }
-                offers[node.hash].amount -= maxAmt;
-                emit offerAccepted(node.name, maxAmt);
-                return _amount-maxAmt;
+                offers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                return 0;
             }
             if (!takeSellOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;

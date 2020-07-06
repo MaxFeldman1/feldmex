@@ -373,15 +373,15 @@ contract options is FeldmexOptionsData, Ownable {
     //set the trusted address to the exchange address
     function setTrustedAddressMainExchange() public {trustedAddress = exchangeAddress;}
     //set the trusted address to a multi leg exchange
-    function setTrustedAddressMultiLegExchange(bool _callExchange) public {trustedAddress = mOrganizer(mOrganizerAddress).exchangeAddresses(address(this), _callExchange ? 0 : 1);}
+    function setTrustedAddressMultiLegExchange(uint8 _index) public {trustedAddress = mOrganizer(mOrganizerAddress).exchangeAddresses(address(this), _index);}
 
     /*
         @Description: set the maximum values for the transfer amounts
 
-        @param uint _maxDebtorTransfer: the maximum amount for transferAmountDebtor if this limit is breached assignPosition transactions will revert
-        @param uint _maxHolderTransfer: the maximum amount for transferAmountHolder if this limit is breached assignPosition transactions will revert
+        @param int _maxDebtorTransfer: the maximum amount for transferAmountDebtor if this limit is breached assignPosition transactions will revert
+        @param int _maxHolderTransfer: the maximum amount for transferAmountHolder if this limit is breached assignPosition transactions will revert
     */
-    function setLimits(uint _maxDebtorTransfer, uint _maxHolderTransfer) public {
+    function setLimits(int _maxDebtorTransfer, int _maxHolderTransfer) public {
         maxDebtorTransfer = _maxDebtorTransfer;
         maxHolderTransfer = _maxHolderTransfer;
     }

@@ -615,7 +615,7 @@ contract exchange{
         optionsContract.setParams(_debtor,_holder,_maturity);
         optionsContract.setPaymentParams(_debtorPays, int(_price));
         optionsContract.setTrustedAddressMainExchange();
-        optionsContract.setLimits(_amount * satUnits - _price, _price);
+        optionsContract.setLimits(int(_amount * satUnits - _price), int(_price));
 
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return (false, 0);
@@ -652,7 +652,7 @@ contract exchange{
         optionsContract.setParams(_debtor,_holder,_maturity);
         optionsContract.setPaymentParams(_debtorPays, int(_price));
         optionsContract.setTrustedAddressMainExchange();
-        optionsContract.setLimits(_amount * _strike - _price, _price);
+        optionsContract.setLimits(int(_amount * _strike - _price), int(_price));
 
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return (false, 0);

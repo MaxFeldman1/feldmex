@@ -99,8 +99,8 @@ contract mLegData {
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint scUnits;
     //previously recorded balances of this contract
-    uint satReserves;
-    uint scReserves;
+    uint public satReserves;
+    uint public scReserves;
 
     address delegateAddress;
 

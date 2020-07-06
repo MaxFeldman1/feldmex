@@ -108,8 +108,8 @@ contract FeldmexOptionsData {
     address debtor;
     address holder;
     uint maturity;
-    uint maxDebtorTransfer;
-    uint maxHolderTransfer;
+    int maxDebtorTransfer;
+    int maxHolderTransfer;
 
     address trustedAddress;
     bool useDebtorInternalFunds;

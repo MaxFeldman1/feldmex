@@ -513,7 +513,7 @@ contract multiPutExchange {
                         therefore we do not need to call options.assignPosition
                     */
                     position memory pos = positions[offer.legsHash];
-                    uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetHolder) + offer.price));
+                    uint req = uint(int(_amount) * (int(pos.maxStrikeAssetHolder) + offer.price));
                     if (int(req) < 0) req = 0;
                     claimedStable[msg.sender] += req;
                 }
@@ -562,7 +562,7 @@ contract multiPutExchange {
                         therefore we do not need to call options.mintCall/Put
                     */
                     position memory pos = positions[offer.legsHash];
-                    uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetDebtor) - offer.price));
+                    uint req = uint(int(_amount) * (int(pos.maxStrikeAssetDebtor) - offer.price));
                     if (int(req) < 0) req = 0;
                     claimedStable[msg.sender] += req;
                 }
@@ -599,8 +599,8 @@ contract multiPutExchange {
         for (uint i = 0; i < pos.putAmounts.length; i++)
             optionsContract.addPosition(pos.putStrikes[i], int(_amount)*pos.putAmounts[i], false);
         optionsContract.setPaymentParams(_index==0, _price);
-        optionsContract.setTrustedAddressMultiLegExchange(false);
-        optionsContract.setLimits(uint(int(_amount * pos.maxStrikeAssetDebtor) - _price), uint(int(_amount * pos.maxStrikeAssetHolder) + _price));
+        optionsContract.setTrustedAddressMultiLegExchange(1);
+        optionsContract.setLimits(int(_amount * pos.maxStrikeAssetDebtor) - _price, int(_amount * pos.maxStrikeAssetHolder) + _price);
 
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return false;

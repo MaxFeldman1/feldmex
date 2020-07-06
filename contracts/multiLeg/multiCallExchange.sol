@@ -520,7 +520,7 @@ contract multiCallExchange {
                         therefore we do not need to call options.assignPosition
                     */
                     position memory pos = positions[offer.legsHash];
-                    uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
+                    uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
                     if (int(req) < 0) req = 0;
                     claimedToken[msg.sender] += req;
                 }
@@ -568,7 +568,7 @@ contract multiCallExchange {
                         therefore we do not need to call options.mintCall/Put
                     */
                     position memory pos = positions[offer.legsHash];
-                    uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
+                    uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
                     if (int(req) < 0) req = 0;
                     claimedToken[msg.sender] += req;
                 }
@@ -605,8 +605,8 @@ contract multiCallExchange {
         for (uint i = 0; i < pos.callAmounts.length; i++)
             optionsContract.addPosition(pos.callStrikes[i], int(_amount)*pos.callAmounts[i], true);
         optionsContract.setPaymentParams(_index==0, _price);
-        optionsContract.setTrustedAddressMultiLegExchange(true);
-        optionsContract.setLimits(uint(int(_amount * pos.maxUnderlyingAssetDebtor) - _price), uint(int(_amount * pos.maxUnderlyingAssetHolder) + _price));
+        optionsContract.setTrustedAddressMultiLegExchange(0);
+        optionsContract.setLimits(int(_amount * pos.maxUnderlyingAssetDebtor) - _price, int(_amount * pos.maxUnderlyingAssetHolder) + _price);
 
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return false;
