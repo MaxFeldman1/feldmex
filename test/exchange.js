@@ -10,6 +10,7 @@ const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const mLegHelper = artifacts.require("mLegHelper");
 const mLegDelegate = artifacts.require("mLegDelegate");
+const feeOracle = artifacts.require("feeOracle");
 
 const defaultBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
@@ -49,8 +50,9 @@ contract('exchange', async function(accounts) {
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
+		feeOracleInstance = await feeOracle.new();
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
-			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);
+			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		mintHandler.postOrder = async (maturity, strike, price, amount, buy, call, params) => {
 			if (typeof(strikes[maturity]) === 'undefined') strikes[maturity] = {};
 			if (typeof(strikes[maturity][strike]) === 'undefined'){

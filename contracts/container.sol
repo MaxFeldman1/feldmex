@@ -138,17 +138,6 @@ contract container is ERC20, Ownable, yieldEnabled {
 	}
 	//----------------end contract setup------------
 
-	/*
-		@Description: the owner may call this function to set the fee denominator in the options smart contract
-
-		@param uint _feeDenominator: the value to pass to optionsContract.setFee
-	*/
-	function setFee(uint _feeDeonominator) onlyOwner public {
-		optionsContract.setFee(_feeDeonominator);
-		if (progress > 2) optionsContract2.setFee(_feeDeonominator);
-	}
-
-
     /*
         @Descripton: allows for users to withdraw funds that are not locked up as collateral
             these funds are tracked in the claimedTokens mapping and the claimedStable mapping for asset1 and asset2 respectively

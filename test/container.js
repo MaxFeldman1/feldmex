@@ -14,6 +14,7 @@ const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const mLegHelper = artifacts.require("mLegHelper");
 const mLegDelegate = artifacts.require("mLegDelegate");
+const feeOracle = artifacts.require("feeOracle");
 
 const helper = require("../helper/helper.js");
 
@@ -34,7 +35,8 @@ contract('container', async function(accounts){
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);
+		feeOracleInstance = await feeOracle.new();
+		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		eHelperInstance = await eHelper.new();
 		orcHelperInstance = await orcHelper.new();
 		containerInstance = await container.new(tokenInstance.address, strikeAssetInstance.address, oHelperInstance.address, eHelperInstance.address, orcHelperInstance.address);
@@ -56,6 +58,11 @@ contract('container', async function(accounts){
 		satUnits = Math.pow(10, (await tokenInstance.decimals()).toNumber());
 		scUnits = Math.pow(10, (await strikeAssetInstance.decimals()).toNumber());
 	});
+
+	async function setFee(denominator) {
+		//only set fee in only the options instance
+		await feeOracleInstance.setBaseFees(denominator, 0, 0, {from: deployerAccount});
+	}
 
 
 	//because oracle returns median of last 3 returned prices we must set price 2 times
@@ -237,14 +244,14 @@ contract('container', async function(accounts){
 
 	it('changes the fee', () => {
 		nonDeployer = accounts[1];
-		return containerInstance.setFee(1500, {from: deployerAccount}).then(() => {
+		return setFee(1500).then(() => {
 			feeDenominator = 1500;
 			return "OK";
 		}).catch(() => {
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OK", "Successfully changed the fee");
-			return containerInstance.setFee(400, {from: deployerAccount});
+			return setFee(400);
 		}).then(() => {
 			feeDenominator = 400;
 			return "OK";
@@ -252,7 +259,7 @@ contract('container', async function(accounts){
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OOF", "Fee change was stopped because fee was too high");
-			return containerInstance.setFee(1800, {from: nonDeployer});
+			return setFee(1800);
 		}).then(() => {
 			feeDenominator = 1800;
 			return "OK";
@@ -371,7 +378,7 @@ contract('container', async function(accounts){
 		assert.equal((await tokenInstance.balanceOf(deployerAccount)).toNumber() >= maxTransfer, true, "balance is large enough");
 		await mintCall(deployerAccount, accounts[1], maturity, strike, amount, maxTransfer, {from: deployerAccount}, true);
 		feeDenominator = 1000;
-		await containerInstance.setFee(1000, {from: deployerAccount});
+		await setFee(1000);
 		prevBalance = (await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber();
 		await containerInstance.changeFeeStatus(accounts[1], {from: deployerAccount});
 		assert.equal(await optionsInstance.feeImmunity(accounts[1]), true, "fee immunity granted to receiver account");

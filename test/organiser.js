@@ -16,6 +16,7 @@ const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const mLegHelper = artifacts.require("mLegHelper");
 const mLegDelegate = artifacts.require("mLegDelegate");
+const feeOracle = artifacts.require("feeOracle");
 
 const nullAddress = "0x0000000000000000000000000000000000000000";
 
@@ -30,7 +31,8 @@ contract('organiser', async function(accounts){
 		mLegDelegateInstance = await mLegDelegate.new();
 		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address);
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);
-		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address);
+		feeOracleInstance = await feeOracle.new();
+		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		eHelperInstance = await eHelper.new();
 		cHelperInstance = await cHelper.new();
 		orcHelperInstance = await orcHelper.new();

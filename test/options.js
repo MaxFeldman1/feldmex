@@ -4,6 +4,7 @@ const options = artifacts.require("options");
 const strikeAsset = artifacts.require("strikeAsset");
 const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
+const feeOracle = artifacts.require("feeOracle");
 
 const helper = require("../helper/helper.js");
 
@@ -28,16 +29,22 @@ var allMaturities = [];
 
 contract('options', async function(accounts){
 
+	async function setFee(denominator) {
+		//only set fee in only the options instance
+		await feeOracleInstance.setBaseFees(denominator, 0, 0, {from: accounts[0]});
+	}
+
 	it('before each', async () => {
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
+		feeOracleInstance = await feeOracle.new();
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
-			feldmexERC20HelperInstance.address,  /*this param does not matter*/accounts[0], assignOptionsDelegateInstance.address);
+			feldmexERC20HelperInstance.address, accounts[0], assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		feeDenominator = 1000;
-		await optionsInstance.setFee(1000, {from: accounts[0]});
+		await setFee(1000, {from: accounts[0]});
 		inflatorObj = {};
 		//setWithInflator sets spot and adjusts for the inflator
 		//because median of last 3 is returned by oracle we must set spot 2 times
@@ -229,20 +236,20 @@ contract('options', async function(accounts){
 	it('changes the fee', async () => {
 		deployer = defaultAccount;
 		nonDeployer = reciverAccount;
-		return optionsInstance.setFee(1500, {from: deployer}).then(() => {
+		return setFee(1500, {from: deployer}).then(() => {
 			return "OK";
 		}).catch(() => {
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OK", "Successfully changed the fee");
-			return optionsInstance.setFee(400, {from: deployer});
+			return setFee(400, {from: deployer});
 		}).then(() => {
 			return "OK";
 		}).catch(() => {
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OOF", "Fee change was stopped because fee was too high");
-			return optionsInstance.setFee(800, {from: nonDeployer});
+			return setFee(800, {from: nonDeployer});
 		}).then(() => {
 			return "OK";
 		}).catch(() => {
@@ -325,7 +332,7 @@ contract('options', async function(accounts){
 		assert.equal((await tokenInstance.balanceOf(defaultAccount)).toNumber() >= maxTransfer, true, "balance is large enough");
 		await inflatorObj.mintCall(defaultAccount, reciverAccount, maturity, strike, amount, maxTransfer, {from: defaultAccount});
 		feeDenominator = 1000;
-		await optionsInstance.setFee(1000, {from: defaultAccount});
+		await setFee(1000, {from: defaultAccount});
 		await optionsInstance.viewClaimedTokens({from: reciverAccount});
 		prevBalance = (await optionsInstance.viewClaimedTokens({from: reciverAccount})).toNumber();
 		await optionsInstance.changeFeeStatus(reciverAccount, {from: defaultAccount});

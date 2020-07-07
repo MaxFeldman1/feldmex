@@ -19,6 +19,8 @@ contract FeldmexOptionsData {
     address mOrganizerAddress;
     //address of delegate contract that is responsible for assigning positions
     address assignOptionsDelegateAddress;
+    //address of the contract that holds the info about fees
+    address feeOracleAddress;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
     uint satUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar

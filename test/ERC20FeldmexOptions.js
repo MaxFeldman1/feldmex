@@ -33,7 +33,7 @@ contract('ERC20FeldmexOptions', async function(accounts){
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
-			feldmexERC20HelperInstance.address,  /*this param does not matter*/accounts[0], assignOptionsDelegateInstance.address);
+			feldmexERC20HelperInstance.address,  /*this param does not matter*/accounts[0], assignOptionsDelegateInstance.address, accounts[0]);
 		await feldmexERC20HelperInstance.deployNew(optionsInstance.address, maturity, strike, true);
 		await feldmexERC20HelperInstance.deployNew(optionsInstance.address, maturity, strike, false);
 		feldmexERC20CallInstance = await ERC20FeldmexOption.at(await feldmexERC20HelperInstance.callAddresses(optionsInstance.address, maturity, strike));

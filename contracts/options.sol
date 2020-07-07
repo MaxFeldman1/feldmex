@@ -6,6 +6,7 @@ import "./interfaces/Ownable.sol";
 import "./ERC20FeldmexOptions/FeldmexERC20Helper.sol";
 import "./multiLeg/mOrganizer.sol";
 import "./FeldmexOptionsData.sol";
+import "./feeOracle.sol";
 
 contract options is FeldmexOptionsData, Ownable {
 
@@ -18,10 +19,12 @@ contract options is FeldmexOptionsData, Ownable {
         @param address _feldmexERC20HelperAddress: address that will be assigned to feldmexERC20HelperAddress
         @param address _mOrganizerAddress: address that will be assigned to mOrganizerAddress
         @param address _assignOptionsDelegateAddress: address that will be assigned to assignOptionsDelegateAddress
+        @param address _feeOracleAddress: address that will be assigned to feeOracleAddress
     */
     constructor (address _oracleAddress, address _underlyingAssetAddress, 
         address _strikeAssetAddress, address _feldmexERC20HelperAddress, 
-        address _mOrganizerAddress, address _assignOptionsDelegateAddress) public {
+        address _mOrganizerAddress, address _assignOptionsDelegateAddress,
+        address _feeOracleAddress) public {
         
         oracleAddress = _oracleAddress;
         underlyingAssetAddress = _underlyingAssetAddress;
@@ -30,6 +33,7 @@ contract options is FeldmexOptionsData, Ownable {
         feldmexERC20HelperAddress = _feldmexERC20HelperAddress;
         assignOptionsDelegateAddress = _assignOptionsDelegateAddress;
         mOrganizerAddress = _mOrganizerAddress;
+        feeOracleAddress = _feeOracleAddress;
         oracle orc = oracle(oracleAddress);
         inflator = orc.inflator();
         ERC20 ua = ERC20(underlyingAssetAddress);
@@ -46,17 +50,6 @@ contract options is FeldmexOptionsData, Ownable {
     function setExchangeAddress(address _exchangeAddress) onlyOwner public {
         require(exchangeAddress == owner);
         exchangeAddress = _exchangeAddress;
-    }
-
-    /*
-        @Description: allows the deployer to set a new fee
-
-        @param uint _feeDenominator: the value which will be the denominator in the fee on all transactions
-            fee == (amount*priceOfOption)/feeDenominator
-    */
-    function setFee(uint _feeDeonominator) onlyOwner public {
-        require(_feeDeonominator >= 500);
-        feeDenominator = _feeDeonominator;
     }
 
     /*
@@ -110,15 +103,16 @@ contract options is FeldmexOptionsData, Ownable {
         //satValueOf is inflated by _price parameter and scValueOf thus only divide out spot from callValue not putValue
         callValue /= spot;
         delete strikes[msg.sender][_maturity];
+        uint _feeDenominator = feeOracle(feeOracleAddress).fetchFee(0);
         if (callValue > satDeduction[msg.sender][_maturity]){
             callValue -= satDeduction[msg.sender][_maturity];
-            uint fee = feeImmunity[msg.sender] ? 0 : callValue/feeDenominator;
+            uint fee = feeImmunity[msg.sender] ? 0 : callValue/_feeDenominator;
             claimedTokens[owner] += fee;
             claimedTokens[msg.sender] += callValue - fee;
         }
         if (putValue > scDeduction[msg.sender][_maturity]){
             putValue -= scDeduction[msg.sender][_maturity];
-            uint fee = feeImmunity[msg.sender] ? 0 : putValue/feeDenominator;
+            uint fee = feeImmunity[msg.sender] ? 0 : putValue/_feeDenominator;
             claimedStable[owner] += fee;
             claimedStable[msg.sender] += putValue - fee;
         }
