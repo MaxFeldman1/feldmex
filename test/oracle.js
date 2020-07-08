@@ -45,70 +45,64 @@ contract('oracle', function(accounts){
 	}
 
 	it('sets and fetches spot price', async () => {
-		try{
-			spot = 5
-			secondSpot = 7;
-			await setPrice(spot);
-			blockSetSpot = await getBlockNumber();
-			await helper.advanceTime(2);
-			res = (await oracleInstance.latestSpot()) / inflator;
-			assert.equal(res, spot, 'latestSpot() fetches current spot price');
-			height = await getBlockNumber();
-			res = (await heightToPrevSpot(height))/inflator;
-			//res = (await heightToPrevSpot(height))/inflator;
-			assert.equal(res, spot, "getUint(uint) fetches the latest spot price");
-			await setPrice(secondSpot);
-			blockSetSecondSpot = await getBlockNumber();
-			await helper.advanceTime(2);
-			//note that we have not updated the value of height yet
-			res = (await heightToPrevSpot(height)) / inflator;
-			assert.equal(res, spot, "getUint(uint) can fetch previous values");
-			//we are now feching the price of the blocks after setting the spot a second time
-			res = (await heightToPrevSpot(blockSetSecondSpot+5))/inflator;
-			assert.equal(res, secondSpot, "getUint(uint) can fetch the most recent spot");
-			res = (await heightToPrevSpot(height-3))/inflator;
-			assert.equal(res, 0, "getUint(uint) returns 0 when there are no previous spot prices");
-			res = await web3.eth.getBlock('latest');
-			height = res.number;
-			time = res.timestamp;
-			result = (await heightToPrevSpot(height))/inflator;
-			//res  = await oracleInstance.timestampBehindHeight(height);
-			res  = await heightToPrevTs(height);
-			assert.equal(res <= time, true, "returns the correct timestamp");
-			await setPrice(1);
-			blockSet1 = await getBlockNumber();
-			await helper.advanceTime(2);
-			await setPrice(5);
-			blockSet5 = await getBlockNumber();
-			await helper.advanceTime(2);
-			await setPrice(6);
-			blockSet6 = await getBlockNumber();
-			res = await web3.eth.getBlock('latest');
-			diff = res.timestamp-time;
-			time = res.timestamp;
-			height = res.number;
-			res = (await tsToPrevSpot(time))/inflator;
-			assert.equal(res, 6, "correct spot");
-			newTime = (await web3.eth.getBlock(blockSet1)).timestamp+1;
-			res = (await tsToPrevSpot(newTime))/inflator;
-			assert.equal(res, 1, "correct spot");
-			newTime = (await web3.eth.getBlock(blockSet5)).timestamp+1;
-			res = (await tsToPrevSpot(newTime))/inflator;
-			assert.equal(res, 5, "correct spot");
-			newTime = (await web3.eth.getBlock(blockSetSpot)).timestamp;
-			spotTime = newTime;
-			res = (await tsToPrevSpot(newTime))/inflator;
-			assert.equal(res, spot, "correct spot");
-			newTime = (await web3.eth.getBlock(blockSetSecondSpot)).timestamp;
-			res = (await tsToPrevSpot(newTime))/inflator;
-			assert.equal(res, secondSpot, "correct spot");
-			res = (await tsToPrevSpot(spotTime-4))/inflator;
-			assert.equal(res, 0, "correct spot");
-		} catch (err) {
-			console.error(err.message);
-			throw err;
-		}
-
+		spot = 5
+		secondSpot = 7;
+		await setPrice(spot);
+		blockSetSpot = await getBlockNumber();
+		await helper.advanceTime(2);
+		res = (await oracleInstance.latestSpot()) / inflator;
+		assert.equal(res, spot, 'latestSpot() fetches current spot price');
+		height = await getBlockNumber();
+		res = (await heightToPrevSpot(height))/inflator;
+		//res = (await heightToPrevSpot(height))/inflator;
+		assert.equal(res, spot, "getUint(uint) fetches the latest spot price");
+		await setPrice(secondSpot);
+		blockSetSecondSpot = await getBlockNumber();
+		await helper.advanceTime(2);
+		//note that we have not updated the value of height yet
+		res = (await heightToPrevSpot(height)) / inflator;
+		assert.equal(res, spot, "getUint(uint) can fetch previous values");
+		//we are now feching the price of the blocks after setting the spot a second time
+		res = (await heightToPrevSpot(blockSetSecondSpot+5))/inflator;
+		assert.equal(res, secondSpot, "getUint(uint) can fetch the most recent spot");
+		res = (await heightToPrevSpot(height-3))/inflator;
+		assert.equal(res, 0, "getUint(uint) returns 0 when there are no previous spot prices");
+		res = await web3.eth.getBlock('latest');
+		height = res.number;
+		time = res.timestamp;
+		result = (await heightToPrevSpot(height))/inflator;
+		//res  = await oracleInstance.timestampBehindHeight(height);
+		res  = await heightToPrevTs(height);
+		assert.equal(res <= time, true, "returns the correct timestamp");
+		await setPrice(1);
+		blockSet1 = await getBlockNumber();
+		await helper.advanceTime(2);
+		await setPrice(5);
+		blockSet5 = await getBlockNumber();
+		await helper.advanceTime(2);
+		await setPrice(6);
+		blockSet6 = await getBlockNumber();
+		res = await web3.eth.getBlock('latest');
+		diff = res.timestamp-time;
+		time = res.timestamp;
+		height = res.number;
+		res = (await tsToPrevSpot(time))/inflator;
+		assert.equal(res, 6, "correct spot");
+		newTime = (await web3.eth.getBlock(blockSet1)).timestamp+1;
+		res = (await tsToPrevSpot(newTime))/inflator;
+		assert.equal(res, 1, "correct spot");
+		newTime = (await web3.eth.getBlock(blockSet5)).timestamp+1;
+		res = (await tsToPrevSpot(newTime))/inflator;
+		assert.equal(res, 5, "correct spot");
+		newTime = (await web3.eth.getBlock(blockSetSpot)).timestamp;
+		spotTime = newTime;
+		res = (await tsToPrevSpot(newTime))/inflator;
+		assert.equal(res, spot, "correct spot");
+		newTime = (await web3.eth.getBlock(blockSetSecondSpot)).timestamp;
+		res = (await tsToPrevSpot(newTime))/inflator;
+		assert.equal(res, secondSpot, "correct spot");
+		res = (await tsToPrevSpot(spotTime-4))/inflator;
+		assert.equal(res, 0, "correct spot");
 	});
 
 });

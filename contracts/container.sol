@@ -132,10 +132,6 @@ contract container is ERC20, Ownable, yieldEnabled {
 		progress++;
 	}
 
-	function changeFeeStatus(address _addr) onlyOwner public returns (bool success){
-		optionsContract.changeFeeStatus(_addr);
-		success = true;
-	}
 	//----------------end contract setup------------
 
     /*

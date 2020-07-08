@@ -29,18 +29,10 @@ contract FeldmexOptionsData {
     uint satReserves;
     uint scReserves;
     /*
-        addresses that are approved do not have to pay fees
-        addresses that are approved are usually market makers/liquidity providers
-        addresses are approved by the owner
-    */
-    mapping(address => bool) public feeImmunity;
-    /*
         number by which the oracle multiplies all spot prices
         also used to inflate strike prices here
     */
     uint public inflator;
-    //fee == (pricePaid)/feeDenominator
-    uint public feeDenominator = 2**255;
 
 
     /*

@@ -29,9 +29,9 @@ var allMaturities = [];
 
 contract('options', async function(accounts){
 
-	async function setFee(denominator) {
+	async function setFee(denominator, params) {
 		//only set fee in only the options instance
-		await feeOracleInstance.setBaseFees(denominator, 0, 0, {from: accounts[0]});
+		await feeOracleInstance.setBaseFees(denominator, 500, 500, params);
 	}
 
 	it('before each', async () => {
@@ -43,6 +43,7 @@ contract('options', async function(accounts){
 		feeOracleInstance = await feeOracle.new();
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
 			feldmexERC20HelperInstance.address, accounts[0], assignOptionsDelegateInstance.address, feeOracleInstance.address);
+		assert.equal(await feeOracleInstance.specificFeeImmunity(optionsInstance.address, accounts[0]), true, "owner of optionsContract is feeImmune");
 		feeDenominator = 1000;
 		await setFee(1000, {from: accounts[0]});
 		inflatorObj = {};
@@ -93,7 +94,6 @@ contract('options', async function(accounts){
 	}
 
 	it ('mints, exercizes call options', async () => {
-		try{
 		defaultAccount = accounts[0];
 		reciverAccount = accounts[1];
 		satUnits = Math.pow(10, await tokenInstance.decimals());
@@ -120,7 +120,6 @@ contract('options', async function(accounts){
 		await inflatorObj.balanceOf(debtor, maturity, strike, true);
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, true)).toNumber(), 0, "debtor's contracts have been exerciced");
 		assert.equal((await inflatorObj.balanceOf(holder, maturity, strike, true)).toNumber(), 0, "holder's contracts have been exerciced");
-		} catch (err) {process.exit();}
 	});
 
 	it('distributes funds correctly', async () => {
@@ -320,40 +319,6 @@ contract('options', async function(accounts){
 		});
 	});
 
-	it('approves and exempts addresses from fees', async () => {
-		spot = strike+10;
-		await setWithInflator(spot);
-		maturity = (await web3.eth.getBlock('latest')).timestamp;
-		allMaturities.push(maturity);
-		maxTransfer = satUnits*amount;
-		//wait one second to allow for maturity to pass
-		await helper.advanceTime(1);
-		await tokenInstance.approve(optionsInstance.address, maxTransfer, {from: defaultAccount});
-		assert.equal((await tokenInstance.balanceOf(defaultAccount)).toNumber() >= maxTransfer, true, "balance is large enough");
-		await inflatorObj.mintCall(defaultAccount, reciverAccount, maturity, strike, amount, maxTransfer, {from: defaultAccount});
-		feeDenominator = 1000;
-		await setFee(1000, {from: defaultAccount});
-		await optionsInstance.viewClaimedTokens({from: reciverAccount});
-		prevBalance = (await optionsInstance.viewClaimedTokens({from: reciverAccount})).toNumber();
-		await optionsInstance.changeFeeStatus(reciverAccount, {from: defaultAccount});
-		assert.equal(await optionsInstance.feeImmunity(reciverAccount), true, "fee immunity granted to receiver account");
-		await optionsInstance.claim(maturity, {from: reciverAccount});
-		//note that there is no fee present when calculating balance
-		assert.equal((await optionsInstance.viewClaimedTokens({from: reciverAccount})).toNumber(), prevBalance + Math.floor(satUnits*amount*(spot-strike)/spot), "No fee charged on reciverAccount's call to options.claim");
-		await optionsInstance.changeFeeStatus(reciverAccount, {from: defaultAccount});
-		assert.equal(await optionsInstance.feeImmunity(reciverAccount), false, "fee immunity revoked for receiver account");
-		maturity++;
-		allMaturities.push(maturity);
-		maxTransfer = scUnits*amount*strike;
-		await helper.advanceTime(1);
-		await strikeAssetInstance.approve(optionsInstance.address, maxTransfer, {from: defaultAccount});
-		await inflatorObj.mintPut(reciverAccount, defaultAccount, maturity, strike, amount, maxTransfer, {from: defaultAccount});
-		prevBalance = (await optionsInstance.viewClaimedStable({from: reciverAccount})).toNumber();
-		//option expired worthless reciverAccount gets back all collateral
-		await optionsInstance.claim(maturity, {from: reciverAccount});
-		assert.equal((await optionsInstance.viewClaimedStable({from: reciverAccount})).toNumber(), prevBalance+maxTransfer-Math.floor(maxTransfer/feeDenominator), "fee is now charged again");
-	});
-
 	it('mints 4+ leg put positions with correct collateral requirements', async () => {
 		//get new maturity
 		maturity++;
@@ -444,6 +409,6 @@ contract('options', async function(accounts){
 		await optionsInstance.withdrawFunds({from: accounts[2]});
 		//withdraw fees with owner key
 		await optionsInstance.withdrawFunds({from: accounts[0]});
-		assert.equal((await tokenInstance.balanceOf(optionsInstance.address)).toNumber(), 5, "non excessive amount of funds left");
+		assert.equal((await tokenInstance.balanceOf(optionsInstance.address)).toNumber(), 4, "non excessive amount of funds left");
 	});
 });

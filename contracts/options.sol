@@ -34,6 +34,7 @@ contract options is FeldmexOptionsData, Ownable {
         assignOptionsDelegateAddress = _assignOptionsDelegateAddress;
         mOrganizerAddress = _mOrganizerAddress;
         feeOracleAddress = _feeOracleAddress;
+        feeOracle(_feeOracleAddress).setSpecificFeeImmunity(address(this), msg.sender, true);
         oracle orc = oracle(oracleAddress);
         inflator = orc.inflator();
         ERC20 ua = ERC20(underlyingAssetAddress);
@@ -53,23 +54,16 @@ contract options is FeldmexOptionsData, Ownable {
     }
 
     /*
-        @Description: allows the owner of this contract to give and take approval from accounts that are providing liquidity
-            If an address is already approved approval will be removed if not approval will be awarded
-
-        @address _addr: the address to give or retract fee immunity from
-    */
-    function changeFeeStatus(address _addr) onlyOwner public {
-        if (feeImmunity[_addr]) delete feeImmunity[_addr];
-        else feeImmunity[_addr] = true;
-    }
-
-    /*
         @Description: transfers ownership of contract
             if exchangeAddress has not been set it is also set to _addr such that it is known that the exchange address has not been set when it == owner
     */
     function transferOwnership(address _newOwner) onlyOwner public {
         if (owner == exchangeAddress) exchangeAddress = _newOwner;
         super.transferOwnership(_newOwner);
+        address _feeOracleAddress = feeOracleAddress;
+        feeOracle fo = feeOracle(_feeOracleAddress);
+        fo.setSpecificFeeImmunity(address(this), _newOwner, true);
+        fo.setSpecificFeeImmunity(address(this), msg.sender, false);
     }
 
 
@@ -103,16 +97,18 @@ contract options is FeldmexOptionsData, Ownable {
         //satValueOf is inflated by _price parameter and scValueOf thus only divide out spot from callValue not putValue
         callValue /= spot;
         delete strikes[msg.sender][_maturity];
-        uint _feeDenominator = feeOracle(feeOracleAddress).fetchFee(0);
+        feeOracle fo = feeOracle(feeOracleAddress);
+        uint _feeDenominator = fo.fetchFee(0);
+        bool _feeImmunity = fo.isFeeImmune(address(this), msg.sender);
         if (callValue > satDeduction[msg.sender][_maturity]){
             callValue -= satDeduction[msg.sender][_maturity];
-            uint fee = feeImmunity[msg.sender] ? 0 : callValue/_feeDenominator;
+            uint fee = _feeImmunity ? 0 : callValue/_feeDenominator;
             claimedTokens[owner] += fee;
             claimedTokens[msg.sender] += callValue - fee;
         }
         if (putValue > scDeduction[msg.sender][_maturity]){
             putValue -= scDeduction[msg.sender][_maturity];
-            uint fee = feeImmunity[msg.sender] ? 0 : putValue/_feeDenominator;
+            uint fee = _feeImmunity ? 0 : putValue/_feeDenominator;
             claimedStable[owner] += fee;
             claimedStable[msg.sender] += putValue - fee;
         }

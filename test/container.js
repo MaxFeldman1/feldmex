@@ -59,9 +59,9 @@ contract('container', async function(accounts){
 		scUnits = Math.pow(10, (await strikeAssetInstance.decimals()).toNumber());
 	});
 
-	async function setFee(denominator) {
+	async function setFee(denominator, params) {
 		//only set fee in only the options instance
-		await feeOracleInstance.setBaseFees(denominator, 0, 0, {from: deployerAccount});
+		await feeOracleInstance.setBaseFees(denominator, 500, 500, params);
 	}
 
 
@@ -244,14 +244,14 @@ contract('container', async function(accounts){
 
 	it('changes the fee', () => {
 		nonDeployer = accounts[1];
-		return setFee(1500).then(() => {
+		return setFee(1500, {from: deployerAccount}).then(() => {
 			feeDenominator = 1500;
 			return "OK";
 		}).catch(() => {
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OK", "Successfully changed the fee");
-			return setFee(400);
+			return setFee(400, {from: deployerAccount});
 		}).then(() => {
 			feeDenominator = 400;
 			return "OK";
@@ -259,7 +259,7 @@ contract('container', async function(accounts){
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OOF", "Fee change was stopped because fee was too high");
-			return setFee(1800);
+			return setFee(1800, {from: accounts[1]});
 		}).then(() => {
 			feeDenominator = 1800;
 			return "OK";
@@ -364,36 +364,4 @@ contract('container', async function(accounts){
 		assert.equal((await containerInstance.viewAsset1Balance({from: accounts[2]})).toNumber(), 0, "correct amount of second account's funds remain in container contract");
 	});
 
-	it('grants fee immunity', async () => {
-		strike = 10;
-		spot = strike+10;
-		//strike*=satUnits;
-		//spot*=satUnits;
-		await setPrice(spot);
-		maturity = (await web3.eth.getBlock('latest')).timestamp;
-		maxTransfer = satUnits*amount;
-		//wait one second to allow for maturity to pass
-		await helper.advanceTime(1);
-		await tokenInstance.approve(optionsInstance.address, maxTransfer, {from: deployerAccount});
-		assert.equal((await tokenInstance.balanceOf(deployerAccount)).toNumber() >= maxTransfer, true, "balance is large enough");
-		await mintCall(deployerAccount, accounts[1], maturity, strike, amount, maxTransfer, {from: deployerAccount}, true);
-		feeDenominator = 1000;
-		await setFee(1000);
-		prevBalance = (await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber();
-		await containerInstance.changeFeeStatus(accounts[1], {from: deployerAccount});
-		assert.equal(await optionsInstance.feeImmunity(accounts[1]), true, "fee immunity granted to receiver account");
-		await optionsInstance.claim(maturity, {from: accounts[1]});
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), prevBalance + Math.floor(satUnits*amount*(spot-strike)/spot), "No fee charged on first account's call to options.claim");
-		await containerInstance.changeFeeStatus(accounts[1], {from: deployerAccount});
-		assert.equal(await optionsInstance.feeImmunity(accounts[1]), false, "fee immunity revoked for receiver account");
-		maturity++;
-		maxTransfer = amount*strike;
-		helper.advanceTime(1);
-		await strikeAssetInstance.approve(optionsInstance.address, maxTransfer, {from: deployerAccount});
-		await mintPut(accounts[1], deployerAccount, maturity, strike, amount, maxTransfer, {from: deployerAccount}, true);
-		prevBalance = (await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber();
-		//option expired worthless first account gets back all collateral
-		await optionsInstance.claim(maturity, {from: accounts[1]});
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), prevBalance+maxTransfer-Math.floor(maxTransfer/feeDenominator), "fee is now charged again");
-	});
 });
