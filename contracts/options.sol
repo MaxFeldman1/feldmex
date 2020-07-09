@@ -239,7 +239,7 @@ contract options is FeldmexOptionsData, Ownable {
     function addStrike(uint _maturity, uint _strike, uint _index) public {
         require(_maturity > 0 && _strike > 0);
         uint size = strikes[msg.sender][_maturity].length;
-        require(_index <= size);
+        require(_index <= size && size < 14);
         if (_index > 0) require(_strike > strikes[msg.sender][_maturity][_index-1]);
         if (_index < size) require(_strike < strikes[msg.sender][_maturity][_index]);
         strikes[msg.sender][_maturity].push(_strike);

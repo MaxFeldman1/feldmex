@@ -18,6 +18,9 @@ const feeOracle = artifacts.require("feeOracle");
 
 const helper = require("../helper/helper.js");
 
+const defaultBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+
 contract('container', async function(accounts){
 
 	deployerAccount = accounts[0];
@@ -47,10 +50,15 @@ contract('container', async function(accounts){
 		await containerInstance.depExchange();
 		assert.equal(await containerInstance.progress(), 4, "second options chain setup has been sucessfully completed");
 		oracleInstance = await oracle.at(await containerInstance.oracleContract());
+		assert.notEqual(oracleInstance.address, defaultBytes32, "valid address");
 		optionsInstance = await options.at(await containerInstance.optionsContract());
+		assert.notEqual(optionsInstance.address, defaultBytes32, "valid address");
 		exchangeInstance = await exchange.at(await containerInstance.exchangeContract());
+		assert.notEqual(exchangeInstance.address, defaultBytes32, "valid address");
 		secondOptionsInstance = await options.at(await containerInstance.optionsContract2());
+		assert.notEqual(secondOptionsInstance.address, defaultBytes32, "valid address");
 		secondExchangeInstance = await exchange.at(await containerInstance.exchangeContract2());
+		assert.notEqual(secondExchangeInstance.address, defaultBytes32, "valid address");
 		assert.equal(await optionsInstance.underlyingAssetAddress(), tokenInstance.address, "underlying assset address for options instance is correct");
 		assert.equal(await optionsInstance.strikeAssetAddress(), strikeAssetInstance.address, "strike assset address for options instance is correct");
 		assert.equal(await secondOptionsInstance.underlyingAssetAddress(), strikeAssetInstance.address, "reverses strike and underlying asset between two option chains");
