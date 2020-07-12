@@ -1,4 +1,4 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.6.0;
 import "../interfaces/ERC20.sol";
 import "../options.sol";
 import "./mLegData.sol";

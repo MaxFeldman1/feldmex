@@ -1,4 +1,4 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.6.0;
 import "./container.sol";
 import "./helpers/cHelper.sol";
 import "./interfaces/Ownable.sol";

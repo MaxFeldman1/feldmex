@@ -1,17 +1,17 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.6.0;
 import "./interfaces/ERC20.sol";
 import "./interfaces/ITimeSeriesOracle.sol";
 
 contract oracle is ITimeSeriesOracle {
-    uint public latestSpot;
+    uint public override latestSpot;
 
     //lists all block heights at which spot is collected
-    uint[] public heights;
-    function heightsLength() external view returns (uint length) {length = heights.length;}
+    uint[] public override heights;
+    function heightsLength() external view override returns (uint length) {length = heights.length;}
     //height => timestamp
-    mapping(uint => uint) public timestamps;
+    mapping(uint => uint) public override timestamps;
     //height => price
-    mapping(uint => uint) public heightToSpot;
+    mapping(uint => uint) public override heightToSpot;
 
 
 
@@ -22,11 +22,11 @@ contract oracle is ITimeSeriesOracle {
         any contract interacting with this oracle shold divide out the inflator after calculatioins
         inflator shall be equal to scUnits *the amount of subUnits in one full unit of strikeAsset*
     */
-    uint public inflator;
+    uint public override inflator;
 
-    address public underlyingAssetAddress;
+    address public override underlyingAssetAddress;
 
-    address public strikeAssetAddress;
+    address public override strikeAssetAddress;
 
     constructor(address _underlyingAssetAddress, address _strikeAssetAddress) public {
         underlyingAssetAddress = _underlyingAssetAddress;
@@ -38,14 +38,14 @@ contract oracle is ITimeSeriesOracle {
         //set();
     }
 
-    function set(uint _spot) public {
+    function set(uint _spot) public override {
         latestSpot = _spot;
         if (heights[heights.length-1] != block.number) heights.push(block.number);
         timestamps[block.number] = block.timestamp;
         heightToSpot[block.number] = _spot;
     }
     
-    function tsToIndex(uint _time) public view returns (uint) {
+    function tsToIndex(uint _time) public view override returns (uint) {
         uint size = heights.length;
         if (_time >= timestamps[heights[size-1]]) return size-1;
         if (_time < timestamps[heights[0]] || size < 3) return 0;
@@ -78,7 +78,7 @@ contract oracle is ITimeSeriesOracle {
 
     }
 
-    function heightToIndex(uint _height) public view returns (uint) {
+    function heightToIndex(uint _height) public view override returns (uint) {
         uint size = heights.length;
         if (_height >= heights[size-1]) return size-1;
         if (_height <= heights[0] || size == 3) return 0;
@@ -113,7 +113,7 @@ contract oracle is ITimeSeriesOracle {
 
     }
 
-    function medianPreviousIndecies(uint _index) public view returns (uint median) {
+    function medianPreviousIndecies(uint _index) public view override returns (uint median) {
         require(_index > 1, "index must be 2 or greater");
         require(_index < heights.length, "index must be in array");
         uint first = heightToSpot[heights[_index-2]];
@@ -125,7 +125,7 @@ contract oracle is ITimeSeriesOracle {
         median = second;
     }
 
-    function fetchSpotAtTime(uint _time) external view returns (uint) {
+    function fetchSpotAtTime(uint _time) external view override returns (uint) {
         return medianPreviousIndecies(tsToIndex(_time));
     }
 

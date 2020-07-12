@@ -1,4 +1,4 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.6.0;
 import "../options.sol";
 
 //allows us to deploy the options smart contract without going over gas limit

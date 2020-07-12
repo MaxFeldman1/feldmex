@@ -1,6 +1,6 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.6.0;
 
-contract Ownable {
+abstract contract Ownable {
     address public owner;
 
     constructor () public {
@@ -12,7 +12,7 @@ contract Ownable {
         _;
     }
 
-    function transferOwnership(address newOwner) onlyOwner public{
+    function transferOwnership(address newOwner) onlyOwner public virtual {
         if (newOwner != address(0)) {
             owner = newOwner;
         }

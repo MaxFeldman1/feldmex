@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.6.0;
+pragma solidity >=0.4.21 <0.7.0;
 
 interface ERC20 {
     event Transfer(
@@ -17,5 +17,5 @@ interface ERC20 {
     function transferFrom(address _from, address _to, uint _value) external returns (bool success);
     function approve(address _spender, uint _value) external returns (bool success);
     function allowance(address _owner, address _spender) external view returns (uint remaining);
-    function decimals() external view returns(uint digits);
+    function decimals() external view returns(uint8 digits);
 }

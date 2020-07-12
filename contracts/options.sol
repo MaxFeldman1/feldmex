@@ -1,4 +1,4 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.6.0;
 import "./interfaces/ITimeSeriesOracle.sol";
 import "./oracle.sol";
 import "./interfaces/ERC20.sol";
@@ -57,7 +57,7 @@ contract options is FeldmexOptionsData, Ownable {
         @Description: transfers ownership of contract
             if exchangeAddress has not been set it is also set to _addr such that it is known that the exchange address has not been set when it == owner
     */
-    function transferOwnership(address _newOwner) onlyOwner public {
+    function transferOwnership(address _newOwner) onlyOwner public override {
         if (owner == exchangeAddress) exchangeAddress = _newOwner;
         super.transferOwnership(_newOwner);
         address _feeOracleAddress = feeOracleAddress;

@@ -1,4 +1,4 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.6.0;
 import "./options.sol";
 import "./interfaces/ERC20.sol";
 import "./interfaces/ITimeSeriesOracle.sol";
@@ -34,14 +34,14 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 	uint public lastWithdraw;
 
 	//total amount of smallest denomination units of coin in this smart contract
-	uint public totalSupply = 10 ** uint(10);
+	uint public override totalSupply = 10 ** uint(10);
 	//10 ** decimals == the amount of sub units in a whole coin
-	uint8 public decimals = 4;
+	uint8 public override decimals = 4;
 	//each user's balance of coins
-	mapping(address => uint) public balanceOf;
+	mapping(address => uint) public override balanceOf;
 	//the amount of funds each address has allowed other addresses to spend on the first address's behalf
 	//holderOfFunds => spender => amountOfFundsAllowed
-	mapping(address => mapping(address => uint)) public allowance;
+	mapping(address => mapping(address => uint)) public override allowance;
 
 
 	/*
@@ -99,7 +99,7 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 
 		@return bool success: true if function executes sucessfully
     */
-    function transfer(address _to, uint256 _value) public returns (bool success) {
+    function transfer(address _to, uint256 _value) public override returns (bool success) {
         success = transferTokenOwner(_to, _value, msg.sender);
     }
 
@@ -111,7 +111,7 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 
 		@return bool success: true if function executes sucessfully
     */
-    function approve(address _spender, uint256 _value) public returns (bool success) {
+    function approve(address _spender, uint256 _value) public override returns (bool success) {
         success = approveYieldOwner(_spender, _value, msg.sender);
     }
 
@@ -125,15 +125,15 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 
 		@return bool success: true if function executes sucessfully
     */
-    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
+    function transferFrom(address _from, address _to, uint256 _value) public override returns (bool success) {
         success = transferTokenOwnerFrom(_from, _to, _value, _from);
     }
 
     //-----------------i-m-p-l-e-m-e-n-t-s---y-i-e-l-d----------------
-    mapping(address => mapping(address => uint256)) public yieldDistribution;
-    mapping(address => uint) public totalYield;
-    mapping(address => mapping(address => mapping(address => uint))) public specificAllowance;
-    mapping(address => bool) public autoClaimYieldDisabled;
+    mapping(address => mapping(address => uint256)) public override yieldDistribution;
+    mapping(address => uint) public override totalYield;
+    mapping(address => mapping(address => mapping(address => uint))) public override specificAllowance;
+    mapping(address => bool) public override autoClaimYieldDisabled;
     /*
 		@Description: Emitted when there is movement of _value in yieldDistribution from
 			yieldDistribution[_tokenOwner][_yieldOwner] to
@@ -156,12 +156,12 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     	uint256 _value
     );
 
-    function claimYield(address _yieldOwner, uint256 _value) external returns (bool success) {
+    function claimYield(address _yieldOwner, uint256 _value) external override returns (bool success) {
         claimYieldInternal(msg.sender, _yieldOwner, _value);
     	success = true;
     }
 
-    function sendYield(address _to, uint256 _value) public returns (bool success) {
+    function sendYield(address _to, uint256 _value) public override returns (bool success) {
     	require(yieldDistribution[msg.sender][msg.sender] >= _value);
         claimDividendInternal(msg.sender);
         claimDividendInternal(_to);
@@ -173,7 +173,7 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     	success = true;
     }
 
-    function transferTokenOwner(address _to, uint256 _value, address _yieldOwner) public returns (bool success) {
+    function transferTokenOwner(address _to, uint256 _value, address _yieldOwner) public override returns (bool success) {
     	require(yieldDistribution[msg.sender][_yieldOwner] >= _value);
     	yieldDistribution[msg.sender][_yieldOwner] -= _value;
 		balanceOf[msg.sender] -= _value;
@@ -188,7 +188,7 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 		success = true;
     }
 
-    function approveYieldOwner(address _spender, uint256 _value, address _yieldOwner) public returns (bool success) {
+    function approveYieldOwner(address _spender, uint256 _value, address _yieldOwner) public override returns (bool success) {
     	allowance[msg.sender][_spender] -= specificAllowance[msg.sender][_spender][_yieldOwner];
     	specificAllowance[msg.sender][_spender][_yieldOwner] = _value;
     	allowance[msg.sender][_spender] += _value;
@@ -198,7 +198,7 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     	success = true;
     }
 
-    function transferTokenOwnerFrom(address _from, address _to, uint256 _value, address _yieldOwner) public returns (bool success) {
+    function transferTokenOwnerFrom(address _from, address _to, uint256 _value, address _yieldOwner) public override returns (bool success) {
     	require(yieldDistribution[_from][_yieldOwner] >= _value);
     	require(specificAllowance[_from][msg.sender][_yieldOwner] >= _value);
     	yieldDistribution[_from][_yieldOwner] -= _value;
@@ -217,14 +217,14 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 		success = true;
     }
 
-    function setAutoClaimYield() public {
+    function setAutoClaimYield() public override {
         autoClaimYieldDisabled[msg.sender] = !autoClaimYieldDisabled[msg.sender];
     }
 
 	/*
 		@Description: allows token holders to claim their portion of the cashflow
 	*/
-	function claimDividend() public {
+	function claimDividend() public override {
 		claimDividendInternal(msg.sender);
 	}
 

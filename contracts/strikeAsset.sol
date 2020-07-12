@@ -1,4 +1,4 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.6.0;
 
 contract strikeAsset {
     uint8 public decimals = 6;

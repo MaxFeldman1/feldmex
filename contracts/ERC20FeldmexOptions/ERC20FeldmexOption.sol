@@ -1,4 +1,4 @@
-pragma solidity ^0.5.12;
+pragma solidity >=0.6.0;
 import "../interfaces/ERC20.sol";
 import "../options.sol";
 
@@ -14,14 +14,14 @@ contract ERC20FeldmexOption is ERC20 {
 	uint public strike;
 	bool public call;
 
-	uint public decimals = 0;
+	uint8 public override decimals = 0;
 	string public symbol = "FDMX";
 	string public name;
 
 	uint coinSubUnits;
 
 	// owner => spender => remaining
-	mapping(address => mapping(address => uint)) public allowance;
+	mapping(address => mapping(address => uint)) public override allowance;
 
 	constructor(address _optionsHandlerAddress, uint _maturity, uint _strike, bool _call) public {
 		maturity = _maturity;
@@ -35,16 +35,16 @@ contract ERC20FeldmexOption is ERC20 {
 		coinSubUnits = 10 ** uint(ERC20(_call ? underlyingAssetAddress : strikeAssetAddress).decimals());
 	}
 
-	function totalSupply() public view returns (uint supply){
+	function totalSupply() public view override returns (uint supply){
 		supply = 0;
 	}
 
-	function balanceOf(address _owner) public view returns (uint balance){
+	function balanceOf(address _owner) public view override returns (uint balance){
 		int ret = options(optionsHandlerAddress).balanceOf(_owner, maturity, strike, call);
 		balance = ret > 0 ? uint(ret) : 0;
 	}
 
-	function transfer(address _to, uint _value) public returns (bool success){
+	function transfer(address _to, uint _value) public override returns (bool success){
 		options optionsContract = options(optionsHandlerAddress);
 		uint _maturity = maturity;	//gas savings
 		require(balanceOf(msg.sender) >= _value || optionsContract.containedStrikes(msg.sender,_maturity,strike));
@@ -54,7 +54,7 @@ contract ERC20FeldmexOption is ERC20 {
 		success = assignPosition();
 	}
 
-	function transferFrom(address _from, address _to, uint _value) public returns (bool success){
+	function transferFrom(address _from, address _to, uint _value) public override returns (bool success){
 		require(allowance[_from][msg.sender] >= _value);
 		options optionsContract = options(optionsHandlerAddress);
 		uint _maturity = maturity;	//gas savings
@@ -66,7 +66,7 @@ contract ERC20FeldmexOption is ERC20 {
 		success = assignPosition();
 	}
 
-	function approve(address _spender, uint _value) public returns (bool success){
+	function approve(address _spender, uint _value) public override returns (bool success){
 		allowance[msg.sender][_spender] = _value;
 		emit Approval(msg.sender, _spender, _value);
 		success = true;

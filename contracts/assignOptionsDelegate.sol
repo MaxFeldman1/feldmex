@@ -1,4 +1,4 @@
-pragma solidity >=0.5.0;
+pragma solidity >=0.6.0;
 import "./interfaces/ERC20.sol";
 import "./ERC20FeldmexOptions/FeldmexERC20Helper.sol";
 import "./FeldmexOptionsData.sol";
