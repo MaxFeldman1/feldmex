@@ -3,7 +3,7 @@ import "./container.sol";
 import "./helpers/cHelper.sol";
 import "./interfaces/Ownable.sol";
 
-contract organiser is Ownable {
+contract containerDeveloper is Ownable {
 	address public cHelperAddress;
 	address public oHelperAddress;
 	address public eHelperAddress;

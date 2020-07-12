@@ -278,7 +278,7 @@ contract('container', async function(accounts){
 		});
 	});
 
-	it('gathers yeild from fees generated in first options contract', async () => {
+	it('gathers yield from fees generated in first options contract', async () => {
 		await setPrice(1);
 		maturity = (await web3.eth.getBlock('latest')).timestamp;
 		strike = 100
@@ -311,7 +311,7 @@ contract('container', async function(accounts){
 		assert.equal(secondUnderlyingBalance, Math.floor(expectedFee*(secondAccountYield)/totalSupply), "correct divident paid to accounts[2]");
 	});
 
-	it('gathers yeild from fees generated in second options contract', async () => {
+	it('gathers yield from fees generated in second options contract', async () => {
 		//set spot very low
 		await setPrice(1);
 		maturity = (await web3.eth.getBlock('latest')).timestamp;

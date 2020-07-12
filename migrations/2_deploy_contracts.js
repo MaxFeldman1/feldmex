@@ -4,7 +4,7 @@ const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
 const container = artifacts.require("container");
-const organiser = artifacts.require("organiser");
+const containerDeveloper = artifacts.require("containerDeveloper");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
 const cHelper = artifacts.require("cHelper");
@@ -40,7 +40,7 @@ module.exports = async function(deployer) {
   cHelperAddress = cHelperInstance.address;
   orcHelperInstance = await deployer.deploy(orcHelper);
   orcHelperAddress = orcHelperInstance.address;
-  organiserInstance = await deployer.deploy(organiser, cHelperAddress, oHelperAddress, eHelperAddress, orcHelperAddress);
-  organiserAddress = organiserInstance.address;
-  await cHelperInstance.transferOwnership(organiserAddress);
+  containerDeveloperInstance = await deployer.deploy(containerDeveloper, cHelperAddress, oHelperAddress, eHelperAddress, orcHelperAddress);
+  containerDeveloperAddress = containerDeveloperInstance.address;
+  await cHelperInstance.transferOwnership(containerDeveloperAddress);
 }

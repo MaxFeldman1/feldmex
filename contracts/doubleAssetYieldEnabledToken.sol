@@ -135,9 +135,9 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     mapping(address => mapping(address => mapping(address => uint))) public specificAllowance;
     mapping(address => bool) public autoClaimYieldDisabled;
     /*
-		@Description: Emitted when there is movement of _value in yeildDistribution from
-			yeildDistribution[_tokenOwner][_yeildOwner] to
-			yeildDistribution[_tokenOwner][_tokenOwner]
+		@Description: Emitted when there is movement of _value in yieldDistribution from
+			yieldDistribution[_tokenOwner][_yieldOwner] to
+			yieldDistribution[_tokenOwner][_tokenOwner]
     */
     event ClaimYield(
     	address indexed _tokenOwner,
@@ -146,9 +146,9 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     );
 
     /*
-		@Description: Emitted when there is movement of _value in yeildDistribution from
-			yeildDistirbution[_tokenOwner][_tokenOwner] to
-			yeildDistribution[_tokenOwner][_yeildOwner]
+		@Description: Emitted when there is movement of _value in yieldDistribution from
+			yieldDistirbution[_tokenOwner][_tokenOwner] to
+			yieldDistribution[_tokenOwner][_yieldOwner]
     */
     event SendYield(
     	address indexed _tokenOwner,
@@ -157,7 +157,7 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     );
 
     function claimYield(address _yieldOwner, uint256 _value) external returns (bool success) {
-        claimYeildInternal(msg.sender, _yieldOwner, _value);
+        claimYieldInternal(msg.sender, _yieldOwner, _value);
     	success = true;
     }
 
@@ -181,7 +181,7 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 		yieldDistribution[_to][_yieldOwner] += _value;
 		balanceOf[_to] += _value;
 
-        if (!autoClaimYieldDisabled[_to]) claimYeildInternal(_to, _yieldOwner, _value);
+        if (!autoClaimYieldDisabled[_to]) claimYieldInternal(_to, _yieldOwner, _value);
 
 		emit Transfer(msg.sender, _to, _value, _yieldOwner);
 
@@ -210,7 +210,7 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 		yieldDistribution[_to][_yieldOwner] += _value;
 		balanceOf[_to] += _value;
 
-        if (!autoClaimYieldDisabled[_to]) claimYeildInternal(_to, _yieldOwner, _value);
+        if (!autoClaimYieldDisabled[_to]) claimYieldInternal(_to, _yieldOwner, _value);
 
 		emit Transfer(_from, _to, _value, _yieldOwner);
 
@@ -269,7 +269,7 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 		balanceAsset2[_addr] += totalIncreace * _totalYield / _totalSupply;
 	}
 
-    function claimYeildInternal(address _tokenOwner, address _yieldOwner, uint256 _value) internal {
+    function claimYieldInternal(address _tokenOwner, address _yieldOwner, uint256 _value) internal {
         require(yieldDistribution[_tokenOwner][_yieldOwner] >= _value);
         claimDividendInternal(_tokenOwner);
         claimDividendInternal(_yieldOwner);

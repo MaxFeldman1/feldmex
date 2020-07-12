@@ -21,9 +21,9 @@ interface  yieldEnabled {
     */
 
     /*
-		@Description: Emitted when there is movement of _value in yeildDistribution from
-			yeildDistribution[_tokenOwner][_yeildOwner] to
-			yeildDistribution[_tokenOwner][_tokenOwner]
+		@Description: Emitted when there is movement of _value in yieldDistribution from
+			yieldDistribution[_tokenOwner][_yieldOwner] to
+			yieldDistribution[_tokenOwner][_tokenOwner]
     */
     event ClaimYield(
     	address indexed _tokenOwner,
@@ -32,9 +32,9 @@ interface  yieldEnabled {
     );
 
     /*
-		@Description: Emitted when there is movement of _value in yeildDistribution from
-			yeildDistirbution[_tokenOwner][_tokenOwner] to
-			yeildDistribution[_tokenOwner][_yeildOwner]
+		@Description: Emitted when there is movement of _value in yieldDistribution from
+			yieldDistirbution[_tokenOwner][_tokenOwner] to
+			yieldDistribution[_tokenOwner][_yieldOwner]
     */
     event SendYield(
     	address indexed _tokenOwner,
@@ -52,7 +52,7 @@ interface  yieldEnabled {
 	//mapping (token owner) => (spender) => (yield owner)
 	function specificAllowance(address, address, address) external view returns (uint256);
 
-	//mapping (address) => (whether or not to automatically claim yeild when tokens are transfered to this address)
+	//mapping (address) => (whether or not to automatically claim yield when tokens are transfered to this address)
 	function autoClaimYieldDisabled(address) external view returns (bool);
 
 	/*
@@ -82,52 +82,52 @@ interface  yieldEnabled {
 	function sendYield(address _to, uint256 _value) external returns (bool success);
 
 	/*
-		@Description: allows users to transfer tokens much like the transfer function in the ERC20 interface however this function specifies the yeild owner of the tokens
-			thus the change in the mapping yeildDistribution resulting from execution of this function will result in movement of funds from
-			yeildDistribution[msg.sender][_yeildOwner]
+		@Description: allows users to transfer tokens much like the transfer function in the ERC20 interface however this function specifies the yield owner of the tokens
+			thus the change in the mapping yieldDistribution resulting from execution of this function will result in movement of funds from
+			yieldDistribution[msg.sender][_yieldOwner]
 			to
-			yeildDistribution[_to][_yeildOwner] //If !autoClaim[_to] 
+			yieldDistribution[_to][_yieldOwner] //If !autoClaim[_to] 
 			or
-			yeildDistribution[_to][_to] //If autoClaim[_to]
+			yieldDistribution[_to][_to] //If autoClaim[_to]
 
 		@param address _to: the address that recieves the tokens
 		@param uint256 _value: the amount of sub units of tokens to transfered
-		@param address _yeildOwner: the address that owns the yeild of the funds that are to be transfered
+		@param address _yieldOwner: the address that owns the yield of the funds that are to be transfered
 
 		@return bool success: if an error occurs returns false if no error return true				
 	*/
 	function transferTokenOwner(address _to, uint256 _value, address _yieldOwner) external returns (bool success);
 
 	/*
-		@Description: simmilar to the approve function in the ERC20 interface however this function specifies the yeild owner of the funds that the spender may transfer
+		@Description: simmilar to the approve function in the ERC20 interface however this function specifies the yield owner of the funds that the spender may transfer
 
 		@param address _spender: the address that may spend the funds
 		@param uint256 _value: the amount of funds to allow the spender to spend
-		@param address _yeildOwner: the address of the yeild owner of the funds that the spender may spend
+		@param address _yieldOwner: the address of the yield owner of the funds that the spender may spend
 
 		@return bool success: if an error occurs returns false if no error return true				
 	*/
 	function approveYieldOwner(address _spender, uint256 _value, address _yieldOwner) external returns (bool success);
 
 	/*
-		@Description: allows users to transfer tokens from another address after being approved to do so much like the transferFrom function in the ERC20 interface however this function specifies the yeild owner of the tokens
-			thus the change in the mapping yeildDistribution resulting from execution of this function will result in movement of funds from
-			yeildDistribution[_from][_yeildOwner]
+		@Description: allows users to transfer tokens from another address after being approved to do so much like the transferFrom function in the ERC20 interface however this function specifies the yield owner of the tokens
+			thus the change in the mapping yieldDistribution resulting from execution of this function will result in movement of funds from
+			yieldDistribution[_from][_yieldOwner]
 			to
-			yeildDistribution[_to][_yeildOwner] //If !autoClaim[_to] 
+			yieldDistribution[_to][_yieldOwner] //If !autoClaim[_to] 
 			or
-			yeildDistribution[_to][_to] //If autoClaim[_to]
+			yieldDistribution[_to][_to] //If autoClaim[_to]
 
 		@param address _to: the address that recieves the tokens
 		@param uint256 _value: the amount of sub units of tokens to transfered
-		@param address _yeildOwner: the address that owns the yeild of the funds that are to be transfered
+		@param address _yieldOwner: the address that owns the yield of the funds that are to be transfered
 
 		@return bool success: if an error occurs returns false if no error return true				
 	*/
 	function transferTokenOwnerFrom(address _from, address _to, uint256 _value, address _yieldOwner) external returns (bool success);
 
 	/*
-		@Description: allows users to claim their share of the total dividends of the contract based on their portion of totalYeild compared to the total supply
+		@Description: allows users to claim their share of the total dividends of the contract based on their portion of totalYield compared to the total supply
 	*/
 	function claimDividend() external;
 
