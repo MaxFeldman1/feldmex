@@ -3,6 +3,8 @@ import "./interfaces/Ownable.sol";
 
 contract feeOracle is Ownable {
 
+    address public feldmexTokenAddress;
+
     uint public baseOptionsFeeDenominator = 1<<255;
 
     uint public baseExchangeFeeDenominator = 1<<255;
@@ -23,6 +25,10 @@ contract feeOracle is Ownable {
 
     //optionsContract => user => feeImmune
     mapping(address => mapping(address => bool)) public specificFeeImmunity;
+
+    constructor (address _feldmexTokenAddress) public {
+        feldmexTokenAddress = _feldmexTokenAddress;
+    }
 
     function setBaseFees(uint _baseOptionsFeeDenominator, uint _baseExchangeFeeDenominator, uint _baseMultiLegExchangeFeeDenominator) onlyOwner public {
         require(_baseOptionsFeeDenominator >= 500);

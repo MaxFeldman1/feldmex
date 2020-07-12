@@ -15,6 +15,7 @@ const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const ERC20FeldmexOption = artifacts.require("ERC20FeldmexOption");
 const feeOracle = artifacts.require("feeOracle");
+const feldmexToken = artifacts.require("FeldmexToken");
 
 const nullAddress = "0x0000000000000000000000000000000000000000";
 
@@ -33,7 +34,8 @@ contract('ERC20FeldmexOptions', async function(accounts){
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		feeOracleInstance = await feeOracle.new();
+		feldmexTokenInstance = await feldmexToken.new();
+		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
 			feldmexERC20HelperInstance.address,  /*this param does not matter*/accounts[0], assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		await feldmexERC20HelperInstance.deployNew(optionsInstance.address, maturity, strike, true);

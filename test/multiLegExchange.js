@@ -10,6 +10,7 @@ const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const mLegHelper = artifacts.require("mLegHelper");
 const mLegDelegate = artifacts.require("mLegDelegate");
 const feeOracle = artifacts.require("feeOracle");
+const feldmexToken = artifacts.require("FeldmexToken");
 
 const helper = require("../helper/helper.js");
 
@@ -34,7 +35,8 @@ contract('multi leg exchange', function(accounts){
 		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address);
 		mOrganizerInstance = await mOrganizer.new(accounts[0], accounts[0], mLegHelperInstance.address); //the params here do not matter
 		mLegDelegateInstance = await mLegDelegate.new();
-		feeOracleInstance = await feeOracle.new();
+		feldmexTokenInstance = await feldmexToken.new();
+		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
 		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		await mOrganizerInstance.deployMultiLegExchange(optionsInstance.address);

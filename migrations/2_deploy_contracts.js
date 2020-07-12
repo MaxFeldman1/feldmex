@@ -16,6 +16,7 @@ const mLegDelegate = artifacts.require("mLegDelegate");
 const mOrganizer = artifacts.require("mOrganizer");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const feeOracle = artifacts.require("feeOracle");
+const feldmexToken = artifacts.require("FeldmexToken");
 
 module.exports = async function(deployer) {
   underlyingAssetAddress  = await deployer.deploy(underlyingAsset, 0);
@@ -30,7 +31,8 @@ module.exports = async function(deployer) {
   mOrganizerAddress = mOrganizerInstance.address;
   assignOptionsDelegateInstance = await deployer.deploy(assignOptionsDelegate);
   assignOptionsDelegateAddress = assignOptionsDelegateInstance.address;
-  feeOracleInstance = await deployer.deploy(feeOracle);
+  feldmexTokenInstance = await deployer.deploy(feldmexToken);
+  feeOracleInstance = await deployer.deploy(feeOracle, feldmexToken.address);
   feeOracleAddress = feeOracleInstance.address;
   oHelperInstance = await deployer.deploy(oHelper, feldmexERC20HelperAddress, mOrganizerAddress, assignOptionsDelegateAddress, feeOracleAddress);
   oHelperAddress = oHelperInstance.address;

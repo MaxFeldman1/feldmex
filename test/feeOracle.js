@@ -5,6 +5,7 @@ const strikeAsset = artifacts.require("strikeAsset");
 const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const feeOracle = artifacts.require("feeOracle");
+const feldmexToken = artifacts.require("FeldmexToken");
 
 
 contract('feeOracle', function(accounts){
@@ -15,10 +16,12 @@ contract('feeOracle', function(accounts){
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		feeOracleInstance = await feeOracle.new();
+		feldmexTokenInstance = await feldmexToken.new();
+		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
 			feldmexERC20HelperInstance.address, accounts[0], assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		assert.equal(await feeOracleInstance.specificFeeImmunity(optionsInstance.address, accounts[0]), true, "owner of optionsContract is feeImmune");
+		assert.equal(await feeOracleInstance.feldmexTokenAddress(), feldmexTokenInstance.address, "correct value of the feldmex token address");
 	});
 
 	it('sets base fees', async () => {
