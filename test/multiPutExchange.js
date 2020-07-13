@@ -28,10 +28,10 @@ contract('multi put exchange', function(accounts){
 		oracleInstance = await oracle.new(asset1.address, asset2.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		mPutHelperInstance = await mPutHelper.new();
-		mOrganizerInstance = await mOrganizer.new(/*this param does not matter so we will just add the default address*/accounts[0], mPutHelperInstance.address, accounts[0]);
 		feldmexTokenInstance = await feldmexToken.new();
 		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
+		mPutHelperInstance = await mPutHelper.new(feeOracleInstance.address);
+		mOrganizerInstance = await mOrganizer.new(/*this param does not matter so we will just add the default address*/accounts[0], mPutHelperInstance.address, accounts[0]);
 		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		await mOrganizerInstance.deployPutExchange(optionsInstance.address);
@@ -39,6 +39,7 @@ contract('multi put exchange', function(accounts){
 		asset1SubUnits = Math.pow(10, await asset1.decimals());
 		asset2SubUnits = Math.pow(10, await asset2.decimals());
 		inflator = await oracleInstance.inflator();
+		await feeOracleInstance.setSpecificFees(optionsInstance.address, 0, 10000, 20000);
 	});
 
 	async function depositFunds(to, amount, exchange){
@@ -51,7 +52,15 @@ contract('multi put exchange', function(accounts){
 	}
 
 	async function postOrder(maturity, legsHash, price, amount, index, params) {
-		return multiPutExchangeInstance.postOrder(maturity, legsHash, price, amount, index, params);
+		var balance = new web3.utils.BN(await web3.eth.getBalance(params.from));
+		if (typeof params.gasPrice === "undefined") params.gasPrice = 20000000000; //20 gwei
+		var postOrderFee = new web3.utils.BN(await feeOracleInstance.multiLegExchangeFlatEtherFee());
+		params.value = postOrderFee.toNumber();
+		var rec = await multiPutExchangeInstance.postOrder(maturity, legsHash, price, amount, index, params);
+		var txFee = new web3.utils.BN(rec.receipt.gasUsed * params.gasPrice);
+		var newBalance = new web3.utils.BN(await web3.eth.getBalance(params.from));
+		var result = txFee.add(newBalance);
+		assert.equal(result.cmp(balance.sub(postOrderFee)), 0, "correct fees paid");
 	}
 
 

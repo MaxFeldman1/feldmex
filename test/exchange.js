@@ -44,17 +44,21 @@ contract('exchange', async function(accounts) {
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
-		mCallHelperInstance = await mCallHelper.new();
-		mPutHelperInstance = await mPutHelper.new();
+		feldmexTokenInstance = await feldmexToken.new();
+		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
+		mCallHelperInstance = await mCallHelper.new(feeOracleInstance.address);
+		mPutHelperInstance = await mPutHelper.new(feeOracleInstance.address);
 		mLegDelegateInstance = await mLegDelegate.new();
-		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address);
+		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address, feeOracleInstance.address);
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		feldmexTokenInstance = await feldmexToken.new();
-		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
+		exchangeInstance = await exchange.new(tokenInstance.address, strikeAssetInstance.address, optionsInstance.address, feeOracleInstance.address);
+		await optionsInstance.setExchangeAddress(exchangeInstance.address);
+		await feeOracleInstance.setSpecificFees(optionsInstance.address, 0, 10000, 20000);
+
 		mintHandler.postOrder = async (maturity, strike, price, amount, buy, call, params) => {
 			if (typeof(strikes[maturity]) === 'undefined') strikes[maturity] = {};
 			if (typeof(strikes[maturity][strike]) === 'undefined'){
@@ -62,7 +66,15 @@ contract('exchange', async function(accounts) {
 				await addStrike(accounts[1], maturity, strike);
 				await addStrike(accounts[2], maturity, strike);
 			}
-			return exchangeInstance.postOrder(maturity, strike, price, amount, buy, call, params);
+			var balance = new web3.utils.BN(await web3.eth.getBalance(params.from));
+			if (typeof params.gasPrice === "undefined") params.gasPrice = 20000000000; //20 gwei
+			var postOrderFee = new web3.utils.BN(await feeOracleInstance.exchangeFlatEtherFee());
+			params.value = postOrderFee.toNumber();
+			var rec = await exchangeInstance.postOrder(maturity, strike, price, amount, buy, call, params);
+			var txFee = new web3.utils.BN(rec.receipt.gasUsed * params.gasPrice);
+			var newBalance = new web3.utils.BN(await web3.eth.getBalance(params.from));
+			var result = txFee.add(newBalance);
+			assert.equal(result.cmp(balance.sub(postOrderFee)), 0, "correct fees paid");
 		};
 
 		mintHandler.insertOrder = async (maturity, strike, price, amount, buy, call, name, params) => {
@@ -72,10 +84,16 @@ contract('exchange', async function(accounts) {
 				await addStrike(accounts[1], maturity, strike);
 				await addStrike(accounts[2], maturity, strike);
 			}
-			return exchangeInstance.insertOrder(maturity, strike, price, amount, buy, call, name, params);
+			var balance = new web3.utils.BN(await web3.eth.getBalance(params.from));
+			if (typeof params.gasPrice === "undefined") params.gasPrice = 20000000000; //20 gwei
+			var postOrderFee = new web3.utils.BN(await feeOracleInstance.exchangeFlatEtherFee());
+			params.value = postOrderFee.toNumber();
+			var rec = await exchangeInstance.insertOrder(maturity, strike, price, amount, buy, call, name, params);
+			var txFee = new web3.utils.BN(rec.receipt.gasUsed * params.gasPrice);
+			var newBalance = new web3.utils.BN(await web3.eth.getBalance(params.from));
+			var result = txFee.add(newBalance);
+			assert.equal(result.cmp(balance.sub(postOrderFee)), 0, "correct fees paid");
 		};
-		exchangeInstance = await exchange.new(tokenInstance.address, strikeAssetInstance.address, optionsInstance.address);
-		await optionsInstance.setExchangeAddress(exchangeInstance.address);
 	});
 
 	async function addStrike(from, maturity, strike) {

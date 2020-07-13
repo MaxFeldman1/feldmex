@@ -7,4 +7,6 @@ contract FeldmexToken is etherYieldEnabledToken {
 
 	string public symbol = "FELD";
 
+	receive () external payable {}
+
 }

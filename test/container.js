@@ -32,17 +32,17 @@ contract('container', async function(accounts){
 	it('before each', async () => {
 		tokenInstance = await underlyingAsset.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
-		mCallHelperInstance = await mCallHelper.new();
-		mPutHelperInstance = await mPutHelper.new();
+		feldmexTokenInstance = await feldmexToken.new();
+		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
+		mCallHelperInstance = await mCallHelper.new(feeOracleInstance.address);
+		mPutHelperInstance = await mPutHelper.new(feeOracleInstance.address);
 		mLegDelegateInstance = await mLegDelegate.new();
-		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address);
+		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address, feeOracleInstance.address);
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
-		feldmexTokenInstance = await feldmexToken.new();
-		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
 		oHelperInstance = await oHelper.new(feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
-		eHelperInstance = await eHelper.new();
+		eHelperInstance = await eHelper.new(feeOracleInstance.address);
 		orcHelperInstance = await orcHelper.new();
 		containerInstance = await container.new(tokenInstance.address, strikeAssetInstance.address, oHelperInstance.address, eHelperInstance.address, orcHelperInstance.address);
 		await containerInstance.depOptions();

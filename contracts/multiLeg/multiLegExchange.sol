@@ -2,6 +2,7 @@ pragma solidity >=0.6.0;
 import "../interfaces/ERC20.sol";
 import "../options.sol";
 import "./mLegData.sol";
+import "../feeOracle.sol";
 
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract
@@ -55,12 +56,14 @@ contract multiLegExchange is mLegData {
         @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
         @param address _optionsAddress: address that shall be assigned to optionsAddress
         @param address _delegateAddress: address that shall bw assigned to delegateAddress
+        @param address _feeOracleAddress: address that shall be assigned to feeOracleAddress
     */
-    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _delegateAddress) public {
+    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _delegateAddress, address _feeOracleAddress) public {
         underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
         delegateAddress = _delegateAddress;
+        feeOracleAddress = _feeOracleAddress;
         ERC20 ua = ERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
@@ -141,6 +144,16 @@ contract multiLegExchange is mLegData {
         contains = true;
     }
 
+
+    function payFee() internal {
+        feeOracle fo = feeOracle(feeOracleAddress);
+        uint fee = fo.multiLegExchangeFlatEtherFee();
+        require(msg.value >= fee);
+        msg.sender.transfer(msg.value-fee);
+        payable(fo.feldmexTokenAddress()).transfer(fee);
+    }
+
+
     /*
         @Description: creates an order and posts it in one of the 4 linked lists depending on if it is a buy or sell order and if it is for calls or puts
             unless this is the first order of its kind functionality is outsourced to insertOrder
@@ -152,7 +165,7 @@ contract multiLegExchange is mLegData {
         @param bool _buy: if true this is a buy order if false this is a sell order
         @param bool _call: if true this is a call order if false this is a put order
     */
-    function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public {
+    function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public payable {
         require(_maturity != 0 && _legsHash != 0 && _amount != 0);
         position memory pos = positions[_legsHash];
 
@@ -207,6 +220,7 @@ contract multiLegExchange is mLegData {
         offers[hash] = offer;
         linkedNodes[name] = linkedNode(hash, name, 0, 0);
         listHeads[_maturity][_legsHash][_index] = name;
+        payFee();
         emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
     }
 
@@ -223,7 +237,7 @@ contract multiLegExchange is mLegData {
         @param bool _call: if true this is a call order if false this is a put order 
         @param bytes32 _name: the name identifier of the order from which to search for the location to insert this order
     */
-    function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) public {
+    function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) public payable {
         //make sure the offer and node corresponding to the name is in the correct list
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].legsHash == _legsHash && _maturity != 0 &&  _legsHash != 0);
         require(offers[linkedNodes[_name].hash].index == _index);
@@ -292,7 +306,6 @@ contract multiLegExchange is mLegData {
                 linkedNodes[currentNode.name].previous = name;
                 linkedNodes[previousNode.name].next = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
-                return;
             }
             //it falls somewhere in the middle of the chain
             else{
@@ -300,7 +313,6 @@ contract multiLegExchange is mLegData {
                 linkedNodes[currentNode.name].previous = name;
                 linkedNodes[previousNode.name].next = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
-                return;
             }
 
         }
@@ -325,7 +337,6 @@ contract multiLegExchange is mLegData {
                 linkedNodes[nextNode.name].previous = name;
                 listHeads[_maturity][_legsHash][_index] = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
-                return; 
             }
             //falls somewhere in the middle of the list
             else {
@@ -333,9 +344,9 @@ contract multiLegExchange is mLegData {
                 linkedNodes[nextNode.name].previous = name;
                 linkedNodes[currentNode.name].next = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
-                return;
             }
         }
+        payFee();
     }
 
     /*

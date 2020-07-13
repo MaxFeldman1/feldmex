@@ -85,6 +85,8 @@ contract exchange{
     address strikeAssetAddress;
     //address of the smart contract that handles the creation of calls and puts and thier subsequent redemption
     address optionsAddress;
+    //address of the smart contract that stores all fee information and collects all exchange fees
+    address feeOracleAddress;
     //incrementing identifier for each order that garunties unique hashes for all identifiers
     uint totalOrders;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
@@ -101,11 +103,13 @@ contract exchange{
         @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
         @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
         @param address _optionsAddress: address that shall be assigned to optionsAddress
+        @param address _feeOracleAddress: address that shall be assigned to feeOracleAddress
     */
-    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress) public{
+    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) public{
         underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
+        feeOracleAddress = _feeOracleAddress;
         ERC20 ua = ERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
@@ -173,6 +177,14 @@ contract exchange{
     }
 
 
+    function payFee() internal {
+        feeOracle fo = feeOracle(feeOracleAddress);
+        uint fee = fo.exchangeFlatEtherFee();
+        require(msg.value >= fee);
+        msg.sender.transfer(msg.value-fee);
+        payable(fo.feldmexTokenAddress()).transfer(fee);
+    }
+
     /*
         @Description: creates an order and posts it in one of the 4 linked lists depending on if it is a buy or sell order and if it is for calls or puts
             unless this is the first order of its kind functionality is outsourced to insertOrder
@@ -184,7 +196,7 @@ contract exchange{
         @param bool _buy: if true this is a buy order if false this is a sell order
         @param bool _call: if true this is a call order if false this is a put order
     */
-    function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public {
+    function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public payable {
         require(_maturity != 0 && _price != 0 && _price < (_call? satUnits: _strike) && _strike != 0);
         require((options(optionsAddress)).containedStrikes(msg.sender, _maturity, _strike));
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
@@ -226,6 +238,7 @@ contract exchange{
         offers[hash] = offer;
         linkedNodes[name] = linkedNode(hash, name, 0, 0);
         listHeads[_maturity][_strike][index] = name;
+        payFee();
         emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
     }
 
@@ -242,7 +255,7 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order 
         @param bytes32 _name: the name identifier of the order from which to search for the location to insert this order
     */
-    function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public {
+    function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public payable {
         //make sure the offer and node corresponding to the name is in the correct list
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? satUnits: _strike) && _strike != 0);
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
@@ -288,7 +301,6 @@ contract exchange{
                 linkedNodes[currentNode.name].previous = name;
                 linkedNodes[previousNode.name].next = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
-                return;
             }
             //it falls somewhere in the middle of the chain
             else{
@@ -296,7 +308,6 @@ contract exchange{
                 linkedNodes[currentNode.name].previous = name;
                 linkedNodes[previousNode.name].next = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
-                return;
             }
 
         }
@@ -321,7 +332,6 @@ contract exchange{
                 linkedNodes[nextNode.name].previous = name;
                 listHeads[_maturity][_strike][index] = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
-                return; 
             }
             //falls somewhere in the middle of the list
             else {
@@ -329,9 +339,9 @@ contract exchange{
                 linkedNodes[nextNode.name].previous = name;
                 linkedNodes[currentNode.name].next = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].strike, offers[hash].price, offers[hash].amount, index);
-                return;
             }
         }
+        payFee();
     }
 
     /*

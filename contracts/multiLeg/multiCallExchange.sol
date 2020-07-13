@@ -1,6 +1,7 @@
 pragma solidity >=0.6.0;
 import "../interfaces/ERC20.sol";
 import "../options.sol";
+import "../feeOracle.sol";
 
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract
@@ -121,16 +122,20 @@ contract multiCallExchange {
     uint satUnits;
     //previously recorded balances of this contract
     uint satReserves;
+    //address of the contract that stores all fee information and collects all fees
+    address feeOracleAddress;
     
     /*  
         @Description: initialise globals and preform initial processes with the underlying asset and legsHash asset contracts
 
         @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
         @param address _optionsAddress: address that shall be assigned to optionsAddress
+        @param address _feeOracleAddess: address that shall be assigned to feeOracleAddress
     */
-    constructor (address _underlyingAssetAddress, address _optionsAddress) public{
+    constructor (address _underlyingAssetAddress, address _optionsAddress, address _feeOracleAddress) public{
         underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
+        feeOracleAddress = _feeOracleAddress;
         ERC20 ua = ERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
@@ -191,6 +196,14 @@ contract multiCallExchange {
     }
 
 
+    function payFee() internal {
+        feeOracle fo = feeOracle(feeOracleAddress);
+        uint fee = fo.multiLegExchangeFlatEtherFee();
+        require(msg.value >= fee);
+        msg.sender.transfer(msg.value-fee);
+        payable(fo.feldmexTokenAddress()).transfer(fee);
+    }
+
     /*
         @Description: creates an order and posts it in one of the 2 linked lists depending on if it is a buy or sell order and if it is for calls or puts
             unless this is the first order of its kind functionality is outsourced to insertOrder
@@ -201,7 +214,7 @@ contract multiCallExchange {
         @param uint _amount: the amount of calls or puts that this offer is for
         @param uint8 _index: the linked list in which this order is to be placed
     */
-    function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public {
+    function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public payable {
         require(_maturity != 0 && _legsHash != 0 && _amount != 0);
 
         position memory pos = positions[_legsHash];
@@ -234,6 +247,7 @@ contract multiCallExchange {
         offers[hash] = offer;
         linkedNodes[name] = linkedNode(hash, name, 0, 0);
         listHeads[_maturity][_legsHash][_index] = name;
+        payFee();
         emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
     }
 
@@ -249,7 +263,7 @@ contract multiCallExchange {
         @param uint8 _index: the linked list in which this order is to be placed
         @param bytes32 _name: the name identifier of the order from which to search for the location to insert this order
     */
-    function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) public {
+    function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) public payable {
         //make sure the offer and node corresponding to the name is in the correct list
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].legsHash == _legsHash && _maturity != 0 &&  _legsHash != 0);
         require(offers[linkedNodes[_name].hash].index == _index);
@@ -294,7 +308,6 @@ contract multiCallExchange {
                 linkedNodes[currentNode.name].previous = name;
                 linkedNodes[previousNode.name].next = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
-                return;
             }
             //it falls somewhere in the middle of the chain
             else{
@@ -302,7 +315,6 @@ contract multiCallExchange {
                 linkedNodes[currentNode.name].previous = name;
                 linkedNodes[previousNode.name].next = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
-                return;
             }
 
         }
@@ -327,7 +339,6 @@ contract multiCallExchange {
                 linkedNodes[nextNode.name].previous = name;
                 listHeads[_maturity][_legsHash][_index] = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
-                return; 
             }
             //falls somewhere in the middle of the list
             else {
@@ -335,9 +346,9 @@ contract multiCallExchange {
                 linkedNodes[nextNode.name].previous = name;
                 linkedNodes[currentNode.name].next = name;
                 emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
-                return;
             }
         }
+        payFee();
     }
 
     /*

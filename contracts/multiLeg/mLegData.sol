@@ -116,4 +116,5 @@ contract mLegData {
     int price;
     uint8 index;
 
+    address feeOracleAddress;
 }
