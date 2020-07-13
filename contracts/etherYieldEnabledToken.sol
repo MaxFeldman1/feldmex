@@ -205,10 +205,10 @@ contract etherYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 	*/
 	function claimDividendInternal(address _addr) internal {
 		uint lastIndex = contractEtherReceived.length-1;	//gas savings
-		lastClaim[_addr] = lastIndex;
 		uint totalIncreace = contractEtherReceived[lastIndex] - contractEtherReceived[lastClaim[_addr]];
 		uint transferAmount = totalIncreace * totalYield[_addr] / totalSupply;
 		totalWithdrawls += transferAmount;
+		lastClaim[_addr] = lastIndex;
 		payable(_addr).transfer(transferAmount);
 	}
 
