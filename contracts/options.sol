@@ -35,8 +35,6 @@ contract options is FeldmexOptionsData, Ownable {
         mOrganizerAddress = _mOrganizerAddress;
         feeOracleAddress = _feeOracleAddress;
         feeOracle(_feeOracleAddress).setSpecificFeeImmunity(address(this), msg.sender, true);
-        oracle orc = oracle(oracleAddress);
-        inflator = orc.inflator();
         ERC20 ua = ERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
         ERC20 sa = ERC20(strikeAssetAddress);
@@ -77,10 +75,10 @@ contract options is FeldmexOptionsData, Ownable {
     */
     function claim(uint _maturity) public returns(bool success){
         require(_maturity < block.timestamp);
-        //get info from the oracle
+        //spot price fetched from the oracle is inflated by factor of satUnits * scUnits
         ITimeSeriesOracle orc = ITimeSeriesOracle(oracleAddress);
-        //oracle orc = oracle(oracleAddress);
-        uint spot = orc.fetchSpotAtTime(_maturity);
+        //we want spot to == trueSpot * scUnits
+        uint spot = orc.fetchSpotAtTime(_maturity, underlyingAssetAddress);
         uint callValue = 0;
         uint putValue = 0;
         //calls & puts
@@ -95,6 +93,8 @@ contract options is FeldmexOptionsData, Ownable {
             delete containedStrikes[msg.sender][_maturity][strike];
         }
         //satValueOf is inflated by _price parameter and scValueOf thus only divide out spot from callValue not putValue
+        //prevent div by 0, also there are no calls at a strike of 0 so this does not affect payout
+        if (spot == 0) spot++;
         callValue /= spot;
         delete strikes[msg.sender][_maturity];
         feeOracle fo = feeOracle(feeOracleAddress);
@@ -212,6 +212,7 @@ contract options is FeldmexOptionsData, Ownable {
         uint payout = 0;
         if (_amount != 0){
             if (_price < _strike){
+                //spot inflator is == scUnits
                 //inflator must be divided out thus remove *scUnits
                 payout = (_strike - _price)*uint(_amount > 0 ? _amount : -_amount);
             }

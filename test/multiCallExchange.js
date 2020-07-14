@@ -37,7 +37,6 @@ contract('multi call exchange', function(accounts){
 		await mOrganizerInstance.deployCallExchange(optionsInstance.address);
 		multiCallExchangeInstance = await multiCallExchange.at(await mOrganizerInstance.exchangeAddresses(optionsInstance.address, 0));
 		asset1SubUnits = Math.pow(10, await asset1.decimals());
-		inflator = await oracleInstance.inflator();
 	});
 
 	async function depositFunds(to, amount, exchange){

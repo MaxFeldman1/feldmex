@@ -43,7 +43,6 @@ contract('multi leg exchange', function(accounts){
 		multiLegExchangeInstance = await multiLegExchange.at(await mOrganizerInstance.exchangeAddresses(optionsInstance.address, 2));
 		asset1SubUnits = Math.pow(10, await asset1.decimals());
 		asset2SubUnits = Math.pow(10, await asset2.decimals());
-		inflator = await oracleInstance.inflator();
 	});
 
 	async function depositFunds(to, asset1Amount, asset2Amount, exchange){

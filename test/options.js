@@ -6,7 +6,7 @@ const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const feeOracle = artifacts.require("feeOracle");
 const feldmexToken = artifacts.require("FeldmexToken");
-
+const BN = web3.utils.BN;
 const helper = require("../helper/helper.js");
 
 var strike = 100;
@@ -48,19 +48,28 @@ contract('options', async function(accounts){
 		assert.equal(await feeOracleInstance.specificFeeImmunity(optionsInstance.address, accounts[0]), true, "owner of optionsContract is feeImmune");
 		feeDenominator = 1000;
 		await setFee(1000, {from: accounts[0]});
+		defaultAccount = accounts[0];
+		reciverAccount = accounts[1];
+		satUnits = (new web3.utils.BN("10")).pow(await tokenInstance.decimals());
+		scUnits = (new web3.utils.BN("10")).pow(await strikeAssetInstance.decimals());
+		inflator = scUnits;
+		satUnits = satUnits.toNumber();
+		scUnits = scUnits.toNumber();
 		inflatorObj = {};
 		//setWithInflator sets spot and adjusts for the inflator
-		//because median of last 3 is returned by oracle we must set spot 2 times
 		setWithInflator = async (_spot) => {
-			await oracleInstance.set(_spot * inflator);
-			await oracleInstance.set(_spot * inflator);
+			_spot = (new BN(_spot)).mul(inflator).toString();
+			//because median of last 3 is returned by oracle we must set spot 2 times
+			await oracleInstance.set(_spot);
+			await oracleInstance.set(_spot);
 		};
 		inflatorObj.mintCall = async (debtor, holder, maturity, strike, amount, limit, params) => {
 			await addStrike(debtor, maturity, strike);
 			await addStrike(holder, maturity, strike);
 			await optionsInstance.setUseDeposits(false);
 			await optionsInstance.clearPositions();
-			await optionsInstance.addPosition(strike*inflator, amount, true);
+			var str = (new BN(strike)).mul(new BN(scUnits)).toString();
+			await optionsInstance.addPosition(str, amount, true);
 			await optionsInstance.setParams(debtor, holder, maturity);
 			await optionsInstance.setLimits(limit, 0);
 			return optionsInstance.assignCallPosition(params);
@@ -70,16 +79,19 @@ contract('options', async function(accounts){
 			await addStrike(holder, maturity, strike);
 			await optionsInstance.setUseDeposits(false);
 			await optionsInstance.clearPositions();
-			await optionsInstance.addPosition(strike*inflator, amount, false);
+			var str = (new BN(strike)).mul(new BN(scUnits)).toString();
+			await optionsInstance.addPosition(str, amount, false);
 			await optionsInstance.setParams(debtor, holder, maturity);
 			await optionsInstance.setLimits(limit, 0);
 			return optionsInstance.assignPutPosition(params);
 		};
-		inflatorObj.balanceOf = (address, maturity, strike, callPut) => {return optionsInstance.balanceOf(address, maturity, strike*inflator, callPut);};
+		inflatorObj.balanceOf = (address, maturity, strike, callPut) => {
+			return optionsInstance.balanceOf(address, maturity, (new BN(strike)).mul((new BN(scUnits))).toString(), callPut);
+		};
 	});
 
 	async function addStrike(from, maturity, strike) {
-		strike*=inflator;
+		strike*=scUnits;
 		strikes = await optionsInstance.viewStrikes(maturity, {from});
 		var index = 0;
 		for (;index < strikes.length; index++){ 
@@ -96,11 +108,6 @@ contract('options', async function(accounts){
 	}
 
 	it ('mints, exercizes call options', async () => {
-		defaultAccount = accounts[0];
-		reciverAccount = accounts[1];
-		satUnits = Math.pow(10, await tokenInstance.decimals());
-		scUnits = Math.pow(10, await strikeAssetInstance.decimals());
-		inflator = (await optionsInstance.inflator()).toNumber();
 		await tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: defaultAccount});
 		await strikeAssetInstance.approve(optionsInstance.address, 1000*scUnits, {from: defaultAccount});
 		await setWithInflator(finalSpot);
@@ -113,7 +120,7 @@ contract('options', async function(accounts){
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		res = await optionsInstance.viewStrikes(maturity, {from: debtor});
-		assert.equal(res[0].toNumber(), strike*inflator, "the correct strike is added");
+		assert.equal(res[0].toNumber(), strike*scUnits, "the correct strike is added");
 		await inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, true)).toNumber(), -amount, "debtor holds negative amount of contracts");
 		assert.equal((await inflatorObj.balanceOf(holder, maturity, strike, true)).toNumber(), amount, "holder holds positive amount of contracts");
@@ -194,7 +201,7 @@ contract('options', async function(accounts){
 			await addStrike(params.from, maturity, strike);
 			await optionsInstance.setUseDeposits(true, params);
 			await optionsInstance.clearPositions();
-			await optionsInstance.addPosition(strike*inflator, amount, call);
+			await optionsInstance.addPosition(strike*scUnits, amount, call);
 			await optionsInstance.setParams(params.from, to, maturity);
 			await optionsInstance.setLimits(maxTransfer, 0);
 			if (call) await optionsInstance.assignCallPosition(params);
@@ -327,23 +334,23 @@ contract('options', async function(accounts){
 		allMaturities.push(maturity);
 		await optionsInstance.clearPositions();
 		//iorn condor made of puts
-		await optionsInstance.addPosition(strike*inflator, amount, false);
+		await optionsInstance.addPosition(strike*scUnits, amount, false);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*inflator, -amount, false);
+		await optionsInstance.addPosition(strike*scUnits, -amount, false);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*inflator, -amount, false);
+		await optionsInstance.addPosition(strike*scUnits, -amount, false);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*inflator, amount, false);
+		await optionsInstance.addPosition(strike*scUnits, amount, false);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 
-		var expectedCollateralRequirement = 10*amount*inflator;
+		var expectedCollateralRequirement = 10*amount*scUnits;
 		var expectedDebtorRequirement = expectedCollateralRequirement;
 		var expectedHolderRequirement = 0;
 		//hold exactly the correct amount of collateral in the options smart contract
@@ -366,19 +373,19 @@ contract('options', async function(accounts){
 		allMaturities.push(maturity);
 		await optionsInstance.clearPositions();
 		//iorn condor made of calls
-		await optionsInstance.addPosition(strike*inflator, amount, true);
+		await optionsInstance.addPosition(strike*scUnits, amount, true);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*inflator, -amount, true);
+		await optionsInstance.addPosition(strike*scUnits, -amount, true);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*inflator, -amount, true);
+		await optionsInstance.addPosition(strike*scUnits, -amount, true);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*inflator, amount, true);
+		await optionsInstance.addPosition(strike*scUnits, amount, true);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 

@@ -9,11 +9,12 @@ contract('oracle', function(accounts){
 		asset1 = await token.new(0);
 		asset2 = await token.new(0);
 		oracleInstance = await oracle.new(asset1.address, asset2.address);
-		inflator = await oracleInstance.inflator();
+		asset1SubUnits = await oracleInstance.underlyingAssetSubUnits();
+		asset2SubUnits = await oracleInstance.strikeAssetSubUnits();
 	});
 
 	async function setPrice(spot) {
-		return oracleInstance.set(spot*inflator);
+		return oracleInstance.set(spot*asset2SubUnits);
 	}
 
 	async function heightToPrevTs(height) {
@@ -36,7 +37,7 @@ contract('oracle', function(accounts){
 
 	async function indexToSpot(index) {
 		var height = (await oracleInstance.heights(index)).toNumber();
-		return (await oracleInstance.heightToSpot(height)) / inflator;
+		return (await oracleInstance.heightToSpot(height)) / asset2SubUnits;
 	}
 
 	//in solidity block.number is always height of the next block, in web3 it is height of prev block
@@ -50,27 +51,27 @@ contract('oracle', function(accounts){
 		await setPrice(spot);
 		blockSetSpot = await getBlockNumber();
 		await helper.advanceTime(2);
-		res = (await oracleInstance.latestSpot()) / inflator;
+		res = (await oracleInstance.latestSpot()) / asset2SubUnits;
 		assert.equal(res, spot, 'latestSpot() fetches current spot price');
 		height = await getBlockNumber();
-		res = (await heightToPrevSpot(height))/inflator;
-		//res = (await heightToPrevSpot(height))/inflator;
+		res = (await heightToPrevSpot(height))/asset2SubUnits;
+		//res = (await heightToPrevSpot(height))/asset2SubUnits;
 		assert.equal(res, spot, "getUint(uint) fetches the latest spot price");
 		await setPrice(secondSpot);
 		blockSetSecondSpot = await getBlockNumber();
 		await helper.advanceTime(2);
 		//note that we have not updated the value of height yet
-		res = (await heightToPrevSpot(height)) / inflator;
+		res = (await heightToPrevSpot(height)) / asset2SubUnits;
 		assert.equal(res, spot, "getUint(uint) can fetch previous values");
 		//we are now feching the price of the blocks after setting the spot a second time
-		res = (await heightToPrevSpot(blockSetSecondSpot+5))/inflator;
+		res = (await heightToPrevSpot(blockSetSecondSpot+5))/asset2SubUnits;
 		assert.equal(res, secondSpot, "getUint(uint) can fetch the most recent spot");
-		res = (await heightToPrevSpot(height-3))/inflator;
+		res = (await heightToPrevSpot(height-3))/asset2SubUnits;
 		assert.equal(res, 0, "getUint(uint) returns 0 when there are no previous spot prices");
 		res = await web3.eth.getBlock('latest');
 		height = res.number;
 		time = res.timestamp;
-		result = (await heightToPrevSpot(height))/inflator;
+		result = (await heightToPrevSpot(height))/asset2SubUnits;
 		//res  = await oracleInstance.timestampBehindHeight(height);
 		res  = await heightToPrevTs(height);
 		assert.equal(res <= time, true, "returns the correct timestamp");
@@ -86,22 +87,22 @@ contract('oracle', function(accounts){
 		diff = res.timestamp-time;
 		time = res.timestamp;
 		height = res.number;
-		res = (await tsToPrevSpot(time))/inflator;
+		res = (await tsToPrevSpot(time))/asset2SubUnits;
 		assert.equal(res, 6, "correct spot");
 		newTime = (await web3.eth.getBlock(blockSet1)).timestamp+1;
-		res = (await tsToPrevSpot(newTime))/inflator;
+		res = (await tsToPrevSpot(newTime))/asset2SubUnits;
 		assert.equal(res, 1, "correct spot");
 		newTime = (await web3.eth.getBlock(blockSet5)).timestamp+1;
-		res = (await tsToPrevSpot(newTime))/inflator;
+		res = (await tsToPrevSpot(newTime))/asset2SubUnits;
 		assert.equal(res, 5, "correct spot");
 		newTime = (await web3.eth.getBlock(blockSetSpot)).timestamp;
 		spotTime = newTime;
-		res = (await tsToPrevSpot(newTime))/inflator;
+		res = (await tsToPrevSpot(newTime))/asset2SubUnits;
 		assert.equal(res, spot, "correct spot");
 		newTime = (await web3.eth.getBlock(blockSetSecondSpot)).timestamp;
-		res = (await tsToPrevSpot(newTime))/inflator;
+		res = (await tsToPrevSpot(newTime))/asset2SubUnits;
 		assert.equal(res, secondSpot, "correct spot");
-		res = (await tsToPrevSpot(spotTime-4))/inflator;
+		res = (await tsToPrevSpot(spotTime-4))/asset2SubUnits;
 		assert.equal(res, 0, "correct spot");
 	});
 

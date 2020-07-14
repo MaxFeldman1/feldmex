@@ -18,11 +18,11 @@ contract oracle is ITimeSeriesOracle {
     uint mostRecent;
 
     /*
-        adds extra accuracy to spot price
-        any contract interacting with this oracle shold divide out the inflator after calculatioins
-        inflator shall be equal to scUnits *the amount of subUnits in one full unit of strikeAsset*
+        spots are stored at an inflated value of spot * underlyingAssetSubUnits
     */
-    uint public override inflator;
+    uint public override underlyingAssetSubUnits;
+
+    uint public override strikeAssetSubUnits;
 
     address public override underlyingAssetAddress;
 
@@ -31,11 +31,11 @@ contract oracle is ITimeSeriesOracle {
     constructor(address _underlyingAssetAddress, address _strikeAssetAddress) public {
         underlyingAssetAddress = _underlyingAssetAddress;
         strikeAssetAddress = _strikeAssetAddress;
-        inflator = 10 ** uint(ERC20(strikeAssetAddress).decimals());
+        underlyingAssetSubUnits = 10 ** uint(ERC20(_underlyingAssetAddress).decimals());
+        strikeAssetSubUnits = 10 ** uint(ERC20(_strikeAssetAddress).decimals());
         heights.push(block.number);
         heights.push(block.number);
         heights.push(block.number);
-        //set();
     }
 
     function set(uint _spot) public override {
@@ -125,8 +125,19 @@ contract oracle is ITimeSeriesOracle {
         median = second;
     }
 
-    function fetchSpotAtTime(uint _time) external view override returns (uint) {
-        return medianPreviousIndecies(tsToIndex(_time));
+    function fetchSpotAtTime(uint _time, address _underlyingAssetAddress) external view override returns (uint spot) {
+        spot = medianPreviousIndecies(tsToIndex(_time));
+        /*
+            if _underlyingAssetAddress != underlyingAssetAddress we know that the requesting options handler contract
+            wants the inverse of the spot that we found on the line above.
+            because spot already == trueSpot * strikeAssetSubUnits
+            and we want spot to == underlyingAssetSubUnits / trueSpot
+            we can achieve this by setting spot = underlyingAssetSubUnits * strikeAssetSubUnits / spot;
+                underlyingAssetSubUnits * strikeAssetSubUnits / spot ==
+                underlyingAssetSubUnits * strikeAssetSubUnits / (trueSpot * strikeAssetSubUnits) == 
+                underlyingAssetSubUnits * trueSpot
+        */
+        if (_underlyingAssetAddress != underlyingAssetAddress) spot = underlyingAssetSubUnits * strikeAssetSubUnits / spot;
     }
 
 }

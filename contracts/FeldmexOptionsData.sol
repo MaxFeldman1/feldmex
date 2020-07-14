@@ -28,11 +28,6 @@ contract FeldmexOptionsData {
     //previously recorded balances
     uint satReserves;
     uint scReserves;
-    /*
-        number by which the oracle multiplies all spot prices
-        also used to inflate strike prices here
-    */
-    uint public inflator;
 
 
     /*
