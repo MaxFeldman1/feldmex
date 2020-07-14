@@ -39,7 +39,6 @@ contract('multi put exchange', function(accounts){
 		asset1SubUnits = Math.pow(10, await asset1.decimals());
 		asset2SubUnits = Math.pow(10, await asset2.decimals());
 		inflator = await oracleInstance.inflator();
-		await feeOracleInstance.setSpecificFees(optionsInstance.address, 0, 10000, 20000);
 	});
 
 	async function depositFunds(to, amount, exchange){

@@ -24,31 +24,24 @@ contract('feeOracle', function(accounts){
 		assert.equal(await feeOracleInstance.feldmexTokenAddress(), feldmexTokenInstance.address, "correct value of the feldmex token address");
 	});
 
-	it('sets base fees', async () => {
+	it('sets base fee', async () => {
 		baseOptionsFeeDenominator = 600;
-		baseExchangeFeeDenominator = 700;
-		baseMultiLegExchangeFeeDenominator = 800;
-		await feeOracleInstance.setBaseFees(baseOptionsFeeDenominator, baseExchangeFeeDenominator, baseMultiLegExchangeFeeDenominator);
+		await feeOracleInstance.setBaseFee(baseOptionsFeeDenominator);
 		assert.equal((await feeOracleInstance.baseOptionsFeeDenominator()).toNumber(), baseOptionsFeeDenominator, "correct base options fee denominator");
-		assert.equal((await feeOracleInstance.baseExchangeFeeDenominator()).toNumber(), baseExchangeFeeDenominator, "correct base exchange fee denominator");
-		assert.equal((await feeOracleInstance.baseMultiLegExchangeFeeDenominator()).toNumber(), baseMultiLegExchangeFeeDenominator, "correct base multi leg exchange fee denominator");
+		assert((await feeOracleInstance.fetchFee(optionsInstance.address)).toNumber(), baseOptionsFeeDenominator, "correct fee for specific options contract");
 	});
 
-	it('sets specific fees', async () => {
+	it('sets specific fee', async () => {
 		specificOptionsFeeDenominator = 900;
-		specificExchangeFeeDenominator = 1000;
-		specificMultiLegExchangeFeeDenominator = 1100;
-		await feeOracleInstance.setSpecificFees(optionsInstance.address, specificOptionsFeeDenominator, specificExchangeFeeDenominator, specificMultiLegExchangeFeeDenominator);
+		await feeOracleInstance.setSpecificFee(optionsInstance.address, specificOptionsFeeDenominator);
 		assert.equal((await feeOracleInstance.specificOptionsFeeDenominator(optionsInstance.address)).toNumber(), specificOptionsFeeDenominator, "correct specific options fee denominator");
-		assert.equal((await feeOracleInstance.specificExchangeFeeDenominator(optionsInstance.address)).toNumber(), specificExchangeFeeDenominator, "correct specific exchange fee denominator");
-		assert.equal((await feeOracleInstance.specificMultiLegExchangeFeeDenominator(optionsInstance.address)).toNumber(), specificMultiLegExchangeFeeDenominator, "correct specific multi leg exchange fee denominator");
+		assert((await feeOracleInstance.fetchFee(optionsInstance.address)).toNumber(), specificOptionsFeeDenominator, "correct fee for specific options contract");
 	});
 
-	it('deletes specific fees', async () => {
-		await feeOracleInstance.deleteSpecificFees(optionsInstance.address);
+	it('deletes specific fee', async () => {
+		await feeOracleInstance.deleteSpecificFee(optionsInstance.address);
 		assert.equal((await feeOracleInstance.specificOptionsFeeDenominator(optionsInstance.address)).toNumber(), 0, "correct specific options fee denominator");
-		assert.equal((await feeOracleInstance.specificExchangeFeeDenominator(optionsInstance.address)).toNumber(), 0, "correct specific exchange fee denominator");
-		assert.equal((await feeOracleInstance.specificMultiLegExchangeFeeDenominator(optionsInstance.address)).toNumber(), 0, "correct specific multi leg exchange fee denominator");		
+		assert((await feeOracleInstance.fetchFee(optionsInstance.address)).toNumber(), baseOptionsFeeDenominator, "correct fee for specific options contract");
 	});
 
 	it('sets flat ether fees', async () => {

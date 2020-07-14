@@ -7,19 +7,11 @@ contract feeOracle is Ownable {
 
     uint public baseOptionsFeeDenominator = 1<<255;
 
-    uint public baseExchangeFeeDenominator = 1<<255;
-
-    uint public baseMultiLegExchangeFeeDenominator = 1<<255;
-
     uint public exchangeFlatEtherFee = 0;
 
     uint public multiLegExchangeFlatEtherFee = 0;
 
     mapping(address => uint) public specificOptionsFeeDenominator;
-
-    mapping(address => uint) public specificExchangeFeeDenominator;
-
-    mapping(address => uint) public specificMultiLegExchangeFeeDenominator;
 
     mapping(address => bool) public feeImmunity;
 
@@ -30,22 +22,14 @@ contract feeOracle is Ownable {
         feldmexTokenAddress = _feldmexTokenAddress;
     }
 
-    function setBaseFees(uint _baseOptionsFeeDenominator, uint _baseExchangeFeeDenominator, uint _baseMultiLegExchangeFeeDenominator) onlyOwner public {
+    function setBaseFee(uint _baseOptionsFeeDenominator) onlyOwner public {
         require(_baseOptionsFeeDenominator >= 500);
-        require(_baseExchangeFeeDenominator >= 500 );
-        require(_baseMultiLegExchangeFeeDenominator >= 500);
         baseOptionsFeeDenominator = _baseOptionsFeeDenominator;
-        baseExchangeFeeDenominator = _baseExchangeFeeDenominator;
-        baseMultiLegExchangeFeeDenominator = _baseMultiLegExchangeFeeDenominator;
     }
 
-    function setSpecificFees(address _optionsAddress, uint _specificOptionsFeeDenominator, uint _specificExchangeFeeDenominator, uint _specificMultiLegExchangeFeeDenominator) onlyOwner public {
+    function setSpecificFee(address _optionsAddress, uint _specificOptionsFeeDenominator) onlyOwner public {
         require(_specificOptionsFeeDenominator >= 500 || _specificOptionsFeeDenominator == 0);
-        require(_specificExchangeFeeDenominator >= 500 || _specificExchangeFeeDenominator == 0);
-        require(_specificMultiLegExchangeFeeDenominator >= 500 || _specificMultiLegExchangeFeeDenominator == 0);
         specificOptionsFeeDenominator[_optionsAddress] = _specificOptionsFeeDenominator;
-        specificExchangeFeeDenominator[_optionsAddress] = _specificExchangeFeeDenominator;
-        specificMultiLegExchangeFeeDenominator[_optionsAddress] = _specificMultiLegExchangeFeeDenominator;
     }
 
     function setFlatEtherFees(uint _exchageFlatEtherFee, uint _multiLegExchnageFlatEtherFee) onlyOwner public {
@@ -54,25 +38,13 @@ contract feeOracle is Ownable {
     }
 
 
-    function deleteSpecificFees(address _optionsAddress) onlyOwner public {
+    function deleteSpecificFee(address _optionsAddress) onlyOwner public {
         delete specificOptionsFeeDenominator[_optionsAddress];
-        delete specificExchangeFeeDenominator[_optionsAddress];
-        delete specificMultiLegExchangeFeeDenominator[_optionsAddress];
     }
 
-    function fetchFee(uint8 _type) public view returns (uint _feeDenominator) {
-        if (_type==0) {
-            _feeDenominator = specificOptionsFeeDenominator[msg.sender];
-            if (_feeDenominator==0) _feeDenominator = baseOptionsFeeDenominator;
-        }
-        else if (_type==1) {
-            _feeDenominator = specificExchangeFeeDenominator[msg.sender];
-            if (_feeDenominator==0) _feeDenominator = baseExchangeFeeDenominator;
-        }
-        else {
-            _feeDenominator = specificMultiLegExchangeFeeDenominator[msg.sender];
-            if (_feeDenominator==0) _feeDenominator = baseMultiLegExchangeFeeDenominator;
-        }
+    function fetchFee(address _optionsAddress) public view returns (uint _feeDenominator) {
+        _feeDenominator = specificOptionsFeeDenominator[_optionsAddress];
+        if (_feeDenominator==0) _feeDenominator = baseOptionsFeeDenominator;
     }
 
     function setBaseFeeImmunity(address _addr, bool _feeImmunity) onlyOwner public {

@@ -98,7 +98,7 @@ contract options is FeldmexOptionsData, Ownable {
         callValue /= spot;
         delete strikes[msg.sender][_maturity];
         feeOracle fo = feeOracle(feeOracleAddress);
-        uint _feeDenominator = fo.fetchFee(0);
+        uint _feeDenominator = fo.fetchFee(address(this));
         bool _feeImmunity = fo.isFeeImmune(address(this), msg.sender);
         if (callValue > satDeduction[msg.sender][_maturity]){
             callValue -= satDeduction[msg.sender][_maturity];

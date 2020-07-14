@@ -57,7 +57,6 @@ contract('exchange', async function(accounts) {
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		exchangeInstance = await exchange.new(tokenInstance.address, strikeAssetInstance.address, optionsInstance.address, feeOracleInstance.address);
 		await optionsInstance.setExchangeAddress(exchangeInstance.address);
-		await feeOracleInstance.setSpecificFees(optionsInstance.address, 0, 10000, 20000);
 
 		mintHandler.postOrder = async (maturity, strike, price, amount, buy, call, params) => {
 			if (typeof(strikes[maturity]) === 'undefined') strikes[maturity] = {};

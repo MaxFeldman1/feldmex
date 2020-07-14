@@ -179,6 +179,7 @@ contract exchange{
 
     function payFee() internal {
         feeOracle fo = feeOracle(feeOracleAddress);
+        if (fo.isFeeImmune(optionsAddress, msg.sender)) return;
         uint fee = fo.exchangeFlatEtherFee();
         require(msg.value >= fee);
         msg.sender.transfer(msg.value-fee);

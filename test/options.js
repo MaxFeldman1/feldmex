@@ -32,7 +32,7 @@ contract('options', async function(accounts){
 
 	async function setFee(denominator, params) {
 		//only set fee in only the options instance
-		await feeOracleInstance.setBaseFees(denominator, 500, 500, params);
+		await feeOracleInstance.setBaseFee(denominator, params);
 	}
 
 	it('before each', async () => {

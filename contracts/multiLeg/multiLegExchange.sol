@@ -2,7 +2,6 @@ pragma solidity >=0.6.0;
 import "../interfaces/ERC20.sol";
 import "../options.sol";
 import "./mLegData.sol";
-import "../feeOracle.sol";
 
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract
@@ -146,11 +145,8 @@ contract multiLegExchange is mLegData {
 
 
     function payFee() internal {
-        feeOracle fo = feeOracle(feeOracleAddress);
-        uint fee = fo.multiLegExchangeFlatEtherFee();
-        require(msg.value >= fee);
-        msg.sender.transfer(msg.value-fee);
-        payable(fo.feldmexTokenAddress()).transfer(fee);
+        (bool success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("payFee()"));
+        require(success);
     }
 
 

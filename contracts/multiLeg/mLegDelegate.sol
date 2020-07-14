@@ -1,8 +1,20 @@
 pragma solidity >=0.6.0;
 import "./mLegData.sol";
 import "../options.sol";
+import "../feeOracle.sol";
 
 contract mLegDelegate is mLegData {
+
+
+    function payFee() public payable {
+        feeOracle fo = feeOracle(feeOracleAddress);
+        if (fo.isFeeImmune(optionsAddress, msg.sender)) return;
+        uint fee = fo.multiLegExchangeFlatEtherFee();
+        require(msg.value >= fee);
+        msg.sender.transfer(msg.value-fee);
+        payable(fo.feldmexTokenAddress()).transfer(fee);
+    }
+
 
     function cancelOrderInternal(bytes32 _name) public {
     	//bytes32 _name = name;
