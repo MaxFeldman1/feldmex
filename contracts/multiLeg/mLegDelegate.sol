@@ -172,12 +172,25 @@ contract mLegDelegate is mLegData {
         delete offers[node.hash];
     }
 
-
+    /*
+        @Description: method by which proxy contract may delegatecall this delegate contract to mint position using globals as params
+    */
     function mintPosition() public {
     	bool success = mintPositionInternal(debtor,holder,maturity,legsHash,amount,price,index);
     	assert(success);
     }
 
+    /*
+        @Description: mint a specific position between two users
+
+        @param address _ debtor: the address selling the position
+        @param address _holder: the address buying the position
+        @param uint _maturity: the maturity of the position to mint
+        @param bytes32 _legsHash: the identifier to find the position in positions[]
+        @param uint _amount: the amount of times to mint the position
+        @param int _price: the premium paid by the holder to the debtor
+        @param uint8 _index: the index of the offer for which this function is called
+    */
     function mintPositionInternal(address _debtor, address _holder, uint _maturity, bytes32 _legsHash, uint _amount, int _price, uint8 _index) internal returns(bool success){
         /*
             debtor pays is true if debtor is making the market order and thus debtor must provide the necessary collateral

@@ -82,15 +82,29 @@ contract multiPutExchange {
         uint maxStrikeAssetDebtor;
         uint maxStrikeAssetHolder;
     }
-
+    //hash of position information => position
     mapping(bytes32 => position) public positions;
 
+    /*
+        @Description: returns arrays callAmounts and callStrikes of a given position
+
+        @param bytes32 _legsHash: the hash leading to the positions
+
+        @return int[] memory putAmounts: position.putAmounts
+        @return uint[] memory putStrikes: position.putStrikes
+    */
     function positionInfo(bytes32 _legsHash) public view returns(int[] memory putAmounts, uint[] memory putStrikes){
         position memory pos = positions[_legsHash];
         putAmounts = pos.putAmounts;
         putStrikes = pos.putStrikes;
     }
 
+    /*
+        @Description: add new position to enable trading on said position
+
+        @param uint[] memory _putStrikes: the strikes of the put positions
+        @param int[] memory _putAmounts: the amount of the put positons at the various strikes in _putStrikes
+    */
     function addLegHash(uint[] memory _putStrikes, int[] memory _putAmounts) public {
         //make sure that this is a multi leg order
         require(_putAmounts.length > 1);
@@ -125,11 +139,7 @@ contract multiPutExchange {
     address feeOracleAddress;
     
     /*  
-        @Description: initialise globals and preform initial processes with the underlying asset and legsHash asset contracts
-
-        @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
-        @param address _optionsAddress: address that shall be assigned to optionsAddress
-        @param address _feeOracleAddess: address that shall be assigned to feeOracleAddress
+        @Description: setup
     */
     constructor (address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) public {
         optionsAddress = _optionsAddress;
@@ -183,6 +193,14 @@ contract multiPutExchange {
     }
 
 
+    /*
+        @Description: checks if all strikes from _legsHash are contained by msg.sender in the options exchange
+
+        @param uint _maturity: the maturity of the maturity strike combination in question
+        @param bytes32 _legsHash: key in position mappings that leads to the position in question
+
+        @return bool contains: true if all strikes from legsHash are contained otherwise false
+    */
     function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
         position memory pos = positions[_legsHash];
         options optionsContract = options(optionsAddress);
@@ -193,6 +211,9 @@ contract multiPutExchange {
     }
 
 
+    /*
+        @Description: pay fee to feldmex token address
+    */
     function payFee() internal {
         feeOracle fo = feeOracle(feeOracleAddress);
         if (fo.isFeeImmune(optionsAddress, msg.sender)) return;
@@ -394,6 +415,11 @@ contract multiPutExchange {
     }
     
 
+    /*
+        @Description: cancel order of specific identifier
+
+        @param bytes32 _name: the hash to find the offer's linked node in linkedNodes[]
+    */
     function cancelOrder(bytes32 _name) public {
         require(msg.sender == offers[linkedNodes[_name].hash].offerer);
         cancelOrderInternal(_name);
@@ -525,7 +551,7 @@ contract multiPutExchange {
                 if (msg.sender == offer.offerer) {
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                        therefore we do not need to call options.assignPosition
+                        therefore we do not need to call mintPosition
                     */
                     position memory pos = positions[offer.legsHash];
                     uint req = uint(int(_amount) * (int(pos.maxStrikeAssetHolder) + offer.price));
@@ -574,7 +600,7 @@ contract multiPutExchange {
                 if (offer.offerer == msg.sender){
                     /*
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                        therefore we do not need to call options.mintCall/Put
+                        therefore we do not need to call mintPosition
                     */
                     position memory pos = positions[offer.legsHash];
                     uint req = uint(int(_amount) * (int(pos.maxStrikeAssetDebtor) - offer.price));
@@ -598,6 +624,17 @@ contract multiPutExchange {
         unfilled = _amount;
     }
 
+    /*
+        @Description: mint a specific position between two users
+
+        @param address _ debtor: the address selling the position
+        @param address _holder: the address buying the position
+        @param uint _maturity: the maturity of the position to mint
+        @param bytes32 _legsHash: the identifier to find the position in positions[]
+        @param uint _amount: the amount of times to mint the position
+        @param int _price: the premium paid by the holder to the debtor
+        @param uint8 _index: the index of the offer for which this function is called
+    */
     function mintPosition(address _debtor, address _holder, uint _maturity, bytes32 _legsHash, uint _amount, int _price, uint8 _index) internal returns(bool success){
         /*
             debtor pays is true if debtor is making the market order and thus debtor must provide the necessary collateral

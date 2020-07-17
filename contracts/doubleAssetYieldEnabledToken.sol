@@ -130,8 +130,11 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     }
 
     //-----------------i-m-p-l-e-m-e-n-t-s---y-i-e-l-d----------------
+    //token owner => yield owner => amount
     mapping(address => mapping(address => uint256)) public override yieldDistribution;
+    //yield owner => total yield owned
     mapping(address => uint) public override totalYield;
+    //token owner => spender => yield owner => amount approved
     mapping(address => mapping(address => mapping(address => uint))) public override specificAllowance;
     mapping(address => bool) public override autoClaimYieldDisabled;
     /*
@@ -156,11 +159,23 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     	uint256 _value
     );
 
+    /*
+		@Description: repatriate _value amount of yield from _yieldOwner to token owner
+
+		@param address _yieldOwner: the original owner of the yield
+		@param uint256 _value: the amount of yield transfered
+    */
     function claimYield(address _yieldOwner, uint256 _value) external override returns (bool success) {
         claimYieldInternal(msg.sender, _yieldOwner, _value);
     	success = true;
     }
 
+    /*
+		@Description: move _value of yield from token owner to _to
+
+		@param address _to: the address that receives the yield
+		@param uint256 _value: the amount of yield transfered
+    */
     function sendYield(address _to, uint256 _value) public override returns (bool success) {
     	require(yieldDistribution[msg.sender][msg.sender] >= _value);
         claimDividendInternal(msg.sender);
@@ -173,6 +188,15 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     	success = true;
     }
 
+    /*
+		@Description: transfer _value amount of options with yield owner of _yeildOwner from msg.sender to _to
+
+		@param address _to: the address that receives the options
+		@param uint256 _value: the amount transfered
+		@param address _yieldOwner: the owner of the yield
+
+		@return bool success: true if function executes sucessfully
+    */
     function transferTokenOwner(address _to, uint256 _value, address _yieldOwner) public override returns (bool success) {
     	require(yieldDistribution[msg.sender][_yieldOwner] >= _value);
     	yieldDistribution[msg.sender][_yieldOwner] -= _value;
@@ -188,6 +212,15 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 		success = true;
     }
 
+    /*
+		@Description: allow _spender to spend _value quantity of options with msg.sender as the token owner and _yieldOwner as the yield owner
+
+		@param address _spender: the spender of the options
+		@param uint256 _value: the amount that the spender is approved to transfer
+		@param address _yieldOwner: the owner of the yield
+
+		@return bool success: true if function executes sucessfully
+    */
     function approveYieldOwner(address _spender, uint256 _value, address _yieldOwner) public override returns (bool success) {
     	allowance[msg.sender][_spender] -= specificAllowance[msg.sender][_spender][_yieldOwner];
     	specificAllowance[msg.sender][_spender][_yieldOwner] = _value;
@@ -198,6 +231,16 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
     	success = true;
     }
 
+    /*
+		@Description: transfer funds from one address to another given that the from address has approved the caller of this function to spend a sufficient amount
+
+		@param address _from: the address from which to send the funds
+		@param address _to: the address to which to send the funds
+		@param uint256 _value: the amount of sub units of coins to allow to be spent
+		@param address _yieldOwner: the owner of the yeild
+
+		@return bool success: true if function executes sucessfully
+    */
     function transferTokenOwnerFrom(address _from, address _to, uint256 _value, address _yieldOwner) public override returns (bool success) {
     	require(yieldDistribution[_from][_yieldOwner] >= _value);
     	require(specificAllowance[_from][msg.sender][_yieldOwner] >= _value);
@@ -217,6 +260,9 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 		success = true;
     }
 
+    /*
+		@Description: allow users to enable or disable auto claim of yield
+    */
     function setAutoClaimYield() public override {
         autoClaimYieldDisabled[msg.sender] = !autoClaimYieldDisabled[msg.sender];
     }
@@ -269,6 +315,13 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 		balanceAsset2[_addr] += totalIncreace * _totalYield / _totalSupply;
 	}
 
+	/*
+		@Description: repatriate _value amount of yield from _yieldOwner to _tokenOwner
+
+		@param address _tokenOwner: the token owner
+		@param address _yieldOwner: the yield owner
+		@param uint256 _value: the amount of yield repatriated
+	*/
     function claimYieldInternal(address _tokenOwner, address _yieldOwner, uint256 _value) internal {
         require(yieldDistribution[_tokenOwner][_yieldOwner] >= _value);
         claimDividendInternal(_tokenOwner);

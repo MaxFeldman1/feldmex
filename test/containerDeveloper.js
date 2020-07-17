@@ -66,7 +66,17 @@ contract('containerDeveloper', async function(accounts){
 		res = await containerInstance.exchangeContract();
 		assert.notEqual(res, nullAddress, "exchange smart contract has been deployed");
 		exchangeInstance = await exchange.at(res);
-		assert.equal(await containerInstance.progress(), 2, "progress counter is correct");
+		assert.equal((await containerInstance.progress()).toNumber(), 2, "progress counter is correct");
+		await containerDeveloperInstance.progressContainer(tokenInstance.address, strikeAssetInstance.address);
+		res = await containerInstance.optionsContract2();
+		assert.notEqual(res, nullAddress, "second options smart contract has been deployed");
+		optionsInstance2 = await options.at(res);
+		assert.equal((await containerInstance.progress()).toNumber(), 3, "progress counter is correct");
+		await containerDeveloperInstance.progressContainer(tokenInstance.address, strikeAssetInstance.address);
+		res = await containerInstance.exchangeContract2();
+		assert.notEqual(res, nullAddress, "second exchange smart contract has been deployed");
+		exchangeInstance2 = await exchange.at(res);
+		assert.equal((await containerInstance.progress()).toNumber(), 4, "progress counter is correct");
 	});
 
 });

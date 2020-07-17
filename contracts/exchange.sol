@@ -98,12 +98,7 @@ contract exchange{
     uint scReserves;
     
     /*  
-        @Description: initialise globals and preform initial processes with the underlying asset and strike asset contracts
-
-        @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
-        @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
-        @param address _optionsAddress: address that shall be assigned to optionsAddress
-        @param address _feeOracleAddress: address that shall be assigned to feeOracleAddress
+        @Description: set up
     */
     constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) public{
         underlyingAssetAddress = _underlyingAssetAddress;
@@ -177,6 +172,9 @@ contract exchange{
     }
 
 
+    /*
+        @Description: pay fee to feldmex token address
+    */
     function payFee() internal {
         feeOracle fo = feeOracle(feeOracleAddress);
         if (fo.isFeeImmune(optionsAddress, msg.sender)) return;

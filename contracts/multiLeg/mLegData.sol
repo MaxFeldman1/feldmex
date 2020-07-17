@@ -83,6 +83,7 @@ contract mLegData {
         uint maxStrikeAssetHolder;
     }
 
+    //hash of position information => position
     mapping(bytes32 => position) public positions;
 
 

@@ -26,11 +26,6 @@ contract container is doubleAssetYieldEnabledToken {
 
 	/*
 		@Description: Assigns inital values and credits the owner of this contract with all coins
-
-		@param address _asset1Address: the address of the ERC0 contract of asset1
-		@param address _asset2Address: the address of the ERC20 contract of asset2
-		@param address _oHelperAddress: the address of the oHelper contract that helps with deployment of the options contract
-		@param address _eHelperAddress: the address of the eHelper contract that helps with deployment of the exchange contract
 	*/
 	constructor (address _asset1Address, address _asset2Address, address _oHelperAddress, address _eHelperAddress, address _orcHelperAddress) public doubleAssetYieldEnabledToken(_asset1Address, _asset2Address) {
 		address _oracleAddress = orcHelper(_orcHelperAddress).oracleAddresses(_asset1Address, _asset2Address);
@@ -46,7 +41,7 @@ contract container is doubleAssetYieldEnabledToken {
 
 	/*
 		@Description: calls oHelper contract to deploy options contract and assigns said contract to the optionsContract variable
-			may only be called when progress == 0
+			may only be called when progress == 0 or 2
 
 		@return bool success: true if function executes sucessfully
 	*/
@@ -68,7 +63,7 @@ contract container is doubleAssetYieldEnabledToken {
 
 	/*
 		@Description: calls eHelper contract to deploy exchange contract and assigns said contract to the exchangeContract variable
-			may only be called when progress == 1
+			may only be called when progress == 1 or 3
 
 		@return bool success: true if function executes sucessfully
 	*/

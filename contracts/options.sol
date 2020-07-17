@@ -10,16 +10,8 @@ import "./feeOracle.sol";
 
 contract options is FeldmexOptionsData, Ownable {
 
-        /*
-        @Description: assigns the addesses of external contracts
-
-        @param address _oracleAddress: address that shall be assigned to oracleAddress
-        @param address _underlyingAssetAddress: address that shall be assigned to underlyingAssetAddress
-        @param address _strikeAssetAddress: address that shall be assigned to strikeAssetAddress
-        @param address _feldmexERC20HelperAddress: address that will be assigned to feldmexERC20HelperAddress
-        @param address _mOrganizerAddress: address that will be assigned to mOrganizerAddress
-        @param address _assignOptionsDelegateAddress: address that will be assigned to assignOptionsDelegateAddress
-        @param address _feeOracleAddress: address that will be assigned to feeOracleAddress
+    /*
+        @Description: setup
     */
     constructor (address _oracleAddress, address _underlyingAssetAddress, 
         address _strikeAssetAddress, address _feldmexERC20HelperAddress, 
@@ -54,6 +46,8 @@ contract options is FeldmexOptionsData, Ownable {
     /*
         @Description: transfers ownership of contract
             if exchangeAddress has not been set it is also set to _addr such that it is known that the exchange address has not been set when it == owner
+
+        @param address _newOwner: the address that will take ownership of this contract
     */
     function transferOwnership(address _newOwner) onlyOwner public override {
         if (owner == exchangeAddress) exchangeAddress = _newOwner;
@@ -94,8 +88,8 @@ contract options is FeldmexOptionsData, Ownable {
         }
         //satValueOf is inflated by _price parameter and scValueOf thus only divide out spot from callValue not putValue
         //prevent div by 0, also there are no calls at a strike of 0 so this does not affect payout
-        if (spot == 0) spot++;
-        callValue /= spot;
+        //If spot == 0 so will callValue so there there is no harm done by this safety check
+        if (spot != 0) callValue /= spot;
         delete strikes[msg.sender][_maturity];
         feeOracle fo = feeOracle(feeOracleAddress);
         uint _feeDenominator = fo.fetchFee(address(this));
@@ -240,7 +234,10 @@ contract options is FeldmexOptionsData, Ownable {
     function addStrike(uint _maturity, uint _strike, uint _index) public {
         require(_maturity > 0 && _strike > 0);
         uint size = strikes[msg.sender][_maturity].length;
-        require(_index <= size && size < 14);
+        /*
+            we put a limit of 15 strikes added so as to limit gas expenditure when users make market orders in the exchange
+        */
+        require(_index <= size && size < 15);
         if (_index > 0) require(_strike > strikes[msg.sender][_maturity][_index-1]);
         if (_index < size) require(_strike < strikes[msg.sender][_maturity][_index]);
         strikes[msg.sender][_maturity].push(_strike);

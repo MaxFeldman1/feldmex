@@ -41,13 +41,9 @@ contract assignOptionsDelegate is FeldmexOptionsData {
 
     /*
         @Description: used to find the minimum amount of collateral that is required to to support call positions for a certain user at a given maturity
-            also takes into account an extra position that is entered in the last two parameters
-            The purpose of adding having the extra position in the last two parameters is that it allows for 
 
         @param address _addr: address in question
         @param uint _maturity: maturity in question
-        @param int _amount: the amount of the added position
-        @param uint _strike: the strike price of the added position
 
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in the underlying
         @return uint: sum of all short call positions multiplied by satUnits
@@ -81,12 +77,9 @@ contract assignOptionsDelegate is FeldmexOptionsData {
 
     /*
         @Description: used to find the minimum amount of collateral that is required to to support put positions for a certain user at a given maturity
-            also takes into account an extra position that is entered in the last two parameters
 
         @param address _addr: address in question
         @param uint _maturity: maturity in question
-        @param int _amount: the amount of the added position
-        @param uint _strike: the strike price of the added position
 
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in strike asset
         @return uint: negative value denominated in scUnits of all short put postions at a spot price of 0
@@ -111,6 +104,9 @@ contract assignOptionsDelegate is FeldmexOptionsData {
     }
 
 
+    /*
+        @Description: change all balances contained by the helper address at the helper maturity to -1 * previous value
+    */
     function inversePosition(bool _call) public {
         address _helperAddress = helperAddress;
         uint _helperMaturity = helperMaturity;
