@@ -15,6 +15,7 @@ const helper = require("../helper/helper.js");
 const defaultBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
 var maturity = 100;
 var amount = 10;
+var maxIterations = 5;
 
 
 
@@ -122,7 +123,7 @@ contract('multi call exchange', function(accounts){
 
 		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
 		
-		await multiCallExchangeInstance.marketSell(maturity, legsHash, price, amount-5, {from: accounts[1]});
+		await multiCallExchangeInstance.marketSell(maturity, legsHash, price, amount-5, maxIterations, {from: accounts[1]});
 		listHead = await multiCallExchangeInstance.listHeads(maturity, legsHash, 0);
 		headNode = await multiCallExchangeInstance.linkedNodes(listHead);
 		headOffer = await multiCallExchangeInstance.offers(headNode.hash);
@@ -137,7 +138,7 @@ contract('multi call exchange', function(accounts){
 
 		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetDebtor-price)+ amount*(maxUnderlyingAssetDebtor-secondPrice), "correct underlying asset balance after market sell");
 
-		await multiCallExchangeInstance.marketSell(maturity, legsHash, secondPrice, 5+amount, {from: accounts[1]});
+		await multiCallExchangeInstance.marketSell(maturity, legsHash, secondPrice, 5+amount, maxIterations, {from: accounts[1]});
 
 		listHead = await multiCallExchangeInstance.listHeads(maturity, legsHash, 0);
 		assert.equal(listHead, defaultBytes32, "correct list head");
@@ -182,7 +183,7 @@ contract('multi call exchange', function(accounts){
 
 		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
 		
-		await multiCallExchangeInstance.marketBuy(maturity, legsHash, price, amount-5, {from: accounts[1]});
+		await multiCallExchangeInstance.marketBuy(maturity, legsHash, price, amount-5, maxIterations, {from: accounts[1]});
 		listHead = await multiCallExchangeInstance.listHeads(maturity, legsHash, 1);
 		headNode = await multiCallExchangeInstance.linkedNodes(listHead);
 		headOffer = await multiCallExchangeInstance.offers(headNode.hash);
@@ -197,7 +198,7 @@ contract('multi call exchange', function(accounts){
 
 		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetHolder+price)+ amount*(maxUnderlyingAssetHolder+secondPrice), "correct underlying asset balance after market sell");
 
-		await multiCallExchangeInstance.marketBuy(maturity, legsHash, secondPrice, 5+amount, {from: accounts[1]});
+		await multiCallExchangeInstance.marketBuy(maturity, legsHash, secondPrice, 5+amount, maxIterations, {from: accounts[1]});
 
 		listHead = await multiCallExchangeInstance.listHeads(maturity, legsHash, 1);
 		assert.equal(listHead, defaultBytes32, "correct list head");
@@ -211,6 +212,31 @@ contract('multi call exchange', function(accounts){
 		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after all orders");
 
 		assert.equal((await multiCallExchangeInstance.viewClaimed({from: accounts[1]})).toNumber(), 0, "correct underlying asset balance after all orders");
+	});
+
+
+	it('uses max iterations limit', async () => {
+		maturity++;
+		price = 6;
+		maxIterations = 5;
+		amount = maxIterations+2;
+		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
+		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetHolder+price), true);
+		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-price), false);
+
+		for (let i = 0; i < amount; i++)
+			await postOrder(maturity, legsHash, price, 1, 0, {from: deployerAccount});
+
+		await multiCallExchangeInstance.marketSell(maturity, legsHash, price, maxIterations+2, maxIterations, {from: accounts[1]});
+
+		//check call balances
+		for (var i = 0; i < callStrikes.length; i++){
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), maxIterations*callAmounts[i], "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), -maxIterations*callAmounts[i], "correct call balance first account");
+		}
 	});
 
 });

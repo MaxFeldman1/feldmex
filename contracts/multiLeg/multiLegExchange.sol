@@ -427,11 +427,12 @@ contract multiLegExchange is mLegData {
         @param bytes32 _legsHash: the settlement price of the the underlying asset at the maturity
         @param uint _limitPrice: lowest price to sell at
         @param uint _amount: the amount of calls or puts that this order is for
+        @param uint8 _maxInterations: the maximum amount of calls to mintPosition
         @param bool _call: if true this is a call order if false this is a put order 
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, bool _call) public returns(uint unfilled){
+    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public returns(uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
         //ensure all strikes are contained
@@ -440,7 +441,7 @@ contract multiLegExchange is mLegData {
         Offer memory offer = offers[node.hash];
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
-        while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
+        while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice && _maxIterations != 0){
             if (offer.amount > _amount){
                 if (msg.sender == offer.offerer) {
                     /*
@@ -474,6 +475,7 @@ contract multiLegExchange is mLegData {
             //find the next offer
             node = linkedNodes[listHeads[_maturity][_legsHash][index]];
             offer = offers[node.hash];
+            _maxIterations--;
         }
         unfilled = _amount;
     }
@@ -486,11 +488,12 @@ contract multiLegExchange is mLegData {
         @param bytes32 _legsHash: the settlement price of the the underlying asset at the maturity
         @param uint _limitPrice: highest price to buy at
         @param uint _amount: the amount of calls or puts that this order is for
+        @param uint8 _maxInterations: the maximum amount of calls to mintPosition
         @param bool _call: if true this is a call order if false this is a put order 
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, bool _call) public returns (uint unfilled){
+    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public returns (uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
         //ensure all strikes are contained
@@ -499,7 +502,7 @@ contract multiLegExchange is mLegData {
         Offer memory offer = offers[node.hash];
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
-        while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice){
+        while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice && _maxIterations != 0){
             if (offer.amount > _amount){
                 if (offer.offerer == msg.sender){
                     /*
@@ -532,6 +535,7 @@ contract multiLegExchange is mLegData {
             //find the next offer
             node = linkedNodes[listHeads[_maturity][_legsHash][index]];
             offer = offers[node.hash];
+            _maxIterations--;
         }
         unfilled = _amount;
     }

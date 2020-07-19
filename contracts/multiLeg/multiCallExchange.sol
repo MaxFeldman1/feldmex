@@ -539,10 +539,11 @@ contract multiCallExchange {
         @param bytes32 _legsHash: the settlement price of the the underlying asset at the maturity
         @param uint _limitPrice: lowest price to sell at
         @param uint _amount: the amount of calls or puts that this order is for
+        @param uint8 _maxInterations: the maximum amount of calls to mintPosition
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount) public returns(uint unfilled){
+    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations) public returns(uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
 
@@ -550,7 +551,7 @@ contract multiCallExchange {
         Offer memory offer = offers[node.hash];
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
-        while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice){
+        while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice && _maxIterations != 0){
             if (offer.amount > _amount){
                 if (msg.sender == offer.offerer) {
                     /*
@@ -575,6 +576,7 @@ contract multiCallExchange {
             //find the next offer
             node = linkedNodes[listHeads[_maturity][_legsHash][0]];
             offer = offers[node.hash];
+            _maxIterations--;
         }
         unfilled = _amount;
     }
@@ -587,10 +589,11 @@ contract multiCallExchange {
         @param bytes32 _legsHash: the settlement price of the the underlying asset at the maturity
         @param uint _limitPrice: highest price to buy at
         @param uint _amount: the amount of calls or puts that this order is for
+        @param uint8 _maxInterations: the maximum amount of calls to mintPosition
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount) public returns (uint unfilled){
+    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations) public returns (uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
 
@@ -598,7 +601,7 @@ contract multiCallExchange {
         Offer memory offer = offers[node.hash];
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
-        while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice){
+        while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice && _maxIterations != 0){
             if (offer.amount > _amount){
                 if (offer.offerer == msg.sender){
                     /*
@@ -623,6 +626,7 @@ contract multiCallExchange {
             //find the next offer
             node = linkedNodes[listHeads[_maturity][_legsHash][1]];
             offer = offers[node.hash];
+            _maxIterations--;
         }
         unfilled = _amount;
     }
