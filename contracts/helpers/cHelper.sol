@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 import "../interfaces/Ownable.sol";
-import "../container.sol";
+import "../containers/container.sol";
 
 /*
 	This contract allows us to deploy the options smart contract without going over gas limit

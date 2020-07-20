@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 
-import "./multiLegExchange.sol";
+import "../../multiLeg/multiLeg/multiLegExchange.sol";
 
 contract mLegHelper {
 	address public addr;

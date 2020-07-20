@@ -1,4 +1,4 @@
-var underlyingAsset = artifacts.require("./UnderlyingAsset.sol");
+var underlyingAsset = artifacts.require("UnderlyingAsset");
 
 contract('UnderlyingAsset', function(accounts) {
 	var btcs = 21000000;

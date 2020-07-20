@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 import "../interfaces/ERC20.sol";
-import "../options.sol";
+import "../optionsHandler/options.sol";
 
 contract ERC20FeldmexOption is ERC20 {
 

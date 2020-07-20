@@ -1,9 +1,9 @@
 pragma solidity >=0.6.0;
 
-import "../options.sol";
-import "./mCallHelper.sol";
-import "./mPutHelper.sol";
-import "./mLegHelper.sol";
+import "../optionsHandler/options.sol";
+import "../helpers/mLeg/mCallHelper.sol";
+import "../helpers/mLeg/mPutHelper.sol";
+import "../helpers/mLeg/mLegHelper.sol";
 
 contract mOrganizer {
 

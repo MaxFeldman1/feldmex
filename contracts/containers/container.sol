@@ -1,10 +1,10 @@
 pragma solidity >=0.6.0;
-import "./oracle.sol";
-import "./options.sol";
-import "./exchange.sol";
-import "./helpers/oHelper.sol";
-import "./helpers/eHelper.sol";
-import "./helpers/orcHelper.sol";
+import "../oracle.sol";
+import "../optionsHandler/options.sol";
+import "../singleOptionExchange/exchange.sol";
+import "../helpers/oHelper.sol";
+import "../helpers/eHelper.sol";
+import "../helpers/orcHelper.sol";
 import "./doubleAssetYieldEnabledToken.sol";
 
 contract container is doubleAssetYieldEnabledToken {

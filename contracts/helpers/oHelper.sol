@@ -1,5 +1,5 @@
 pragma solidity >=0.6.0;
-import "../options.sol";
+import "../optionsHandler/options.sol";
 
 //allows us to deploy the options smart contract without going over gas limit
 contract oHelper {

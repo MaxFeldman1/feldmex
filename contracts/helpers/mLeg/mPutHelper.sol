@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 
-import "./multiPutExchange.sol";
+import "../../multiLeg/multiPut/multiPutExchange.sol";
 
 contract mPutHelper {
 	address public addr;

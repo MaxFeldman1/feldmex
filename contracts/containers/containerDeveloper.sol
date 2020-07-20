@@ -1,7 +1,7 @@
 pragma solidity >=0.6.0;
 import "./container.sol";
-import "./helpers/cHelper.sol";
-import "./interfaces/Ownable.sol";
+import "../helpers/cHelper.sol";
+import "../interfaces/Ownable.sol";
 
 contract containerDeveloper is Ownable {
 	address public cHelperAddress;

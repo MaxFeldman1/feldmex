@@ -1,12 +1,12 @@
 pragma solidity >=0.6.0;
-import "./interfaces/ITimeSeriesOracle.sol";
-import "./oracle.sol";
-import "./interfaces/ERC20.sol";
-import "./interfaces/Ownable.sol";
-import "./ERC20FeldmexOptions/FeldmexERC20Helper.sol";
-import "./multiLeg/mOrganizer.sol";
+import "../interfaces/ITimeSeriesOracle.sol";
+import "../oracle.sol";
+import "../interfaces/ERC20.sol";
+import "../interfaces/Ownable.sol";
+import "../ERC20FeldmexOptions/FeldmexERC20Helper.sol";
+import "../multiLeg/mOrganizer.sol";
 import "./FeldmexOptionsData.sol";
-import "./feeOracle.sol";
+import "../feeOracle.sol";
 
 contract options is FeldmexOptionsData, Ownable {
 

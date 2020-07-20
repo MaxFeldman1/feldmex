@@ -1,9 +1,9 @@
 pragma solidity >=0.6.0;
-import "./options.sol";
-import "./interfaces/ERC20.sol";
-import "./interfaces/ITimeSeriesOracle.sol";
-import "./interfaces/Ownable.sol";
-import "./interfaces/yieldEnabled.sol";
+import "../optionsHandler/options.sol";
+import "../interfaces/ERC20.sol";
+import "../interfaces/ITimeSeriesOracle.sol";
+import "../interfaces/Ownable.sol";
+import "../interfaces/yieldEnabled.sol";
 
 contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 	

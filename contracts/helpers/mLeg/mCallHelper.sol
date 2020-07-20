@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 
-import "./multiCallExchange.sol";
+import "../../multiLeg/multiCall/multiCallExchange.sol";
 
 contract mCallHelper {
 	address public addr;

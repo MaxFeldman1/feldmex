@@ -1,7 +1,7 @@
 pragma solidity >=0.6.0;
 import "./mLegData.sol";
-import "../options.sol";
-import "../feeOracle.sol";
+import "../../optionsHandler/options.sol";
+import "../../feeOracle.sol";
 
 contract mLegDelegate is mLegData {
 
