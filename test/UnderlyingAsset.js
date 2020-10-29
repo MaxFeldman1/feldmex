@@ -1,10 +1,10 @@
-var underlyingAsset = artifacts.require("UnderlyingAsset");
+var token = artifacts.require("Token");
 
 contract('UnderlyingAsset', function(accounts) {
 	var btcs = 21000000;
 
 	it('before each', async() => {
-		return underlyingAsset.new(0).then((i) => {
+		return token.new(0).then((i) => {
 			tokenInstance = i;
 			return;
 		});

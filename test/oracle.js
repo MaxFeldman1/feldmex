@@ -1,5 +1,5 @@
 var oracle = artifacts.require("oracle");
-var token = artifacts.require("UnderlyingAsset");
+var token = artifacts.require("Token");
 
 const helper = require("../helper/helper.js");
 

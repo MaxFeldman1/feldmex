@@ -1,16 +1,16 @@
 pragma solidity >=0.6.0;
 import "../optionsHandler/options.sol";
-import "../interfaces/ERC20.sol";
+import "../interfaces/IERC20.sol";
 import "../interfaces/ITimeSeriesOracle.sol";
 import "../interfaces/Ownable.sol";
 import "../interfaces/yieldEnabled.sol";
 
-contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
+contract doubleAssetYieldEnabledToken is IERC20, Ownable, yieldEnabled {
 	
 	//smart contract of the asset in the numerator of oracle price
-	ERC20 public Asset1Contract;
+	IERC20 public Asset1Contract;
 	//smart contract of the asset in the denominator of oracle price
-	ERC20 public Asset2Contract;
+	IERC20 public Asset2Contract;
 
 	//smart contract that handles settlement of calls and puts
 	options public optionsContract;
@@ -51,8 +51,8 @@ contract doubleAssetYieldEnabledToken is ERC20, Ownable, yieldEnabled {
 		@param address _asset2Address: the address of the ERC20 contract of asset2
 	*/
 	constructor (address _asset1Address, address _asset2Address) public {
-		Asset1Contract = ERC20(_asset1Address);
-		Asset2Contract = ERC20(_asset2Address);
+		Asset1Contract = IERC20(_asset1Address);
+		Asset2Contract = IERC20(_asset2Address);
 		balanceOf[owner] = totalSupply;
 		yieldDistribution[msg.sender][msg.sender] = totalSupply;
 		totalYield[msg.sender] = totalSupply;

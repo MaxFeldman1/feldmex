@@ -1,5 +1,5 @@
 pragma solidity >=0.6.0;
-import "./interfaces/ERC20.sol";
+import "./interfaces/IERC20.sol";
 import "./interfaces/ITimeSeriesOracle.sol";
 
 contract oracle is ITimeSeriesOracle {
@@ -31,8 +31,8 @@ contract oracle is ITimeSeriesOracle {
     constructor(address _underlyingAssetAddress, address _strikeAssetAddress) public {
         underlyingAssetAddress = _underlyingAssetAddress;
         strikeAssetAddress = _strikeAssetAddress;
-        underlyingAssetSubUnits = 10 ** uint(ERC20(_underlyingAssetAddress).decimals());
-        strikeAssetSubUnits = 10 ** uint(ERC20(_strikeAssetAddress).decimals());
+        underlyingAssetSubUnits = 10 ** uint(IERC20(_underlyingAssetAddress).decimals());
+        strikeAssetSubUnits = 10 ** uint(IERC20(_strikeAssetAddress).decimals());
         heights.push(block.number);
         heights.push(block.number);
         heights.push(block.number);

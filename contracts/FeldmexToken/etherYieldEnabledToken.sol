@@ -1,11 +1,11 @@
 pragma solidity >=0.6.0;
 import "../optionsHandler/options.sol";
-import "../interfaces/ERC20.sol";
+import "../interfaces/IERC20.sol";
 import "../interfaces/ITimeSeriesOracle.sol";
 import "../interfaces/Ownable.sol";
 import "../interfaces/yieldEnabled.sol";
 
-contract etherYieldEnabledToken is ERC20, Ownable, yieldEnabled {
+contract etherYieldEnabledToken is IERC20, Ownable, yieldEnabled {
 
 	//total amount of withdrawls
 	uint public totalWithdrawls;

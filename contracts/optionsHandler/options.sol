@@ -1,7 +1,7 @@
 pragma solidity >=0.6.0;
 import "../interfaces/ITimeSeriesOracle.sol";
 import "../oracle.sol";
-import "../interfaces/ERC20.sol";
+import "../interfaces/IERC20.sol";
 import "../interfaces/Ownable.sol";
 import "../ERC20FeldmexOptions/FeldmexERC20Helper.sol";
 import "../multiLeg/mOrganizer.sol";
@@ -27,9 +27,9 @@ contract options is FeldmexOptionsData, Ownable {
         mOrganizerAddress = _mOrganizerAddress;
         feeOracleAddress = _feeOracleAddress;
         feeOracle(_feeOracleAddress).setSpecificFeeImmunity(address(this), msg.sender, true);
-        ERC20 ua = ERC20(underlyingAssetAddress);
+        IERC20 ua = IERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
-        ERC20 sa = ERC20(strikeAssetAddress);
+        IERC20 sa = IERC20(strikeAssetAddress);
         scUnits = 10 ** uint(sa.decimals());
     }
     
@@ -117,11 +117,11 @@ contract options is FeldmexOptionsData, Ownable {
         @return uint strikeAsset: the amount of the strike asset that has been withdrawn
     */
     function withdrawFunds() public returns(uint underlyingAsset, uint strikeAsset){
-        ERC20 ua = ERC20(underlyingAssetAddress);
+        IERC20 ua = IERC20(underlyingAssetAddress);
         underlyingAsset = claimedTokens[msg.sender];
         claimedTokens[msg.sender] = 0;
         ua.transfer(msg.sender, underlyingAsset);
-        ERC20 sa = ERC20(strikeAssetAddress);
+        IERC20 sa = IERC20(strikeAssetAddress);
         strikeAsset = claimedStable[msg.sender];
         claimedStable[msg.sender] = 0;
         sa.transfer(msg.sender, strikeAsset);
@@ -134,10 +134,10 @@ contract options is FeldmexOptionsData, Ownable {
             these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
     */
     function depositFunds(address _to) public returns(bool success){
-    	uint balance = ERC20(underlyingAssetAddress).balanceOf(address(this));
+    	uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
     	uint sats = balance - satReserves;
     	satReserves = balance;
-    	balance = ERC20(strikeAssetAddress).balanceOf(address(this));
+    	balance = IERC20(strikeAssetAddress).balanceOf(address(this));
     	uint sc = balance - scReserves;
     	scReserves = balance;
     	claimedTokens[_to] += sats;

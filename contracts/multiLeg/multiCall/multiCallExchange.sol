@@ -1,5 +1,5 @@
 pragma solidity >=0.6.0;
-import "../../interfaces/ERC20.sol";
+import "../../interfaces/IERC20.sol";
 import "../../optionsHandler/options.sol";
 import "../../feeOracle.sol";
 
@@ -146,7 +146,7 @@ contract multiCallExchange {
         underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
         feeOracleAddress = _feeOracleAddress;
-        ERC20 ua = ERC20(underlyingAssetAddress);
+        IERC20 ua = IERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
     }
@@ -159,7 +159,7 @@ contract multiCallExchange {
         @return bool success: if an error occurs returns false if no error return true
     */
     function depositFunds(address _to) public returns(bool success){
-        uint balance = ERC20(underlyingAssetAddress).balanceOf(address(this));
+        uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
         uint sats = balance - satReserves;
         satReserves = balance;
         claimedToken[_to] += sats;
@@ -175,7 +175,7 @@ contract multiCallExchange {
     */
     function withdrawAllFunds() public returns(bool success){
         uint val = claimedToken[msg.sender];
-        ERC20 ua = ERC20(underlyingAssetAddress);
+        IERC20 ua = IERC20(underlyingAssetAddress);
         claimedToken[msg.sender] = 0;
         success = ua.transfer(msg.sender, val);
         satReserves -= val;

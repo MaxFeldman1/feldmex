@@ -1,5 +1,5 @@
 const oracle = artifacts.require("oracle");
-const underlyingAsset = artifacts.require("UnderlyingAsset");
+const token = artifacts.require("Token");
 const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
 const container = artifacts.require("container");
@@ -27,9 +27,9 @@ contract('ERC20FeldmexOptions', async function(accounts){
 	deployerAccount = accounts[0];
 
 	it('transfers funds', async () => {
-		tokenInstance = await underlyingAsset.new(0);
+		tokenInstance = await token.new(0);
 		tokenSubUnits = Math.pow(10, (await tokenInstance.decimals()).toNumber());
-		strikeAssetInstance = await underlyingAsset.new(0);
+		strikeAssetInstance = await token.new(0);
 		tokenSubUnits = Math.pow(10, (await strikeAssetInstance.decimals()).toNumber());
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();

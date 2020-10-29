@@ -1,5 +1,5 @@
 const oracle = artifacts.require("oracle");
-const underlyingAsset = artifacts.require("UnderlyingAsset");
+const token = artifacts.require("Token");
 const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
 const strikeAsset = artifacts.require("strikeAsset");
@@ -23,7 +23,7 @@ const nullAddress = "0x0000000000000000000000000000000000000000";
 
 contract('containerDeveloper', async function(accounts){
 	it('before each', async () => {
-		tokenInstance = await underlyingAsset.new(0);
+		tokenInstance = await token.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();

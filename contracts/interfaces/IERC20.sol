@@ -1,6 +1,6 @@
 pragma solidity >=0.4.21 <0.7.0;
 
-interface ERC20 {
+interface IERC20 {
     event Transfer(
         address indexed _from,
         address indexed _to,

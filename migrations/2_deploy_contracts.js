@@ -1,5 +1,5 @@
 const oracle = artifacts.require("oracle");
-const underlyingAsset = artifacts.require("UnderlyingAsset");
+const token = artifacts.require("Token");
 const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
@@ -19,8 +19,8 @@ const feeOracle = artifacts.require("feeOracle");
 const feldmexToken = artifacts.require("FeldmexToken");
 
 module.exports = async function(deployer) {
-  underlyingAssetAddress  = await deployer.deploy(underlyingAsset, 0);
-  strikeAssetAddress = await deployer.deploy(underlyingAsset, 0);
+  underlyingAssetAddress  = await deployer.deploy(token, 0);
+  strikeAssetAddress = await deployer.deploy(token, 0);
   feldmexERC20HelperInstance = await deployer.deploy(feldmexERC20Helper);
   feldmexERC20HelperAddress = feldmexERC20HelperInstance.address;
   feldmexTokenInstance = await deployer.deploy(feldmexToken);

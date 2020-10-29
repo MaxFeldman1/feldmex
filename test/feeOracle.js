@@ -1,5 +1,5 @@
 const oracle = artifacts.require("oracle");
-const token = artifacts.require("UnderlyingAsset");
+const token = artifacts.require("Token");
 const options = artifacts.require("options");
 const strikeAsset = artifacts.require("strikeAsset");
 const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");

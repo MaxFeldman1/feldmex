@@ -1,5 +1,5 @@
 pragma solidity >=0.6.0;
-import "../../interfaces/ERC20.sol";
+import "../../interfaces/IERC20.sol";
 import "../../optionsHandler/options.sol";
 import "./mLegData.sol";
 
@@ -75,10 +75,10 @@ contract multiLegExchange is mLegData {
         strikeAssetAddress = _strikeAssetAddress;
         delegateAddress = _delegateAddress;
         feeOracleAddress = _feeOracleAddress;
-        ERC20 ua = ERC20(underlyingAssetAddress);
+        IERC20 ua = IERC20(underlyingAssetAddress);
         satUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
-        ERC20 sa = ERC20(strikeAssetAddress);
+        IERC20 sa = IERC20(strikeAssetAddress);
         scUnits = 10 ** uint(sa.decimals());
         sa.approve(optionsAddress, 2**255);
     }
@@ -91,10 +91,10 @@ contract multiLegExchange is mLegData {
         @return bool success: if an error occurs returns false if no error return true
     */
     function depositFunds(address _to) public returns(bool success){
-        uint balance = ERC20(underlyingAssetAddress).balanceOf(address(this));
+        uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
         uint sats = balance - satReserves;
         satReserves = balance;
-        balance = ERC20(strikeAssetAddress).balanceOf(address(this));
+        balance = IERC20(strikeAssetAddress).balanceOf(address(this));
         uint sc = balance - scReserves;
         scReserves = balance;
         claimedToken[_to] += sats;
@@ -112,14 +112,14 @@ contract multiLegExchange is mLegData {
     function withdrawAllFunds(bool _token) public returns(bool success){
         if (_token){
             uint val = claimedToken[msg.sender];
-            ERC20 ua = ERC20(underlyingAssetAddress);
+            IERC20 ua = IERC20(underlyingAssetAddress);
             claimedToken[msg.sender] = 0;
             success = ua.transfer(msg.sender, val);
             satReserves -= val;
         }
         else {
             uint val = claimedStable[msg.sender];
-            ERC20 sa = ERC20(strikeAssetAddress);
+            IERC20 sa = IERC20(strikeAssetAddress);
             claimedStable[msg.sender] = 0;
             success = sa.transfer(msg.sender, val);
             scReserves -= val;

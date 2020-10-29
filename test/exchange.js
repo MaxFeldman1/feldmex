@@ -1,5 +1,5 @@
 const oracle = artifacts.require("oracle");
-const underlyingAsset = artifacts.require("UnderlyingAsset");
+const token = artifacts.require("Token");
 const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
 const strikeAsset = artifacts.require("strikeAsset");
@@ -42,7 +42,7 @@ var receiverAccountPosition = 0;
 contract('exchange', async function(accounts) {
 
 	it('before each', async () => {
-		tokenInstance = await underlyingAsset.new(0);
+		tokenInstance = await token.new(0);
 		strikeAssetInstance = await strikeAsset.new(0);
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		feldmexTokenInstance = await feldmexToken.new();

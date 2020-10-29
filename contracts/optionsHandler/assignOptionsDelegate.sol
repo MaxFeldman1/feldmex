@@ -1,5 +1,5 @@
 pragma solidity >=0.6.0;
-import "../interfaces/ERC20.sol";
+import "../interfaces/IERC20.sol";
 import "../ERC20FeldmexOptions/FeldmexERC20Helper.sol";
 import "./FeldmexOptionsData.sol";
 
@@ -181,11 +181,11 @@ contract assignOptionsDelegate is FeldmexOptionsData {
             claimedTokens[msg.sender] = uint(int(claimedTokens[msg.sender]) - senderTransfer);
         } else {
             if (senderTransfer > 0){
-                ERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
+                IERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
                 satReserves += uint(senderTransfer);
             }
             else if (senderTransfer < 0){
-                ERC20(underlyingAssetAddress).transfer(msg.sender, uint(-senderTransfer));            
+                IERC20(underlyingAssetAddress).transfer(msg.sender, uint(-senderTransfer));            
                 satReserves -= uint(-senderTransfer);
             }
         }
@@ -256,11 +256,11 @@ contract assignOptionsDelegate is FeldmexOptionsData {
             claimedStable[msg.sender] = uint(int(claimedStable[msg.sender]) - senderTransfer);
         } else {
             if (senderTransfer > 0){
-                ERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
+                IERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
                 scReserves += uint(senderTransfer);
             }
             else if (senderTransfer < 0){
-                ERC20(strikeAssetAddress).transfer(msg.sender, uint(-senderTransfer));
+                IERC20(strikeAssetAddress).transfer(msg.sender, uint(-senderTransfer));
                 scReserves -= uint(-senderTransfer);
             }
         }

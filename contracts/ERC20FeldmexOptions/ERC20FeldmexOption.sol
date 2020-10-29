@@ -1,8 +1,8 @@
 pragma solidity >=0.6.0;
-import "../interfaces/ERC20.sol";
+import "../interfaces/IERC20.sol";
 import "../optionsHandler/options.sol";
 
-contract ERC20FeldmexOption is ERC20 {
+contract ERC20FeldmexOption is IERC20 {
 
 
 	address public optionsHandlerAddress;
@@ -40,7 +40,7 @@ contract ERC20FeldmexOption is ERC20 {
 		underlyingAssetAddress = optionsContract.underlyingAssetAddress();
 		strikeAssetAddress = optionsContract.strikeAssetAddress();
 		name = _call ? "Feldmex Call" : "Feldmex Puts";
-		coinSubUnits = 10 ** uint(ERC20(_call ? underlyingAssetAddress : strikeAssetAddress).decimals());
+		coinSubUnits = 10 ** uint(IERC20(_call ? underlyingAssetAddress : strikeAssetAddress).decimals());
 	}
 
 	/*

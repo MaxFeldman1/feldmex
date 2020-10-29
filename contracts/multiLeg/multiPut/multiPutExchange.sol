@@ -1,5 +1,5 @@
 pragma solidity >=0.6.0;
-import "../../interfaces/ERC20.sol";
+import "../../interfaces/IERC20.sol";
 import "../../optionsHandler/options.sol";
 import "../../feeOracle.sol";
 
@@ -145,7 +145,7 @@ contract multiPutExchange {
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
         feeOracleAddress = _feeOracleAddress;
-        ERC20 sa = ERC20(strikeAssetAddress);
+        IERC20 sa = IERC20(strikeAssetAddress);
         scUnits = 10 ** uint(sa.decimals());
         sa.approve(optionsAddress, 2**255);
     }
@@ -158,7 +158,7 @@ contract multiPutExchange {
         @return bool success: if an error occurs returns false if no error return true
     */
     function depositFunds(address _to) public returns(bool success){
-        uint balance = ERC20(strikeAssetAddress).balanceOf(address(this));
+        uint balance = IERC20(strikeAssetAddress).balanceOf(address(this));
         uint sc = balance - scReserves;
         scReserves = balance;
         claimedStable[_to] += sc;
@@ -172,7 +172,7 @@ contract multiPutExchange {
     */
     function withdrawAllFunds() public returns(bool success){
         uint val = claimedStable[msg.sender];
-        ERC20 sa = ERC20(strikeAssetAddress);
+        IERC20 sa = IERC20(strikeAssetAddress);
         claimedStable[msg.sender] = 0;
         success = sa.transfer(msg.sender, val);
         scReserves -= val;

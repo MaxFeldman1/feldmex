@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 
-contract UnderlyingAsset {
+contract Token {
     uint8 public decimals = 6;
     uint256 public totalSupply;
     //satUnits == 10 ** decimals
