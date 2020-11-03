@@ -77,6 +77,10 @@ contract mLegData {
         uint[] callStrikes;
         int[] putAmounts;
         uint[] putStrikes;
+        /*
+            the underlying asset maximums are inflated by satUnits
+            the strike asset maximums are inflated by scUnits
+        */
         uint maxUnderlyingAssetDebtor;
         uint maxUnderlyingAssetHolder;
         uint maxStrikeAssetDebtor;

@@ -202,17 +202,25 @@ contract exchange{
         }
         //only continue execution here if listHead[_maturity][_strike][index] == 0
         if (index == 0){
-            require(claimedToken[msg.sender] >= _price*_amount);
-            claimedToken[msg.sender] -= _price * _amount;
+            uint _satUnits = satUnits;  //gas savings
+            uint req = _price* _amount;
+            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
+            require(claimedToken[msg.sender] >= req);
+            claimedToken[msg.sender] -= req;
         }
         else if (index == 1){
+            uint _satUnits = satUnits;  //gas savings
             uint req = _amount * (satUnits - _price);
+            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
             require(claimedToken[msg.sender] >= req);
             claimedToken[msg.sender] -= req;
         }
         else if (index == 2){
-            require(claimedStable[msg.sender] >= _price*_amount);
-            claimedStable[msg.sender] -= _price * _amount;
+            uint _scUnits = scUnits;  //gas savings
+            uint req = _price* _amount;
+            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
+            require(claimedStable[msg.sender] >= req);
+            claimedStable[msg.sender] -= req;
         }
         else {
             /*
@@ -224,8 +232,11 @@ contract exchange{
                     _amount * (_strike - price)
                 
             */
-            require(claimedStable[msg.sender] >= _amount * (_strike - _price));
-            claimedStable[msg.sender] -= _amount * (_strike - _price);
+            uint _scUnits = scUnits;  //gas savings
+            uint req = _amount * (_strike - _price);
+            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
+            require(claimedStable[msg.sender] >= req);
+            claimedStable[msg.sender] -= req;
         }
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, index);
         //get hashes
@@ -258,20 +269,30 @@ contract exchange{
         require(offers[linkedNodes[_name].hash].index == index);
         require((options(optionsAddress)).containedStrikes(msg.sender, _maturity, _strike));
         if (index == 0){
-            require(claimedToken[msg.sender] >= _price*_amount);
-            claimedToken[msg.sender] -= _price * _amount;
+            uint _satUnits = satUnits;  //gas savings
+            uint req = _price* _amount;
+            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
+            require(claimedToken[msg.sender] >= req);
+            claimedToken[msg.sender] -= req;
         }
         else if (index == 1){
+            uint _satUnits = satUnits;  //gas savings
             uint req = _amount * (satUnits - _price);
+            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
             require(claimedToken[msg.sender] >= req);
             claimedToken[msg.sender] -= req;
         }
         else if (index == 2){
-            require(claimedStable[msg.sender] >= _price*_amount);
-            claimedStable[msg.sender] -= _price * _amount;
+            uint _scUnits = scUnits;  //gas savings
+            uint req = _price* _amount;
+            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
+            require(claimedStable[msg.sender] >= req);
+            claimedStable[msg.sender] -= req;
         }
         else {
+            uint _scUnits = scUnits;  //gas savings
             uint req = _amount * (_strike - _price);
+            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
             require(claimedStable[msg.sender] >= req);
             claimedStable[msg.sender] -= req;
         }
@@ -372,13 +393,15 @@ contract exchange{
         delete linkedNodes[_name];
         delete offers[node.hash];
         if (offer.index == 0)
-            claimedToken[msg.sender] += offer.price * offer.amount;
-        else if (offer.index == 1)
-            claimedToken[msg.sender] += offer.amount * (satUnits - offer.price);
+            claimedToken[msg.sender] += (offer.price * offer.amount)/satUnits;
+        else if (offer.index == 1){
+            uint _satUnits = satUnits;  //gas savings
+            claimedToken[msg.sender] += (offer.amount * (_satUnits - offer.price))/_satUnits;
+        }
         else if (offer.index == 2)
-            claimedStable[msg.sender] += offer.price * offer.amount;
+            claimedStable[msg.sender] += (offer.price * offer.amount)/scUnits;
         else
-            claimedStable[msg.sender] += offer.amount * (offer.strike - offer.price);
+            claimedStable[msg.sender] += (offer.amount * (offer.strike - offer.price))/scUnits;
     }
     
 
@@ -402,8 +425,8 @@ contract exchange{
                 state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                 therefore we do not need to call options.mintCall/Put
             */
-            if (offer.index < 2) claimedToken[_seller] += offer.price * offer.amount;
-            else claimedStable[_seller] += offer.price * offer.amount;
+            if (offer.index < 2) claimedToken[_seller] += offer.price * offer.amount / satUnits;
+            else claimedStable[_seller] += offer.price * offer.amount / scUnits;
             success = true;
         }
         else if (offer.index < 2){
@@ -458,8 +481,11 @@ contract exchange{
                 state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                 therefore we do not need to call options.mintCall/Put
             */
-            if (offer.index < 2) claimedToken[_buyer] += offer.amount * (satUnits - offer.price);
-            else claimedStable[_buyer] += offer.amount * (offer.strike - offer.price);
+            if (offer.index < 2) {
+                uint _satUnits = satUnits;  //gas savings
+                claimedToken[_buyer] += (offer.amount * (_satUnits - offer.price)) / _satUnits;
+            }
+            else claimedStable[_buyer] += (offer.amount * (offer.strike - offer.price))/scUnits;
             success = true;
         }
         else if (offer.index < 2){
@@ -522,8 +548,8 @@ contract exchange{
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                         therefore we do not need to call options.mintCall/Put
                     */
-                    if (offer.index < 2) claimedToken[msg.sender] += offer.price * _amount;
-                    else claimedStable[msg.sender] += offer.price * _amount;
+                    if (offer.index < 2) claimedToken[msg.sender] += offer.price * _amount / satUnits;
+                    else claimedStable[msg.sender] += offer.price * _amount / scUnits;
                 }
                 else if (_call){
                     (bool success, ) = mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, offer.price, true);
@@ -575,8 +601,11 @@ contract exchange{
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                         therefore we do not need to call options.mintCall/Put
                     */
-                    if (_call) claimedToken[msg.sender] += _amount * (satUnits - offer.price);
-                    else claimedStable[msg.sender] += _amount * (offer.strike - offer.price);
+                    if (_call) {
+                        uint _satUnits = satUnits;
+                        claimedToken[msg.sender] += (_amount * (_satUnits - offer.price))/_satUnits;
+                    }
+                    else claimedStable[msg.sender] += (_amount * (offer.strike - offer.price))/scUnits;
                 }
                 else if (_call){
                     (bool success, ) = mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, offer.price, false);
@@ -620,19 +649,28 @@ contract exchange{
         _price*=_amount;    //price is now equal to total option premium
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
+        uint _satUnits = satUnits;  //gas savings
+        int8 surplus = int8(_price%_satUnits == 0 ? 0 : 1);
+        _price = _price/_satUnits;
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), true);
         optionsContract.setParams(_debtor,_holder,_maturity);
-        optionsContract.setPaymentParams(_debtorPays, int(_price));
+        optionsContract.setPaymentParams(_debtorPays, int(_price) + surplus);
         optionsContract.setTrustedAddressMainExchange();
-        optionsContract.setLimits(int(_amount * satUnits - _price), int(_price));
+        optionsContract.setLimits(int( _amount - _price) + surplus, int(_price) + surplus);
+        if (surplus == 1) {
+            if (_debtorPays)
+                optionsContract.coverCallOverflow(_debtor, _holder);
+            else
+                optionsContract.coverCallOverflow(_holder, _debtor);
+        }
 
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return (false, 0);
-        if (_debtorPays) transferAmt = int(_price);
+        if (_debtorPays) transferAmt = int(_price) + surplus;
         else {
             transferAmt = optionsContract.transferAmountDebtor();
-            claimedToken[_debtor] += uint(int(_amount * satUnits - _price) - transferAmt);
+            claimedToken[_debtor] += _amount - _price + uint(surplus) - uint(transferAmt);
         }
         satReserves = uint(int(satReserves)-transferAmt);
     }
@@ -657,19 +695,27 @@ contract exchange{
         _price*=_amount;    //price is now equal to total option premium
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
+        uint _scUnits = scUnits;  //gas savings
+        int8 surplus = int8(_price%_scUnits == 0 && (_amount * _strike - _price)%scUnits == 0 ? 0 : 1);
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), false);
         optionsContract.setParams(_debtor,_holder,_maturity);
-        optionsContract.setPaymentParams(_debtorPays, int(_price));
+        optionsContract.setPaymentParams(_debtorPays, int(_price / _scUnits) + surplus);
         optionsContract.setTrustedAddressMainExchange();
-        optionsContract.setLimits(int(_amount * _strike - _price), int(_price));
+        optionsContract.setLimits(int( (_amount * _strike - _price) / _scUnits) + surplus, int(_price / _scUnits) + surplus);
+        if (surplus == 1) {
+            if (_debtorPays)
+                optionsContract.coverPutOverflow(_debtor, _holder);
+            else
+                optionsContract.coverPutOverflow(_holder, _debtor);
+        }
 
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return (false, 0);
-        if (_debtorPays) transferAmt = int(_price);
+        if (_debtorPays) transferAmt = int(_price / _scUnits) + surplus;
         else {
             transferAmt = optionsContract.transferAmountDebtor();
-            claimedStable[_debtor] += uint(int(_amount * _strike - _price) - transferAmt);
+            claimedStable[_debtor] += (_amount * _strike - _price) / _scUnits + uint(surplus) - uint(transferAmt);
         }
         scReserves = uint(int(scReserves)-transferAmt);
     }

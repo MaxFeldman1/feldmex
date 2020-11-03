@@ -8,6 +8,7 @@ const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const feeOracle = artifacts.require("feeOracle");
 const feldmexToken = artifacts.require("FeldmexToken");
+const BN = web3.utils.BN;
 
 const helper = require("../helper/helper.js");
 
@@ -37,8 +38,9 @@ contract('multi put exchange', function(accounts){
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		await mOrganizerInstance.deployPutExchange(optionsInstance.address);
 		multiPutExchangeInstance = await multiPutExchange.at(await mOrganizerInstance.exchangeAddresses(optionsInstance.address, 1));
-		asset1SubUnits = Math.pow(10, await asset1.decimals());
-		asset2SubUnits = Math.pow(10, await asset2.decimals());
+
+		asset2SubUnitsBN = (new BN("10")).pow(await asset2.decimals());
+		asset2SubUnits = asset2SubUnitsBN.toString();
 	});
 
 	async function depositFunds(to, amount, exchange){
@@ -55,6 +57,7 @@ contract('multi put exchange', function(accounts){
 		if (typeof params.gasPrice === "undefined") params.gasPrice = 20000000000; //20 gwei
 		var postOrderFee = new web3.utils.BN(await feeOracleInstance.multiLegExchangeFlatEtherFee());
 		params.value = postOrderFee.toNumber();
+		amount = asset2SubUnitsBN.mul(new BN(amount)).toString();
 		var rec = await multiPutExchangeInstance.postOrder(maturity, legsHash, price, amount, index, params);
 		var txFee = new web3.utils.BN(rec.receipt.gasUsed * params.gasPrice);
 		var newBalance = new web3.utils.BN(await web3.eth.getBalance(params.from));
@@ -64,11 +67,14 @@ contract('multi put exchange', function(accounts){
 
 
 	it('creates positions with the correct collateral requirements', async () => {
-		putStrikes = [10, 20];
+		putStrikes = [asset2SubUnitsBN.mul(new BN(10)), asset2SubUnitsBN.mul(new BN(20))];
 		putAmounts = [3, -1];
 		//these calculations would be different if we had different values in the above arrays
-		maxStrikeAssetDebtor = putAmounts[0] * putStrikes[0] + putAmounts[1] * putStrikes[1];
-		maxStrikeAssetHolder = putAmounts[1] * (putStrikes[0]-putStrikes[1]);
+		maxStrikeAssetDebtor = (new BN(putAmounts[0])).mul(putStrikes[0]).add((new BN(putAmounts[1])).mul(putStrikes[1]));
+		maxStrikeAssetHolder = (new BN(putAmounts[1])).mul(putStrikes[0].sub(putStrikes[1]));
+		//reflate putStrikes
+		putStrikes = putStrikes.map(x => x.toString());
+
 		rec = await multiPutExchangeInstance.addLegHash(putStrikes, putAmounts);
 		assert.equal(rec.logs[0].event, "legsHashCreated", "correct event emmited");
 		legsHash = rec.logs[0].args.legsHash;
@@ -91,8 +97,10 @@ contract('multi put exchange', function(accounts){
 		assert.equal(position.putStrikes+'', putStrikes+'', "correct put strikes in position info");
 		assert.equal(position.putAmounts+'', putAmounts+'', "correct put amounts in position info");
 		//check value of collateral requirements
-		assert.equal(position.maxStrikeAssetDebtor, maxStrikeAssetDebtor, "correct value for maxStrikeAssetDebtor");
-		assert.equal(position.maxStrikeAssetHolder, maxStrikeAssetHolder, "correct value for maxStrikeAssetHolder");
+		assert.equal(position.maxStrikeAssetDebtor, maxStrikeAssetDebtor.toString(), "correct value for maxStrikeAssetDebtor");
+		assert.equal(position.maxStrikeAssetHolder, maxStrikeAssetHolder.toString(), "correct value for maxStrikeAssetHolder");
+		maxStrikeAssetDebtor = maxStrikeAssetDebtor.toNumber();
+		maxStrikeAssetHolder = maxStrikeAssetHolder.toNumber();
 	});
 
 
@@ -126,35 +134,39 @@ contract('multi put exchange', function(accounts){
 
 		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
 		
-		await multiPutExchangeInstance.marketSell(maturity, legsHash, price, amount-5, maxIterations, {from: accounts[1]});
+		await multiPutExchangeInstance.marketSell(maturity, legsHash, price, asset2SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, {from: accounts[1]});
 		listHead = await multiPutExchangeInstance.listHeads(maturity, legsHash, 0);
 		headNode = await multiPutExchangeInstance.linkedNodes(listHead);
 		headOffer = await multiPutExchangeInstance.offers(headNode.hash);
-		assert.equal(headOffer.amount.toNumber(), 5, "correct amount left after market sell");
+		assert.equal(headOffer.amount.toString(), asset2SubUnitsBN.mul(new BN(5)).toString(), "correct amount left after market sell");
 		assert.equal(headOffer.price.toNumber(), price, "correct price of the head offer");
 
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN((amount-5)*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-(amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
 		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), 5*(maxStrikeAssetDebtor-price) + amount*(maxStrikeAssetDebtor-secondPrice) , "correct strike asset balance after market sell");
 
-		await multiPutExchangeInstance.marketSell(maturity, legsHash, secondPrice, 5+amount, maxIterations, {from: accounts[1]});
+		await multiPutExchangeInstance.marketSell(maturity, legsHash, secondPrice, asset2SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, {from: accounts[1]});
 
 		listHead = await multiPutExchangeInstance.listHeads(maturity, legsHash, 0);
 		assert.equal(listHead, defaultBytes32, "correct list head");
 
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(), 
+				asset2SubUnitsBN.mul(new BN(2*amount*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: accounts[1]})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await multiPutExchangeInstance.viewClaimed({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
 
 	});
 
@@ -187,36 +199,40 @@ contract('multi put exchange', function(accounts){
 
 		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
 		
-		await multiPutExchangeInstance.marketBuy(maturity, legsHash, price, amount-5, maxIterations, {from: accounts[1]});
+		await multiPutExchangeInstance.marketBuy(maturity, legsHash, price, asset2SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, {from: accounts[1]});
 		listHead = await multiPutExchangeInstance.listHeads(maturity, legsHash, 1);
 		headNode = await multiPutExchangeInstance.linkedNodes(listHead);
 		headOffer = await multiPutExchangeInstance.offers(headNode.hash);
-		assert.equal(headOffer.amount.toNumber(), 5, "correct amount left after market buy");
+		assert.equal(headOffer.amount.toString(), asset2SubUnitsBN.mul(new BN(5)).toString(), "correct amount left after market buy");
 		assert.equal(headOffer.price.toNumber(), price, "correct price of the head offer");
 
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-(amount-5)*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN((amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
 		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), Math.max(5*(maxStrikeAssetHolder+price), 0)+Math.max((5-amount)*(maxStrikeAssetHolder+price), 0)
 			+amount*(maxStrikeAssetHolder+secondPrice), "correct strike asset balance after market buy");
 
-		await multiPutExchangeInstance.marketBuy(maturity, legsHash, secondPrice, 5+amount, maxIterations, {from: accounts[1]});
+		await multiPutExchangeInstance.marketBuy(maturity, legsHash, secondPrice, asset2SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, {from: accounts[1]});
 
 		listHead = await multiPutExchangeInstance.listHeads(maturity, legsHash, 1);
 		assert.equal(listHead, defaultBytes32, "correct list head");
 
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-2*amount*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: accounts[1]})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await multiPutExchangeInstance.viewClaimed({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
 
 	});
 
@@ -235,12 +251,14 @@ contract('multi put exchange', function(accounts){
 		for (let i = 0; i < amount; i++)
 			await postOrder(maturity, legsHash, price, 1, 0, {from: deployerAccount});
 
-		await multiPutExchangeInstance.marketSell(maturity, legsHash, price, maxIterations+2, maxIterations, {from: accounts[1]});
+		await multiPutExchangeInstance.marketSell(maturity, legsHash, price, asset2SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, {from: accounts[1]});
 
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), maxIterations*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -maxIterations*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(maxIterations*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(),
+				asset2SubUnitsBN.mul(new BN(-maxIterations*putAmounts[i])).toString(), "correct put balance first account");
 		}
 	});
 

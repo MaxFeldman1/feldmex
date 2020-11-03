@@ -14,7 +14,7 @@ contract ERC20FeldmexOption is IERC20 {
 	uint public strike;
 	bool public call;
 
-	uint8 public override decimals = 0;
+	uint8 public override decimals;
 	string public symbol = "FDMX";
 	string public name;
 
@@ -37,8 +37,11 @@ contract ERC20FeldmexOption is IERC20 {
 		call = _call;
 		optionsHandlerAddress = _optionsHandlerAddress;
 		options optionsContract = options(_optionsHandlerAddress);
-		underlyingAssetAddress = optionsContract.underlyingAssetAddress();
-		strikeAssetAddress = optionsContract.strikeAssetAddress();
+		address _underlyingAssetAddress = optionsContract.underlyingAssetAddress();
+		address _strikeAssetAddress = optionsContract.strikeAssetAddress();
+		decimals = IERC20(_call ? _underlyingAssetAddress : _strikeAssetAddress).decimals();
+		underlyingAssetAddress = _underlyingAssetAddress;
+		strikeAssetAddress = _strikeAssetAddress;
 		name = _call ? "Feldmex Call" : "Feldmex Puts";
 		coinSubUnits = 10 ** uint(IERC20(_call ? underlyingAssetAddress : strikeAssetAddress).decimals());
 	}

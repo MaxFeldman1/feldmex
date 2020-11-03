@@ -44,26 +44,26 @@ contract mLegDelegate is mLegData {
         delete offers[node.hash];
         position memory pos = positions[offer.legsHash];
         if (offer.index == 0){
-            uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
+            uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price)) / satUnits;
             if (int(req) < 0) req = 0;
             claimedToken[offer.offerer] += req;
-            claimedStable[offer.offerer] += offer.amount * pos.maxStrikeAssetHolder;
+            claimedStable[offer.offerer] += offer.amount * pos.maxStrikeAssetHolder / scUnits;
         }
         else if (offer.index == 1){
-            uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
+            uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price)) / satUnits;
             if (int(req) < 0) req = 0;
             claimedToken[offer.offerer] += req;
-            claimedStable[offer.offerer] += offer.amount * pos.maxStrikeAssetDebtor;
+            claimedStable[offer.offerer] += offer.amount * pos.maxStrikeAssetDebtor / scUnits;
         }
         else if (offer.index == 2){
-            claimedToken[offer.offerer] += offer.amount * pos.maxUnderlyingAssetHolder;
-            uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetHolder) + offer.price));
+            claimedToken[offer.offerer] += offer.amount * pos.maxUnderlyingAssetHolder / satUnits;
+            uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetHolder) + offer.price)) / scUnits;
             if (int(req) < 0) req = 0;
             claimedStable[offer.offerer] += req;
         }
         else {
-            claimedToken[offer.offerer] += offer.amount * pos.maxUnderlyingAssetDebtor;
-            uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetDebtor) - offer.price));
+            claimedToken[offer.offerer] += offer.amount * pos.maxUnderlyingAssetDebtor / satUnits;
+            uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetDebtor) - offer.price)) / scUnits;
             if (int(req) < 0) req = 0;
             claimedStable[offer.offerer] += req;
         }
@@ -200,75 +200,118 @@ contract mLegDelegate is mLegData {
         _price *= int(_amount);
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
-        position memory pos = positions[_legsHash];
         optionsContract.setParams(_debtor, _holder, _maturity);
         optionsContract.setTrustedAddressMultiLegExchange(2);
+        position memory pos = positions[_legsHash];
+
+        pos.maxUnderlyingAssetDebtor *= _amount;
+        pos.maxUnderlyingAssetHolder *= _amount;
+        pos.maxStrikeAssetDebtor *= _amount;
+        pos.maxStrikeAssetHolder *= _amount;
+        if (_index < 2) {
+            pos.maxUnderlyingAssetDebtor = uint(int(pos.maxUnderlyingAssetDebtor) - _price);
+            pos.maxUnderlyingAssetHolder = uint(int(pos.maxUnderlyingAssetHolder) + _price);
+        } else {
+            pos.maxStrikeAssetDebtor = uint(int(pos.maxStrikeAssetDebtor) - _price);
+            pos.maxStrikeAssetHolder = uint(int(pos.maxStrikeAssetHolder) + _price);
+        }
+        uint _subUnits = satUnits;  //gas savings
+        /*
+            surplus & 1 => round up limit for debtor
+            (surplus >> 1) => round up limit for holder
+        
+            before use of % and / operator cast to int because pos.max may be < 0
+        */
+        uint8 surplus = uint8(int(pos.maxUnderlyingAssetDebtor)%int(_subUnits) == 0 ? 0 : 1);
+        surplus += uint8(int(pos.maxUnderlyingAssetHolder)%int(_subUnits) == 0 ? 0 : 2);
+        pos.maxUnderlyingAssetDebtor = uint(int(pos.maxUnderlyingAssetDebtor)/int(_subUnits) + (surplus&1));
+        pos.maxUnderlyingAssetHolder = uint(int(pos.maxUnderlyingAssetHolder)/int(_subUnits) + (surplus>>1));
+
+        /*
+            we only want to round up price when the market maker is receiving the premium
+            thus add (surplus>>1) when index == 1
+        */
+        optionsContract.setPaymentParams(_index%2==0, (_index < 2 ? (_price/int(_subUnits) + (_index == 1 ? (surplus>>1) : 0)) : 0 ) );
+        optionsContract.setLimits(int(pos.maxUnderlyingAssetDebtor), int(pos.maxUnderlyingAssetHolder));
         //load call position
         optionsContract.clearPositions();
         for (uint i = 0; i < pos.callAmounts.length; i++)
             optionsContract.addPosition(pos.callStrikes[i], int(_amount)*pos.callAmounts[i], true);
-        if (_index<2){
-            optionsContract.setPaymentParams(_index==0, _price);
-            optionsContract.setLimits(int(_amount * pos.maxUnderlyingAssetDebtor) - _price, int(_amount * pos.maxUnderlyingAssetHolder) + _price);
-        }
-        else{
-            optionsContract.setPaymentParams(_index==2, 0);
-            optionsContract.setLimits(int(_amount * pos.maxUnderlyingAssetDebtor), int(_amount * pos.maxUnderlyingAssetHolder));
-        }
+
+        //cover underflow in favor of market maker
+        if (_index%2 == 0 && (surplus&1) > 0)
+            optionsContract.coverCallOverflow(_debtor, _holder);
+        else if (_index%2 == 1 && (surplus>>1) > 0)
+            optionsContract.coverCallOverflow(_holder, _debtor);
 
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return false;
 
-        int transfer = _index%2==0 ? optionsContract.transferAmountHolder() : optionsContract.transferAmountDebtor();
-        int transferAmount = -transfer;
+        //store data before calling assignPutPosition
+        int transferAmount;
+        int optionsTransfer;
+        if (_index%2 == 0) {
+            optionsTransfer = optionsContract.transferAmountHolder();
+            transferAmount = int(pos.maxUnderlyingAssetHolder) - optionsTransfer;
+        } else {
+            optionsTransfer = optionsContract.transferAmountDebtor();
+            transferAmount = int(pos.maxUnderlyingAssetDebtor) - optionsTransfer;
+        }
+
+        _subUnits = scUnits;  //gas savings
+        /*
+            surplus & 1 => round up limit for debtor
+            (surplus >> 1) => round up limit for holder
+        
+            before use of % and / operator cast to int because pos.max may be < 0
+        */
+        surplus = uint8(int(pos.maxStrikeAssetDebtor)%int(_subUnits) == 0 ? 0 : 1);
+        surplus += uint8(int(pos.maxStrikeAssetHolder)%int(_subUnits) == 0 ? 0 : 2);
+        pos.maxStrikeAssetDebtor = uint(int(pos.maxStrikeAssetDebtor)/int(_subUnits) + (surplus&1));
+        pos.maxStrikeAssetHolder = uint(int(pos.maxStrikeAssetHolder)/int(_subUnits) + (surplus>>1));
+
+        /*
+            we only want to round up price when the market maker is receiving the premium
+            thus add (surplus>>1) when index == 3
+        */
+        optionsContract.setPaymentParams(_index%2==0, (_index < 2 ? 0 : (_price/int(_subUnits) + (_index == 3 ? (surplus>>1) : 0)) ) );
+        optionsContract.setLimits(int(pos.maxStrikeAssetDebtor), int(pos.maxStrikeAssetHolder));
         //load put position
         optionsContract.clearPositions();
         for (uint i = 0; i < pos.putAmounts.length; i++)
             optionsContract.addPosition(pos.putStrikes[i], int(_amount)*pos.putAmounts[i], false);
-        if (_index>1){
-            optionsContract.setPaymentParams(_index==2, _price);
-            optionsContract.setLimits(int(_amount * pos.maxStrikeAssetDebtor) - _price, int(_amount * pos.maxStrikeAssetHolder) + _price);
-        }
-        else{
-            optionsContract.setPaymentParams(_index==0, 0);
-            optionsContract.setLimits(int(_amount * pos.maxStrikeAssetDebtor), int(_amount * pos.maxStrikeAssetHolder));
-        }
+
+        address _d = _debtor;   //prevent stack too deep
+        address _h = _holder;   //prevent stack too deep
+
+        //cover underflow in favor of market maker
+        if (_index%2 == 0 && (surplus&1) > 0)
+            optionsContract.coverPutOverflow(_d, _h);
+        else if (_index%2 == 1 && (surplus>>1) > 0)
+            optionsContract.coverPutOverflow(_h, _d);
+
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return false;
         /*
             We have minted the put position but we still have data from the call position stored in transferAmountDebtor and transferAmountHolder
             handle distribution of funds in claimedToken mapping
         */
-        address addr;
-        if (_index%2==0){
-            addr = _holder;
-            transferAmount += int(_amount * pos.maxUnderlyingAssetHolder);
-            if (_index==0) transferAmount += _price;
-        } else {
-            addr = _debtor;
-            transferAmount += int(_amount * pos.maxUnderlyingAssetDebtor);
-            if (_index==1) transferAmount -= _price;
-        }
+        address addr = _index%2 == 0 ? _h : _d;
+        satReserves = uint(int(satReserves)-optionsTransfer);
         if (int(claimedToken[addr]) < -transferAmount) return false;
-        claimedToken[addr] += uint(int(claimedToken[addr]) + transferAmount);
-        satReserves = uint(int(satReserves)-transfer);
+        claimedToken[addr] = uint(int(claimedToken[addr]) + transferAmount);
 
-        //update transfer amounts and handle distribution of funds in claimedStable mapping
-        transfer = _index%2==0 ? optionsContract.transferAmountHolder() : optionsContract.transferAmountDebtor();
-        transferAmount = -transfer;
-
+        optionsTransfer;
         if (_index%2==0){
-            addr = _holder;
-            transferAmount += int(_amount * pos.maxStrikeAssetHolder);
-            if (_index==2) transferAmount += _price;
+            optionsTransfer = optionsContract.transferAmountHolder();
+            transferAmount = int(pos.maxStrikeAssetHolder) - optionsTransfer;
         } else {
-            addr = _debtor;
-            transferAmount += int(_amount * pos.maxStrikeAssetDebtor);
-            if (_index==3) transferAmount -= _price;
+            optionsTransfer = optionsContract.transferAmountDebtor();
+            transferAmount = int(pos.maxStrikeAssetDebtor) - optionsTransfer;
         }
+        scReserves = uint(int(scReserves)-optionsTransfer);
         if (int(claimedStable[addr]) < -transferAmount) return false;
-        claimedStable[addr] += uint(int(claimedStable[addr]) + transferAmount);
-        scReserves = uint(int(scReserves)-transfer);
+        claimedStable[addr] = uint(int(claimedStable[addr]) + transferAmount);
     }
 
 

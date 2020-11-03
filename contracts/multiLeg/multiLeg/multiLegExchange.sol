@@ -44,21 +44,23 @@ contract multiLegExchange is mLegData {
         bytes32 hash = keccak256(abi.encodePacked(_callStrikes, _callAmounts, _putStrikes, _putAmounts));
         options optionsContract = options(optionsAddress);
         uint prevStrike;
+        int _subUnits = int(satUnits);  //gas savings
         //load position
         optionsContract.clearPositions();
         for (uint i = 0; i < _callAmounts.length; i++){
             require(prevStrike < _callStrikes[i] && _callAmounts[i] != 0);
             prevStrike = _callStrikes[i];
-            optionsContract.addPosition(_callStrikes[i], _callAmounts[i], true);
+            optionsContract.addPosition(_callStrikes[i], _subUnits*_callAmounts[i], true);
         }
         (uint maxUnderlyingAssetDebtor, uint maxUnderlyingAssetHolder) = optionsContract.transferAmount(true);
 
         prevStrike = 0;
+        _subUnits = int(scUnits);    //gas savings
         optionsContract.clearPositions();
         for (uint i = 0; i < _putAmounts.length; i++){
             require(prevStrike < _putStrikes[i] && _putAmounts[i] != 0);
             prevStrike = _putStrikes[i];
-            optionsContract.addPosition(_putStrikes[i], _putAmounts[i], false);
+            optionsContract.addPosition(_putStrikes[i], _subUnits*_putAmounts[i], false);
         }
         (uint maxStrikeAssetDebtor, uint maxStrikeAssetHolder) = optionsContract.transferAmount(false);
         position memory pos = position(_callAmounts, _callStrikes, _putAmounts, _putStrikes, maxUnderlyingAssetDebtor, maxUnderlyingAssetHolder, maxStrikeAssetDebtor, maxStrikeAssetHolder);
@@ -174,6 +176,46 @@ contract multiLegExchange is mLegData {
 
 
     /*
+        @Description: lock up collateral necessary to post an order in the order book
+            also any call with a non registered legs hash will be reverted
+
+        @position pos: the multi leg position which collateral is being posted for
+        @int _price: the premium which is to be paid per position
+        @uint _amount: the amount of the position for which collateral is being posted
+        @uint8 _index: index of the order being posted
+    */
+    function lockCollateral(bytes32 _legsHash, int _price, uint _amount, uint8 _index) internal {
+        // debtors are paid premium by holders
+        if (_index%2 == 1) _price *= -1;
+
+        position memory pos = positions[_legsHash];
+
+        //lock collateral for calls
+        uint req = _amount * uint(
+            int(_index%2 == 0 ? pos.maxUnderlyingAssetHolder : pos.maxUnderlyingAssetDebtor)
+            + (_index < 2 ? _price : 0)
+            );
+        if (int(req) > 0) {
+            uint _satUnits = satUnits;  //gas savings
+            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
+            require(claimedToken[msg.sender] >= req);
+            claimedToken[msg.sender] -= req;
+        }
+
+        //lock collateral for puts
+        req = _amount * uint(
+            int(_index%2 == 0 ? pos.maxStrikeAssetHolder : pos.maxStrikeAssetDebtor)
+            + (_index < 2 ? 0 : _price)
+            );
+        if (int(req) > 0) {
+            uint _scUnits = scUnits;    //gas savings
+            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
+            require(claimedStable[msg.sender] >= req);
+            claimedStable[msg.sender] -= req;
+        }
+    }
+
+    /*
         @Description: creates an order and posts it in one of the 4 linked lists depending on if it is a buy or sell order and if it is for calls or puts
             unless this is the first order of its kind functionality is outsourced to insertOrder
 
@@ -186,7 +228,6 @@ contract multiLegExchange is mLegData {
     */
     function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public payable {
         require(_maturity != 0 && _legsHash != 0 && _amount != 0);
-        position memory pos = positions[_legsHash];
 
         if (listHeads[_maturity][_legsHash][_index] != 0) {
             insertOrder(_maturity, _legsHash, _price, _amount, _index, listHeads[_maturity][_legsHash][_index]);
@@ -196,42 +237,9 @@ contract multiLegExchange is mLegData {
 
         require(containsStrikes(_maturity, _legsHash));
 
-        if (_index == 0){
-            uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price));
-            if (int(req) < 0) req = 0;
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
-            req = _amount * pos.maxStrikeAssetHolder;
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
-        }
-        else if (_index == 1){
-            uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - _price));
-            if (int(req) < 0) req = 0;
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
-            req = _amount * pos.maxStrikeAssetDebtor;
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
-        }
-        else if (_index == 2){
-            uint req = _amount * pos.maxUnderlyingAssetHolder;
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
-            req = uint(int(_amount) * (int(pos.maxStrikeAssetHolder) + _price));
-            if (int(req) < 0) req = 0;
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
-        }
-        else {
-            uint req = _amount * pos.maxUnderlyingAssetDebtor;
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
-            req = uint(int(_amount) * (int(pos.maxStrikeAssetDebtor) - _price));
-            if (int(req) < 0) req = 0;
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
-        }
+        // any call with a non registered legs hash will be reverted
+        lockCollateral(_legsHash, _price, _amount, _index);
+
         Offer memory offer = Offer(msg.sender, _maturity, _legsHash, _price, _amount, _index);
         //get hashes
         (bytes32 hash, bytes32 name) = hasher(offer);
@@ -263,45 +271,8 @@ contract multiLegExchange is mLegData {
 
         require(containsStrikes(_maturity, _legsHash));
 
-        position memory pos = positions[_legsHash];
-
-
-        if (_index == 0){
-            uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price));
-            if (int(req) < 0) req = 0;
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
-            req = _amount * pos.maxStrikeAssetHolder;
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
-        }
-        else if (_index == 1){
-            uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - _price));
-            if (int(req) < 0) req = 0;
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
-            req = _amount * pos.maxStrikeAssetDebtor;
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
-        }
-        else if (_index == 2){
-            uint req = _amount * pos.maxUnderlyingAssetHolder;
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
-            req = uint(int(_amount) * (int(pos.maxStrikeAssetHolder) + _price));
-            if (int(req) < 0) req = 0;
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
-        }
-        else {
-            uint req = _amount * pos.maxUnderlyingAssetDebtor;
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
-            req = uint(int(_amount) * (int(pos.maxStrikeAssetDebtor) - _price));
-            if (int(req) < 0) req = 0;
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
-        }
+        // any call with a non registered legs hash will be reverted
+        lockCollateral(_legsHash, _price, _amount, _index);
 
         Offer memory offer = Offer(msg.sender, _maturity, _legsHash, _price, _amount, _index);
         //get hashes
@@ -451,14 +422,14 @@ contract multiLegExchange is mLegData {
                     position memory pos = positions[offer.legsHash];
                     if (offer.index == 0){
                         uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
-                        if (int(req) < 0) req = 0;
-                        claimedToken[msg.sender] += req;
-                        claimedStable[msg.sender] += _amount * pos.maxStrikeAssetHolder;
+                        if (int(req) > 0)
+                            claimedToken[msg.sender] += req / satUnits;
+                        claimedStable[msg.sender] += _amount * pos.maxStrikeAssetHolder / scUnits;
                     } else {
-                        claimedToken[msg.sender] += _amount * pos.maxUnderlyingAssetHolder;
+                        claimedToken[msg.sender] += _amount * pos.maxUnderlyingAssetHolder / satUnits;
                         uint req = uint(int(_amount) * (int(pos.maxStrikeAssetHolder) + offer.price));
-                        if (int(req) < 0) req = 0;
-                        claimedStable[msg.sender] += req;
+                        if (int(req) > 0)
+                            claimedStable[msg.sender] += req / scUnits;
                     }
                 }
                 else {
@@ -512,14 +483,14 @@ contract multiLegExchange is mLegData {
                     position memory pos = positions[offer.legsHash];
                     if (offer.index == 1){
                         uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
-                        if (int(req) < 0) req = 0;
-                        claimedToken[msg.sender] += req;
-                        claimedStable[msg.sender] += _amount * pos.maxStrikeAssetDebtor;
+                        if (int(req) > 0)
+                            claimedToken[msg.sender] += req / satUnits;
+                        claimedStable[msg.sender] += _amount * pos.maxStrikeAssetDebtor / scUnits;
                     } else {
-                        claimedToken[msg.sender] += _amount * pos.maxUnderlyingAssetDebtor;
+                        claimedToken[msg.sender] += _amount * pos.maxUnderlyingAssetDebtor / satUnits;
                         uint req = uint(int(_amount) * (int(pos.maxStrikeAssetDebtor) - offer.price));
-                        if (int(req) < 0) req = 0;
-                        claimedStable[msg.sender] += req;
+                        if (int(req) > 0)
+                        claimedStable[msg.sender] += req / scUnits;
                     }
                 }
                 else {

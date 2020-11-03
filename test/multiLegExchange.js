@@ -11,6 +11,7 @@ const mLegHelper = artifacts.require("mLegHelper");
 const mLegDelegate = artifacts.require("mLegDelegate");
 const feeOracle = artifacts.require("feeOracle");
 const feldmexToken = artifacts.require("FeldmexToken");
+const BN = web3.utils.BN;
 
 const helper = require("../helper/helper.js");
 
@@ -42,8 +43,12 @@ contract('multi leg exchange', function(accounts){
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
 		await mOrganizerInstance.deployMultiLegExchange(optionsInstance.address);
 		multiLegExchangeInstance = await multiLegExchange.at(await mOrganizerInstance.exchangeAddresses(optionsInstance.address, 2));
-		asset1SubUnits = Math.pow(10, await asset1.decimals());
-		asset2SubUnits = Math.pow(10, await asset2.decimals());
+
+		asset1SubUnitsBN = (new BN("10")).pow(new BN(await asset1.decimals()));
+		asset1SubUnits = asset1SubUnitsBN.toString();
+
+		asset2SubUnitsBN = (new BN("10")).pow(await asset2.decimals());
+		asset2SubUnits = asset2SubUnitsBN.toString();
 	});
 
 	async function depositFunds(to, asset1Amount, asset2Amount, exchange){
@@ -63,11 +68,13 @@ contract('multi leg exchange', function(accounts){
 		if (typeof params.gasPrice === "undefined") params.gasPrice = 20000000000; //20 gwei
 		var postOrderFee = new web3.utils.BN(await feeOracleInstance.multiLegExchangeFlatEtherFee());
 		params.value = postOrderFee.toNumber();
+		amount = (index < 2 ? asset1SubUnitsBN : asset2SubUnitsBN).mul(new BN(amount)).toString();
 		var rec = await multiLegExchangeInstance.postOrder(maturity, legsHash, price, amount, index, params);
 		var txFee = new web3.utils.BN(rec.receipt.gasUsed * params.gasPrice);
 		var newBalance = new web3.utils.BN(await web3.eth.getBalance(params.from));
 		var result = txFee.add(newBalance);
 		assert.equal(result.cmp(balance.sub(postOrderFee)), 0, "correct fees paid");
+		return rec;
 	}
 
 
@@ -78,9 +85,13 @@ contract('multi leg exchange', function(accounts){
 		putAmounts = [1];
 		//these calculations would be different if we had different values in the above arrays
 		maxUnderlyingAssetDebtor = (-1*(callAmounts[0] + callAmounts[1])) * Math.floor(asset1SubUnits * ((callStrikes[1]-callStrikes[0])/callStrikes[1]));
+		//maxUnderlyingAssetDebtor = asset1SubUnitsBN.mul(new BN(maxUnderlyingAssetDebtor)).toNumber();
 		maxUnderlyingAssetHolder = -1 * asset1SubUnits * (callAmounts[0] + callAmounts[1]);
+		//maxUnderlyingAssetHolder = asset1SubUnitsBN.mul(new BN(maxUnderlyingAssetHolder)).toNumber();
 		maxStrikeAssetDebtor = putAmounts[0] * putStrikes[0];
+		maxStrikeAssetDebtor = asset2SubUnitsBN.mul(new BN(maxStrikeAssetDebtor)).toNumber();
 		maxStrikeAssetHolder = 0;
+		putStrikes = putStrikes.map(x => asset2SubUnitsBN.mul(new BN(x)).toString());
 		rec = await multiLegExchangeInstance.addLegHash(callStrikes, callAmounts, putStrikes, putAmounts);
 		assert.equal(rec.logs[0].event, "legsHashCreated", "correct event emmited");
 		legsHash = rec.logs[0].args.legsHash;
@@ -118,10 +129,12 @@ contract('multi leg exchange', function(accounts){
 		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: accounts[1]});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: accounts[1]});
 
 		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetHolder+price), amount*maxStrikeAssetHolder, true);
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-price), amount*maxStrikeAssetDebtor, false);
-		//we will attempt to trade with 
+
 		await postOrder(maturity, legsHash, price, amount, 0, {from: deployerAccount});
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting order");
 		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting order");
@@ -143,54 +156,64 @@ contract('multi leg exchange', function(accounts){
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
 		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
 		
-		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, amount-5, maxIterations, true, {from: accounts[1]});
+		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, true, {from: accounts[1]});
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 0);
 		headNode = await multiLegExchangeInstance.linkedNodes(listHead);
 		headOffer = await multiLegExchangeInstance.offers(headNode.hash);
-		assert.equal(headOffer.amount.toNumber(), 5, "correct amount left after market sell");
+		assert.equal(headOffer.amount.toNumber(), asset1SubUnitsBN.mul(new BN(5)).toString(), "correct amount left after market sell");
 		assert.equal(headOffer.price.toNumber(), price, "correct price of the head offer");
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), (amount-5)*callAmounts[i], "correct call balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), -(amount-5)*callAmounts[i], "correct call balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN((amount-5)*callAmounts[i])).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(-(amount-5)*callAmounts[i])).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN((amount-5)*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-(amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetDebtor-price)+ amount*(maxUnderlyingAssetDebtor-secondPrice), "correct underlying asset balance after market sell");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), (amount+5)*maxStrikeAssetDebtor, "correct strike asset balance after market sell");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(),
+			5*(maxUnderlyingAssetDebtor-price)+ amount*(maxUnderlyingAssetDebtor-secondPrice), "correct underlying asset balance after market sell");
+		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(),
+			(amount+5)*maxStrikeAssetDebtor, "correct strike asset balance after market sell");
 
-		await multiLegExchangeInstance.marketSell(maturity, legsHash, secondPrice, 5+amount, maxIterations, true, {from: accounts[1]});
+		await multiLegExchangeInstance.marketSell(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, true, {from: accounts[1]});
 
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 0);
 		assert.equal(listHead, defaultBytes32, "correct list head");
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), 2*amount*callAmounts[i], "correct call balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), -2*amount*callAmounts[i], "correct call balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(2*amount*callAmounts[i])).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(),
+				asset1SubUnitsBN.mul(new BN(-2*amount*callAmounts[i])).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(2*amount*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after all orders");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 0, "correct underlying asset balance after all orders");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await asset1.balanceOf(multiLegExchangeInstance.address)).toNumber(), 0, "correct asset1 balance of contract");
-		assert.equal((await asset2.balanceOf(multiLegExchangeInstance.address)).toNumber(), 0, "correct asset2 balance of contract");
+		assert.equal((await asset1.balanceOf(multiLegExchangeInstance.address)).toString(), "0", "correct asset1 balance of contract");
+		assert.equal((await asset2.balanceOf(multiLegExchangeInstance.address)).toString(), "0", "correct asset2 balance of contract");
 
-		assert.equal((await multiLegExchangeInstance.satReserves()).toNumber(), 0, "correct sat reserves");
-		assert.equal((await multiLegExchangeInstance.scReserves()).toNumber(), 0, "correct sc reserves");		
+		assert.equal((await multiLegExchangeInstance.satReserves()).toString(), "0", "correct sat reserves");
+		assert.equal((await multiLegExchangeInstance.scReserves()).toString(), "0", "correct sc reserves");		
 	});
 
 	it('posts orders with correct collateral requirements index 1', async () => {
@@ -199,13 +222,15 @@ contract('multi leg exchange', function(accounts){
 		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: accounts[1]});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: accounts[1]});
 		price = -2;
 		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetDebtor-price), amount*maxStrikeAssetDebtor, true);
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+price), amount*maxStrikeAssetHolder, false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 1, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 1);
@@ -224,48 +249,58 @@ contract('multi leg exchange', function(accounts){
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
 		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
 
-		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, amount-5, maxIterations, true, {from: accounts[1]});
+		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, true, {from: accounts[1]});
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 1);
 		headNode = await multiLegExchangeInstance.linkedNodes(listHead);
 		headOffer = await multiLegExchangeInstance.offers(headNode.hash);
-		assert.equal(headOffer.amount.toNumber(), 5, "correct amount left after market buy");
+		assert.equal(headOffer.amount.toString(), asset1SubUnitsBN.mul(new BN(5)).toString(), "correct amount left after market buy");
 		assert.equal(headOffer.price.toNumber(), price, "correct price of the head offer");
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), -(amount-5)*callAmounts[i], "correct call balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), (amount-5)*callAmounts[i], "correct call balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(-(amount-5)*callAmounts[i])).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN((amount-5)*callAmounts[i])).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-(amount-5)*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN((amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetHolder+price)+ amount*(maxUnderlyingAssetHolder+secondPrice), "correct underlying asset balance after market sell");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), (amount+5)*maxStrikeAssetHolder, "correct strike asset balance after market buy");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(),
+			5*(maxUnderlyingAssetHolder+price)+ amount*(maxUnderlyingAssetHolder+secondPrice), "correct underlying asset balance after market sell");
+		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(),
+			(amount+5)*maxStrikeAssetHolder, "correct strike asset balance after market buy");
 
-		await multiLegExchangeInstance.marketBuy(maturity, legsHash, secondPrice, 5+amount, maxIterations, true, {from: accounts[1]});
+		await multiLegExchangeInstance.marketBuy(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, true, {from: accounts[1]});
 
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 1);
 		assert.equal(listHead, defaultBytes32, "correct list head");
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), -2*amount*callAmounts[i], "correct call balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), 2*amount*callAmounts[i], "correct call balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(-2*amount*callAmounts[i])).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(2*amount*callAmounts[i])).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-2*amount*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after all orders");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 0, "correct underlying asset balance after all orders");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
 
 	});
 
@@ -277,13 +312,15 @@ contract('multi leg exchange', function(accounts){
 		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: accounts[1]});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: accounts[1]});
 
 		await depositFunds(deployerAccount, amount*maxUnderlyingAssetHolder, amount*(maxStrikeAssetHolder+price), true);
 		await depositFunds(accounts[1], amount*maxUnderlyingAssetDebtor, amount*(maxStrikeAssetDebtor-price), false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 2, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 2);
@@ -297,53 +334,65 @@ contract('multi leg exchange', function(accounts){
 		secondPrice = -2;
 		await depositFunds(deployerAccount, amount*maxUnderlyingAssetHolder, amount*(maxStrikeAssetHolder+secondPrice), true);
 		await depositFunds(accounts[1], amount*maxUnderlyingAssetDebtor, amount*(maxStrikeAssetDebtor-secondPrice), false);
+
 		await postOrder(maturity, legsHash, secondPrice, amount, 2, {from: deployerAccount});
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting second order");
 		
-		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, amount-5, maxIterations, false, {from: accounts[1]});
+		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, false, {from: accounts[1]});
+
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 2);
 		headNode = await multiLegExchangeInstance.linkedNodes(listHead);
 		headOffer = await multiLegExchangeInstance.offers(headNode.hash);
-		assert.equal(headOffer.amount.toNumber(), 5, "correct amount left after market sell");
+		assert.equal(headOffer.amount.toString(), asset1SubUnitsBN.mul(new BN(5)).toString(), "correct amount left after market sell");
 		assert.equal(headOffer.price.toNumber(), price, "correct price of the head offer");
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), (amount-5)*callAmounts[i], "correct call balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), -(amount-5)*callAmounts[i], "correct call balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN((amount-5)*callAmounts[i])).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(-(amount-5)*callAmounts[i])).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN((amount-5)*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-(amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), (amount+5)*maxUnderlyingAssetDebtor, "correct underlying asset balance after market sell");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), 5*(maxStrikeAssetDebtor-price) + amount*(maxStrikeAssetDebtor-secondPrice) , "correct strike asset balance after market sell");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(),
+			(amount+5)*maxUnderlyingAssetDebtor, "correct underlying asset balance after market sell");
+		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(),
+			5*(maxStrikeAssetDebtor-price) + amount*(maxStrikeAssetDebtor-secondPrice) , "correct strike asset balance after market sell");
 
-		await multiLegExchangeInstance.marketSell(maturity, legsHash, secondPrice, 5+amount, maxIterations, false, {from: accounts[1]});
+		await multiLegExchangeInstance.marketSell(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, false, {from: accounts[1]});
 
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 2);
 		assert.equal(listHead, defaultBytes32, "correct list head");
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), 2*amount*callAmounts[i], "correct call balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), -2*amount*callAmounts[i], "correct call balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(2*amount*callAmounts[i])).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(-2*amount*callAmounts[i])).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(2*amount*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after all orders");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 0, "correct underlying asset balance after all orders");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
 
 	});
 
@@ -354,13 +403,15 @@ contract('multi leg exchange', function(accounts){
 		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: accounts[1]});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: accounts[1]});
 		price = -2;
 		await depositFunds(deployerAccount, amount*maxUnderlyingAssetDebtor, amount*(maxStrikeAssetDebtor-price), true);
 		await depositFunds(accounts[1], amount*maxUnderlyingAssetHolder, amount*(maxStrikeAssetHolder+price), false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 3, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 3);
@@ -376,49 +427,57 @@ contract('multi leg exchange', function(accounts){
 		await depositFunds(accounts[1], amount*maxUnderlyingAssetHolder, amount*(maxStrikeAssetHolder+secondPrice), false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 3, {from: deployerAccount});
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting second order");
 		
-		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, amount-5, maxIterations, false, {from: accounts[1]});
+		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, asset2SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, false, {from: accounts[1]});
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 3);
 		headNode = await multiLegExchangeInstance.linkedNodes(listHead);
 		headOffer = await multiLegExchangeInstance.offers(headNode.hash);
-		assert.equal(headOffer.amount.toNumber(), 5, "correct amount left after market buy");
+		assert.equal(headOffer.amount.toString(), asset2SubUnitsBN.mul(new BN("5")).toString(), "correct amount left after market buy");
 		assert.equal(headOffer.price.toNumber(), price, "correct price of the head offer");
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), -(amount-5)*callAmounts[i], "correct call balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), (amount-5)*callAmounts[i], "correct call balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(-(amount-5)*callAmounts[i])).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN((amount-5)*callAmounts[i])).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -(amount-5)*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), (amount-5)*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-(amount-5)*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN((amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
 		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), (amount+5)*maxUnderlyingAssetHolder, "correct underlying asset balance after market sell");
 		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), Math.max(5*(maxStrikeAssetHolder+price), 0)+Math.max((5-amount)*(maxStrikeAssetHolder+price), 0)
 			+amount*(maxStrikeAssetHolder+secondPrice), "correct strike asset balance after market buy");
 
-		await multiLegExchangeInstance.marketBuy(maturity, legsHash, secondPrice, 5+amount, maxIterations, false, {from: accounts[1]});
+		await multiLegExchangeInstance.marketBuy(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, false, {from: accounts[1]});
 
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 3);
 		assert.equal(listHead, defaultBytes32, "correct list head");
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), -2*amount*callAmounts[i], "correct call balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), 2*amount*callAmounts[i], "correct call balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(-2*amount*callAmounts[i])).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(2*amount*callAmounts[i])).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), -2*amount*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), 2*amount*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-2*amount*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after all orders");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
 		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 0, "correct underlying asset balance after all orders");
 		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), Math.max(-amount*(maxStrikeAssetHolder+price),0)+Math.max(-amount*(maxStrikeAssetHolder+secondPrice),0),
@@ -436,23 +495,29 @@ contract('multi leg exchange', function(accounts){
 		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: accounts[1]});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
 		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: accounts[1]});
 		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetHolder+price), amount*maxStrikeAssetHolder, true);
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-price), amount*maxStrikeAssetDebtor, false);
 
 		for (let i = 0; i < amount; i++)
 			await postOrder(maturity, legsHash, price, 1, 0, {from: deployerAccount});
 
-		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, maxIterations+2, maxIterations, true, {from: accounts[1]});
+		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, true, {from: accounts[1]});
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toNumber(), maxIterations*callAmounts[i], "correct call balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toNumber(), -maxIterations*callAmounts[i], "correct call balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(maxIterations*callAmounts[i])).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				asset1SubUnitsBN.mul(new BN(-maxIterations*callAmounts[i])).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
-			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toNumber(), maxIterations*putAmounts[i], "correct put balance deployer account");
-			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toNumber(), -maxIterations*putAmounts[i], "correct put balance first account");
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(maxIterations*putAmounts[i])).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				asset2SubUnitsBN.mul(new BN(-maxIterations*putAmounts[i])).toString(), "correct put balance first account");
 		}
 	});
 });

@@ -2,7 +2,6 @@ const oracle = artifacts.require("oracle");
 const token = artifacts.require("Token");
 const options = artifacts.require("options");
 const exchange = artifacts.require("exchange");
-const strikeAsset = artifacts.require("strikeAsset");
 const container = artifacts.require("container");
 const oHelper = artifacts.require("oHelper");
 const eHelper = artifacts.require("eHelper");
@@ -16,6 +15,7 @@ const mLegHelper = artifacts.require("mLegHelper");
 const mLegDelegate = artifacts.require("mLegDelegate");
 const feeOracle = artifacts.require("feeOracle");
 const feldmexToken = artifacts.require("FeldmexToken");
+const BN = web3.utils.BN;
 
 const helper = require("../helper/helper.js");
 
@@ -31,7 +31,7 @@ contract('container', async function(accounts){
 
 	it('before each', async () => {
 		tokenInstance = await token.new(0);
-		strikeAssetInstance = await strikeAsset.new(0);
+		strikeAssetInstance = await token.new(0);
 		feldmexTokenInstance = await feldmexToken.new();
 		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
 		mCallHelperInstance = await mCallHelper.new(feeOracleInstance.address);
@@ -65,8 +65,10 @@ contract('container', async function(accounts){
 		assert.equal(await optionsInstance.strikeAssetAddress(), strikeAssetInstance.address, "strike assset address for options instance is correct");
 		assert.equal(await secondOptionsInstance.underlyingAssetAddress(), strikeAssetInstance.address, "reverses strike and underlying asset between two option chains");
 		assert.equal(await secondOptionsInstance.strikeAssetAddress(), tokenInstance.address, "reverses strike and underlying asset between two option chains");
-		satUnits = Math.pow(10, (await tokenInstance.decimals()).toNumber());
-		scUnits = Math.pow(10, (await strikeAssetInstance.decimals()).toNumber());
+		satUnitsBN = (new BN("10")).pow(await tokenInstance.decimals());
+		satUnits = satUnitsBN.toNumber();
+		scUnitsBN = (new BN("10")).pow(await strikeAssetInstance.decimals());
+		scUnits = scUnitsBN.toNumber();
 	});
 
 	async function setFee(denominator, params) {
@@ -98,6 +100,7 @@ contract('container', async function(accounts){
 		await addStrike(holder, maturity, strike, first);
 		var instance = first ? optionsInstance : secondOptionsInstance;
 		await instance.clearPositions();
+		amount = satUnitsBN.mul(new BN(amount)).toString();
 		await instance.addPosition(strike, amount, true);
 		await instance.setParams(debtor, holder, maturity);
 		await instance.setLimits(amount * satUnits, 0);
@@ -109,6 +112,7 @@ contract('container', async function(accounts){
 		await addStrike(holder, maturity, strike, first);
 		var instance = first ? optionsInstance : secondOptionsInstance;
 		await instance.clearPositions();
+		amount = scUnitsBN.mul(new BN(amount)).toString();
 		await instance.addPosition(strike, amount, false);
 		await instance.setParams(debtor, holder, maturity);
 		await instance.setLimits(amount * strike, 0);

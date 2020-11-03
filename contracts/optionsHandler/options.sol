@@ -69,9 +69,7 @@ contract options is FeldmexOptionsData, Ownable {
     */
     function claim(uint _maturity) public returns(bool success){
         require(_maturity < block.timestamp);
-        //spot price fetched from the oracle is inflated by factor of satUnits * scUnits
         ITimeSeriesOracle orc = ITimeSeriesOracle(oracleAddress);
-        //we want spot to == trueSpot * scUnits
         uint spot = orc.fetchSpotAtTime(_maturity, underlyingAssetAddress);
         uint callValue = 0;
         uint putValue = 0;
@@ -90,6 +88,8 @@ contract options is FeldmexOptionsData, Ownable {
         //prevent div by 0, also there are no calls at a strike of 0 so this does not affect payout
         //If spot == 0 so will callValue so there there is no harm done by this safety check
         if (spot != 0) callValue /= spot;
+        //deflate put value
+        putValue /= scUnits;
         delete strikes[msg.sender][_maturity];
         feeOracle fo = feeOracle(feeOracleAddress);
         uint _feeDenominator = fo.fetchFee(address(this));
@@ -133,7 +133,7 @@ contract options is FeldmexOptionsData, Ownable {
         @Description: allows for users to deposit funds that are not tided up as collateral
             these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
     */
-    function depositFunds(address _to) public returns(bool success){
+    function depositFunds(address _to) public returns (bool success){
     	uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
     	uint sats = balance - satReserves;
     	satReserves = balance;
@@ -173,20 +173,20 @@ contract options is FeldmexOptionsData, Ownable {
         @return uint value: the value of the position in terms of the underlying multiplied by the price
             inflate value by multiplying by price and divide out after doing calculations with the returned value to maintain accuracy
     */
-    function satValueOf(int _amount, uint _strike, uint _price)internal view returns(uint value){
+    function satValueOf(int _amount, uint _strike, uint _price)internal pure returns(uint value){
         uint payout = 0;
         if (_amount != 0){
             if (_price > _strike){
                 //inflator is canceld when it is divided by out
-                //payout = uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price * inflator - (_strike * inflator))/inflator;
-                //payout = uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price - _strike) * inflator/inflator;
-                payout = uint(_amount > 0 ? _amount : -_amount) * satUnits * (_price - _strike);
+                //payout = uint(_amount > 0 ? _amount : -_amount) * (_price * inflator - (_strike * inflator))/inflator;
+                //payout = uint(_amount > 0 ? _amount : -_amount) * (_price - _strike) * inflator/inflator;
+                payout = uint(_amount > 0 ? _amount : -_amount) * (_price - _strike);
             }
             if (_amount > 0){
                 return payout;
             }
             else {
-                return uint(-_amount)*satUnits*_price - payout;
+                return uint(-_amount)*_price - payout;
             }
         } 
         value = 0;
@@ -200,21 +200,18 @@ contract options is FeldmexOptionsData, Ownable {
         @param uint _strike: the strike prive of the put contract in terms of the underlying versus stablecoie
         @param uint _prive: the spot price at which to find the value of the position in terms of the underlying versus stablecoie
 
-        @return uint value: the value of the position in terms of the strike asset
+        @return uint value: the value of the position in terms of the strike asset inflated by scUnits
     */
     function scValueOf(int _amount, uint _strike, uint _price)internal pure returns(uint value){
         uint payout = 0;
         if (_amount != 0){
             if (_price < _strike){
-                //spot inflator is == scUnits
-                //inflator must be divided out thus remove *scUnits
                 payout = (_strike - _price)*uint(_amount > 0 ? _amount : -_amount);
             }
             if (_amount > 0){
                 return payout;
             }
             else {
-                //inflator must be divided out thus remove *scUnits
                 return uint(-_amount)*_strike - payout;
             }
         }
@@ -323,6 +320,32 @@ contract options is FeldmexOptionsData, Ownable {
     function assignPutPosition() public {
         (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("assignPutPosition()"));
         assert(success);
+    }
+
+    /*
+        @Description: when the spending limits cannot be stored without decimals sweep 1 subUnit of Token from market taker to market maker 
+
+        @param address _from: address of market taker
+        @param address _to: address of market maker
+    */
+    function coverCallOverflow(address _from, address _to) public {
+        require(msg.sender == trustedAddress);
+        require(claimedTokens[_from] > 0);
+        claimedTokens[_from]--;
+        claimedTokens[_to]++;
+    }
+
+    /*
+        @Description: when the spending limits cannot be stored without decimals sweep 1 subUnit of Stable from market taker to market maker 
+
+        @param address _from: address of market taker
+        @param address _to: address of market maker
+    */
+    function coverPutOverflow(address _from, address _to) public {
+        require(msg.sender == trustedAddress);
+        require(claimedStable[_from] > 0);
+        claimedStable[_from]--;
+        claimedStable[_to]++;
     }
 
 

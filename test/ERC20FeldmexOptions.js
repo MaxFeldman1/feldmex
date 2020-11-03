@@ -16,6 +16,7 @@ const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const ERC20FeldmexOption = artifacts.require("ERC20FeldmexOption");
 const feeOracle = artifacts.require("feeOracle");
 const feldmexToken = artifacts.require("FeldmexToken");
+const BN = web3.utils.BN;
 
 const nullAddress = "0x0000000000000000000000000000000000000000";
 
@@ -28,7 +29,7 @@ contract('ERC20FeldmexOptions', async function(accounts){
 
 	it('transfers funds', async () => {
 		tokenInstance = await token.new(0);
-		tokenSubUnits = Math.pow(10, (await tokenInstance.decimals()).toNumber());
+		tokenSubUnitsBN = (new BN(10)).pow(await tokenInstance.decimals());
 		strikeAssetInstance = await token.new(0);
 		tokenSubUnits = Math.pow(10, (await strikeAssetInstance.decimals()).toNumber());
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
@@ -56,40 +57,48 @@ contract('ERC20FeldmexOptions', async function(accounts){
 	});
 
 	it('transfers call options', async () => {
-		amount = 20;
+		amount = "20";
+		var amtBN = (new BN(amount)).mul(tokenSubUnitsBN);
+		var amt = amtBN.toString();
 		await depositFunds(tokenSubUnits * amount, 0, deployerAccount);
 		await optionsInstance.addStrike(maturity, strike, 0, {from: deployerAccount});
-		await feldmexERC20CallInstance.transfer(accounts[1], amount, {from: deployerAccount});
-		assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, strike, true)).toNumber(), -amount, "correct call balance of deployerAccount in options instance");
-		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, true)).toNumber(), amount, "correct call balance of first account in options instance");
-		assert.equal((await feldmexERC20CallInstance.balanceOf(deployerAccount)).toNumber(), 0, "correct balance in call erc20 wrapper instance for deployerAccount");
-		assert.equal((await feldmexERC20CallInstance.balanceOf(accounts[1])).toNumber(), amount, "correct balance in call erc20 wrapper instance for first account");
-		assert.equal((await optionsInstance.viewClaimedTokens({from: deployerAccount})).toNumber(), 0, "correct balance of claimed tokens in the options handler for deployerAccount");
-		secondAmount = 15;
-		await feldmexERC20CallInstance.transfer(deployerAccount, secondAmount, {from: accounts[1]});
-		assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, strike, true)).toNumber(), secondAmount-amount, "correct call balance of deployerAccount in options instance");
-		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, true)).toNumber(), amount-secondAmount, "correct call balance of first account in options instance");
-		assert.equal((await feldmexERC20CallInstance.balanceOf(deployerAccount)).toNumber(), 0, "correct balance in call erc20 wrapper instance for deployerAccount");
-		assert.equal((await feldmexERC20CallInstance.balanceOf(accounts[1])).toNumber(), amount-secondAmount, "correct balance in call erc20 wrapper instance for first account");
-		assert.equal((await optionsInstance.viewClaimedTokens({from: deployerAccount})).toNumber(), secondAmount*tokenSubUnits, "correct balance of claimed tokens in the options handler for first account");
+		await feldmexERC20CallInstance.transfer(accounts[1], amt, {from: deployerAccount});
+		assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, strike, true)).toString(), "-"+amt, "correct call balance of deployerAccount in options instance");
+		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, true)).toString(), amt, "correct call balance of first account in options instance");
+		assert.equal((await feldmexERC20CallInstance.balanceOf(deployerAccount)).toString(), "0", "correct balance in call erc20 wrapper instance for deployerAccount");
+		assert.equal((await feldmexERC20CallInstance.balanceOf(accounts[1])).toString(), amt, "correct balance in call erc20 wrapper instance for first account");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: deployerAccount})).toString(), "0", "correct balance of claimed tokens in the options handler for deployerAccount");
+		secondAmount = "15";
+		var amt2BN = (new BN(secondAmount)).mul(tokenSubUnitsBN);
+		var amt2 = amt2BN.toString();
+		await feldmexERC20CallInstance.transfer(deployerAccount, amt2, {from: accounts[1]});
+		assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, strike, true)).toString(), amt2BN.sub(amtBN).toString(), "correct call balance of deployerAccount in options instance");
+		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, true)).toString(), amtBN.sub(amt2BN).toString(), "correct call balance of first account in options instance");
+		assert.equal((await feldmexERC20CallInstance.balanceOf(deployerAccount)).toString(), "0", "correct balance in call erc20 wrapper instance for deployerAccount");
+		assert.equal((await feldmexERC20CallInstance.balanceOf(accounts[1])).toString(), amtBN.sub(amt2BN).toString(), "correct balance in call erc20 wrapper instance for first account");
+		assert.equal((await optionsInstance.viewClaimedTokens({from: deployerAccount})).toString(), amt2, "correct balance of claimed tokens in the options handler for first account");
 	});
 
 	it('transfers put options', async () => {
-		amount = 20;
+		amount = "20";
+		var amtBN = (new BN(amount)).mul(tokenSubUnitsBN);
+		var amt = amtBN.toString();
 		await depositFunds(0, strike * amount, deployerAccount);
-		await feldmexERC20PutInstance.transfer(accounts[1], amount, {from: deployerAccount});
-		assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, strike, false)).toNumber(), -amount, "correct call balance of deployerAccount in options instance");
-		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, false)).toNumber(), amount, "correct call balance of first account in options instance");
-		assert.equal((await feldmexERC20PutInstance.balanceOf(deployerAccount)).toNumber(), 0, "correct balance in call erc20 wrapper instance for deployerAccount");
-		assert.equal((await feldmexERC20PutInstance.balanceOf(accounts[1])).toNumber(), amount, "correct balance in call erc20 wrapper instance for first account");
-		assert.equal((await optionsInstance.viewClaimedStable({from: deployerAccount})).toNumber(), 0, "correct balance of claimed tokens in the options handler for deployerAccount");
-		secondAmount = 15;
-		await feldmexERC20PutInstance.transfer(deployerAccount, secondAmount, {from: accounts[1]});
-		assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, strike, false)).toNumber(), secondAmount-amount, "correct call balance of deployerAccount in options instance");
-		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, false)).toNumber(), amount-secondAmount, "correct call balance of first account in options instance");
-		assert.equal((await feldmexERC20PutInstance.balanceOf(deployerAccount)).toNumber(), 0, "correct balance in call erc20 wrapper instance for deployerAccount");
-		assert.equal((await feldmexERC20PutInstance.balanceOf(accounts[1])).toNumber(), amount-secondAmount, "correct balance in call erc20 wrapper instance for first account");
-		assert.equal((await optionsInstance.viewClaimedStable({from: deployerAccount})).toNumber(), secondAmount*strike, "correct balance of claimed tokens in the options handler for first account");
+		await feldmexERC20PutInstance.transfer(accounts[1], amt, {from: deployerAccount});
+		assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, strike, false)).toString(), "-"+amt, "correct call balance of deployerAccount in options instance");
+		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, false)).toString(), amt, "correct call balance of first account in options instance");
+		assert.equal((await feldmexERC20PutInstance.balanceOf(deployerAccount)).toString(), "0", "correct balance in call erc20 wrapper instance for deployerAccount");
+		assert.equal((await feldmexERC20PutInstance.balanceOf(accounts[1])).toString(), amt, "correct balance in call erc20 wrapper instance for first account");
+		assert.equal((await optionsInstance.viewClaimedStable({from: deployerAccount})).toString(), "0", "correct balance of claimed tokens in the options handler for deployerAccount");
+		secondAmount = "15";
+		var amt2BN = (new BN(secondAmount)).mul(tokenSubUnitsBN);
+		var amt2 = amt2BN.toString();
+		await feldmexERC20PutInstance.transfer(deployerAccount, amt2, {from: accounts[1]});
+		assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, strike, false)).toString(), amt2BN.sub(amtBN).toString(), "correct call balance of deployerAccount in options instance");
+		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, false)).toString(), amtBN.sub(amt2BN).toString(), "correct call balance of first account in options instance");
+		assert.equal((await feldmexERC20PutInstance.balanceOf(deployerAccount)).toString(), "0", "correct balance in call erc20 wrapper instance for deployerAccount");
+		assert.equal((await feldmexERC20PutInstance.balanceOf(accounts[1])).toString(), amtBN.sub(amt2BN).toString(), "correct balance in call erc20 wrapper instance for first account");
+		assert.equal((await optionsInstance.viewClaimedStable({from: deployerAccount})).toString(), (new BN(secondAmount)).mul(new BN(strike)).toString(), "correct balance of claimed tokens in the options handler for first account");
 	});
 
 	it('approves spending of call options', async () => {

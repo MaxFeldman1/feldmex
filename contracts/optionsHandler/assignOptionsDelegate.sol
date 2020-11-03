@@ -49,7 +49,6 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         @return uint: sum of all short call positions multiplied by satUnits
     */
     function minSats(address _addr, uint _maturity) internal view returns (uint minCollateral, uint liabilities) {
-        uint _satUnits = satUnits; //gas savings
         int delta = 0;
         int value = 0;
         int cumulativeStrike;
@@ -59,7 +58,7 @@ contract assignOptionsDelegate is FeldmexOptionsData {
             /*
                 value = satUnits * sigma((delta*strike-cumulativeStrike)/strike)
             */
-            int numerator = int(satUnits) * (delta*strike-cumulativeStrike);
+            int numerator = (delta*strike-cumulativeStrike);
             value = numerator/strike;
             cumulativeStrike += amt*int(strike);
             delta += amt;
@@ -70,9 +69,8 @@ contract assignOptionsDelegate is FeldmexOptionsData {
             if (amt < 0) liabilities+=uint(-amt);
         }
         //value at inf
-        value = int(_satUnits)*delta;
+        value = delta;
         if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
-        liabilities *= _satUnits;
     }
 
     /*
@@ -101,6 +99,8 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         //value at 0
         value += delta * int(prevStrike);
         if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
+        minCollateral = minCollateral/scUnits + (minCollateral%scUnits == 0 ? 0 : 1);
+        liabilities = liabilities/scUnits + (liabilities%scUnits == 0 ? 0 : 1);
     }
 
 
