@@ -668,40 +668,55 @@ contract multiCallExchange {
                 whereas the holder has already provided the necessary collateral
                 this means that the debtor recieves the price premium
         */
-        _price *= int(_amount);
+
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
         position memory pos = positions[_legsHash];
-        pos.maxUnderlyingAssetDebtor *= _amount;
-        pos.maxUnderlyingAssetHolder *= _amount;
-        pos.maxUnderlyingAssetDebtor = uint(int(pos.maxUnderlyingAssetDebtor) - _price);
-        pos.maxUnderlyingAssetHolder = uint(int(pos.maxUnderlyingAssetHolder) + _price);
-        uint _satUnits = satUnits;  //gas savings
-        /*
-            surplus & 1 => round up limit for debtor
-            (surplus >> 1) => round up limit for holder
-        */
-        uint8 surplus = uint8(pos.maxUnderlyingAssetDebtor%_satUnits == 0 ? 0 : 1);
-        surplus += uint8(pos.maxUnderlyingAssetHolder%_satUnits == 0 ? 0 : 2);
-        pos.maxUnderlyingAssetDebtor = pos.maxUnderlyingAssetDebtor/_satUnits + (surplus&1);
-        pos.maxUnderlyingAssetHolder = pos.maxUnderlyingAssetHolder/_satUnits + (surplus>>1);
-
         optionsContract.setParams(_debtor, _holder, _maturity);
         //load call position into register
         optionsContract.clearPositions();
         for (uint i = 0; i < pos.callAmounts.length; i++)
             optionsContract.addPosition(pos.callStrikes[i], int(_amount)*pos.callAmounts[i], true);
         optionsContract.setTrustedAddressMultiLegExchange(0);
+
+        uint _satUnits = satUnits;  //gas savings
+
+        int premium;
+        {
+            uint totalReq;
+            uint holderReq;
+
+            {
+                //accounting for holder and debtor must be done seperately as that is how it is done in the options handler
+                uint temp = _amount * pos.maxUnderlyingAssetHolder;
+                holderReq = temp/_satUnits + (temp%_satUnits == 0 ? 0 : 1);
+                totalReq = holderReq;
+
+                temp = _amount * pos.maxUnderlyingAssetDebtor;
+                totalReq += temp/_satUnits + (temp%_satUnits == 0 ? 0 : 1);            
+            }
+
+
+            /*
+                pos refers to the state of pos after the reassignment of its members
+
+                pos.maxUnderlyingAssetHolder = holderReq + premium
+                
+                premium = pos.maxUnderlyingAssetHolder - holderReq
+            */
+
+            if (_index == 0) {
+                pos.maxUnderlyingAssetHolder = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price) / int(_satUnits));
+                pos.maxUnderlyingAssetDebtor = uint(int(totalReq) - int(pos.maxUnderlyingAssetHolder));
+            } else {
+                pos.maxUnderlyingAssetDebtor = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - _price) / int(_satUnits));
+                pos.maxUnderlyingAssetHolder = uint(int(totalReq) - int(pos.maxUnderlyingAssetDebtor));
+            }
+            premium = int(pos.maxUnderlyingAssetHolder) - int(holderReq);
+        }
+
         optionsContract.setLimits(int(pos.maxUnderlyingAssetDebtor), int(pos.maxUnderlyingAssetHolder));
-        /*
-            we only want to round up on price when the market maker is receiving the premium
-            thus add (surplus>>1) when index == 1
-        */
-        optionsContract.setPaymentParams(_index==0, _price/int(_satUnits) + int(_index == 1 ? (surplus>>1) : 0 ) );
-        if (_index == 0 && (surplus&1) > 0)
-            optionsContract.coverCallOverflow(_debtor, _holder);
-        else if (_index == 1 && (surplus>>1) > 0)
-            optionsContract.coverCallOverflow(_holder, _debtor);
+        optionsContract.setPaymentParams(_index==0, premium);
 
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return false;
