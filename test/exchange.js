@@ -51,7 +51,7 @@ contract('exchange', async function(accounts) {
 		mCallHelperInstance = await mCallHelper.new(feeOracleInstance.address);
 		mPutHelperInstance = await mPutHelper.new(feeOracleInstance.address);
 		mLegDelegateInstance = await mLegDelegate.new();
-		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address, feeOracleInstance.address);
+		mLegHelperInstance = await mLegHelper.new(mLegDelegateInstance.address, feeOracleInstance.address);
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
@@ -837,11 +837,11 @@ contract('exchange', async function(accounts) {
 		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
 	});
 
-	it('uses max iterations limit', async () => {
+	it('uses max iterations limit market buy puts', async () => {
 		maturity++;
 		strike = 2;
-		maxIterations = 10;
-		for(let i = 0; i < 15; i++){
+		maxIterations = 5;
+		for(let i = 0; i < 2; i++){
 			await addStrike(receiverAccount, maturity, strike+i);
 			await addStrike(defaultAccount, maturity, strike+i);
 		}
@@ -849,10 +849,71 @@ contract('exchange', async function(accounts) {
 			await exchangeInstance.postOrder(maturity, strike, 1, 1, false, false, {from: defaultAccount});
 
 		await depositFunds(0, 100, false, {from: receiverAccount});
-		rec = await exchangeInstance.marketBuy(maturity, strike, 1, (new BN(100)).mul(scUnitsBN).toString(), maxIterations, false, {from: receiverAccount});
+		var prevBalanceRecAct = await optionsInstance.viewClaimedStable({from: receiverAccount});
+		await exchangeInstance.marketBuy(maturity, strike, 1, (new BN(100)).mul(scUnitsBN).toString(), maxIterations, false, {from: receiverAccount});
 		assert.equal((await optionsInstance.balanceOf(receiverAccount, maturity, 2, false)).toNumber(), maxIterations, "correct balance of puts for receiver account");
 		assert.equal((await optionsInstance.balanceOf(defaultAccount, maturity, 2, false)).toNumber(), -maxIterations, "correct balance of puts for default account");
+		var balanceRecAct = await optionsInstance.viewClaimedStable({from: receiverAccount});
+		assert.equal(prevBalanceRecAct.sub(balanceRecAct).toString(), (new BN(maxIterations)).toString(), "market taker requirement rounds up");
 	});
 
+	it('uses max iterations limit market sell puts', async () => {
+		maturity++;
+		strike = 2;
+		maxIterations = 5;
+		for(let i = 0; i < 2; i++){
+			await addStrike(receiverAccount, maturity, strike+i);
+			await addStrike(defaultAccount, maturity, strike+i);
+		}
+		for (let i = 0; i < maxIterations+2; i++)
+			await exchangeInstance.postOrder(maturity, strike, 1, 1, true, false, {from: defaultAccount});
+
+		await depositFunds(0, 100, false, {from: receiverAccount});
+		var prevBalanceRecAct = await optionsInstance.viewClaimedStable({from: receiverAccount});
+		await exchangeInstance.marketSell(maturity, strike, 1, (new BN(100)).mul(scUnitsBN).toString(), maxIterations, false, {from: receiverAccount});
+		assert.equal((await optionsInstance.balanceOf(receiverAccount, maturity, 2, false)).toNumber(), -maxIterations, "correct balance of puts for receiver account");
+		assert.equal((await optionsInstance.balanceOf(defaultAccount, maturity, 2, false)).toNumber(), maxIterations, "correct balance of puts for default account");
+		var balanceRecAct = await optionsInstance.viewClaimedStable({from: receiverAccount});
+		//because the strike price is less than 1 full unit of the strike asset  and the amount is also a sub unit the collateral requirement is constant after the first iteration at 1 sub unit
+		assert.equal(prevBalanceRecAct.sub(balanceRecAct).toString(), "1", "market taker requirement rounds up");
+	});
+
+	it('uses max iterations limit market sell calls', async () => {
+		maturity++;
+		strike = 2;
+		maxIterations = 5;
+		for(let i = 0; i < 2; i++){
+			await addStrike(receiverAccount, maturity, strike+i);
+			await addStrike(defaultAccount, maturity, strike+i);
+		}
+		for (let i = 0; i < maxIterations+2; i++)
+			await exchangeInstance.postOrder(maturity, strike, 1, 1, true, true, {from: defaultAccount});
+		await depositFunds(10000000, 0, false, {from: receiverAccount});
+		var prevBalanceRecAct = await optionsInstance.viewClaimedTokens({from: receiverAccount});
+		await exchangeInstance.marketSell(maturity, strike, 1, (new BN(100)).mul(satUnitsBN).toString(), maxIterations, true, {from: receiverAccount});
+		assert.equal((await optionsInstance.balanceOf(receiverAccount, maturity, 2, true)).toNumber(), -maxIterations, "correct balance of puts for receiver account");
+		assert.equal((await optionsInstance.balanceOf(defaultAccount, maturity, 2, true)).toNumber(), maxIterations, "correct balance of puts for default account");
+		var balanceRecAct = await optionsInstance.viewClaimedTokens({from: receiverAccount});
+		assert.equal(prevBalanceRecAct.sub(balanceRecAct).toString(), (new BN(maxIterations)).toString(), "market taker requirement rounds up");
+	});
+
+	it('uses max iterations limit market buy calls', async () => {
+		maturity++;
+		strike = 2;
+		maxIterations = 5;
+		for(let i = 0; i < 2; i++){
+			await addStrike(receiverAccount, maturity, strike+i);
+			await addStrike(defaultAccount, maturity, strike+i);
+		}
+		for (let i = 0; i < maxIterations+2; i++)
+			await exchangeInstance.postOrder(maturity, strike, 1, 1, false, true, {from: defaultAccount});
+		await depositFunds(10000000, 0, false, {from: receiverAccount});
+		var prevBalanceRecAct = await optionsInstance.viewClaimedTokens({from: receiverAccount});
+		await exchangeInstance.marketBuy(maturity, strike, 1, (new BN(100)).mul(satUnitsBN).toString(), maxIterations, true, {from: receiverAccount});
+		assert.equal((await optionsInstance.balanceOf(receiverAccount, maturity, 2, true)).toNumber(), maxIterations, "correct balance of puts for receiver account");
+		assert.equal((await optionsInstance.balanceOf(defaultAccount, maturity, 2, true)).toNumber(), -maxIterations, "correct balance of puts for default account");
+		var balanceRecAct = await optionsInstance.viewClaimedTokens({from: receiverAccount});
+		assert.equal(prevBalanceRecAct.sub(balanceRecAct).toString(), (new BN(maxIterations)).toString(), "market taker requirement rounds up");
+	});
 
 });

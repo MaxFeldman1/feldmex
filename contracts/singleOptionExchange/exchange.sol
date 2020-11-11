@@ -650,27 +650,31 @@ contract exchange{
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
         uint _satUnits = satUnits;  //gas savings
-        int8 surplus = int8(_price%_satUnits == 0 ? 0 : 1);
-        _price = _price/_satUnits;
+
+        _price = _price/_satUnits + (_debtorPays || _price%_satUnits == 0 ? 0 : 1);
+
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), true);
         optionsContract.setParams(_debtor,_holder,_maturity);
-        optionsContract.setPaymentParams(_debtorPays, int(_price) + surplus);
+        optionsContract.setPaymentParams(_debtorPays, int(_price) );
         optionsContract.setTrustedAddressMainExchange();
-        optionsContract.setLimits(int( _amount - _price) + surplus, int(_price) + surplus);
-        if (surplus == 1) {
-            if (_debtorPays)
-                optionsContract.coverCallOverflow(_debtor, _holder);
-            else
-                optionsContract.coverCallOverflow(_holder, _debtor);
-        }
+        optionsContract.setLimits(int( _amount - _price), int(_price) );
 
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return (false, 0);
-        if (_debtorPays) transferAmt = int(_price) + surplus;
+        if (_debtorPays) {
+            //fetch transfer amount for holder
+            transferAmt = int(_price);
+            /*
+                We do not need to worry about debtor here because that was all handled in the options handler contract
+            */
+        }
         else {
             transferAmt = optionsContract.transferAmountDebtor();
-            claimedToken[_debtor] += _amount - _price + uint(surplus) - uint(transferAmt);
+            claimedToken[_debtor] += _amount - _price - uint(transferAmt);
+            /*
+                We do not need to worry about holder here because that was all handled in the options handler contract
+            */
         }
         satReserves = uint(int(satReserves)-transferAmt);
     }
@@ -692,30 +696,59 @@ contract exchange{
         @return uint transferAmt: returns the amount of strike asset that was transfered from the message sender to act as collateral for the debtor
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _price, bool _debtorPays) internal returns (bool success, int transferAmt){
-        _price*=_amount;    //price is now equal to total option premium
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
-        uint _scUnits = scUnits;  //gas savings
-        int8 surplus = int8(_price%_scUnits == 0 && (_amount * _strike - _price)%scUnits == 0 ? 0 : 1);
+
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), false);
         optionsContract.setParams(_debtor,_holder,_maturity);
-        optionsContract.setPaymentParams(_debtorPays, int(_price / _scUnits) + surplus);
         optionsContract.setTrustedAddressMainExchange();
-        optionsContract.setLimits(int( (_amount * _strike - _price) / _scUnits) + surplus, int(_price / _scUnits) + surplus);
-        if (surplus == 1) {
-            if (_debtorPays)
-                optionsContract.coverPutOverflow(_debtor, _holder);
-            else
-                optionsContract.coverPutOverflow(_holder, _debtor);
+
+        address _d = _debtor;   //prevent stack too deep
+
+        uint _scUnits = scUnits;  //gas savings
+        /*
+            Total Req == ceil (_amount *_strike / scUnits) == debtorReq + holderReq
+
+            When _debtorPays
+                holderReq = floor ( _amount * _price / scUnits)
+                debtorReq = ceil (_amount *_strike / scUnits) - holderReq
+
+            When !_debtorPays
+                debtorReq = floor ( _amount * (_strike - _price)) / scUnits )
+                holderReq = ceil (_amount *_strike / scUnits) - debtorReq
+        */
+        uint totalReq = _amount*_strike;
+        totalReq = totalReq/_scUnits + (totalReq%_scUnits == 0 ? 0 : 1);
+
+        uint debtorReq;
+        uint holderReq;
+
+        if (_debtorPays) {
+            holderReq =  _amount * _price / _scUnits;
+            debtorReq = totalReq - holderReq;
+        } else {
+            debtorReq =  (_amount * (_strike - _price)) / _scUnits;
+            holderReq = totalReq - debtorReq;
         }
+        optionsContract.setPaymentParams(_debtorPays, int(holderReq) );
+        optionsContract.setLimits( int(debtorReq), int(holderReq) );
 
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return (false, 0);
-        if (_debtorPays) transferAmt = int(_price / _scUnits) + surplus;
+        if (_debtorPays) {
+            //fetch transfer amount for holder
+            transferAmt = int(holderReq);
+            /*
+                We do not need to worry about debtor here because that was all handled in the options handler contract
+            */
+        }
         else {
             transferAmt = optionsContract.transferAmountDebtor();
-            claimedStable[_debtor] += (_amount * _strike - _price) / _scUnits + uint(surplus) - uint(transferAmt);
+            claimedStable[_d] += debtorReq - uint(transferAmt);
+            /*
+                We do not need to worry about holder here because that was all handled in the options handler contract
+            */
         }
         scReserves = uint(int(scReserves)-transferAmt);
     }
