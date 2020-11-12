@@ -245,7 +245,6 @@ contract('multi call exchange', function(accounts){
 		var prevBalanceAct1 = await optionsInstance.viewClaimedTokens({from: accounts[1]});
 
 		await multiCallExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, {from: accounts[1]});
-
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
 			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
@@ -254,8 +253,13 @@ contract('multi call exchange', function(accounts){
 				-maxIterations*callAmounts[i] + "", "correct call balance first account");
 		}
 		var balanceAct1 = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var expectedChange = (maxIterations*(maxUnderlyingAssetHolder%asset1SubUnits == 0 ? 0 : 1) + Math.ceil(maxIterations*(maxUnderlyingAssetDebtor)/asset1SubUnits)).toString();
-		assert.equal(prevBalanceAct1.sub(balanceAct1).toString(), expectedChange, "corrected change account 1 in claimed Tokens in options handler contract");
+		var totalReq = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
+		var reqHolder = Math.floor( (maxUnderlyingAssetHolder + price) / asset1SubUnits);
+		var reqDebtor = totalReq - reqHolder;
+		reqHolder *= maxIterations;
+		reqDebtor *= maxIterations;
+		reqDebtor -= Math.floor(maxIterations * (maxUnderlyingAssetDebtor%asset1SubUnits) / asset1SubUnits);
+		assert.equal(prevBalanceAct1.sub(balanceAct1).toString(), reqDebtor, "corrected change account 1 in claimed Tokens in options handler contract");
 	});
 
 	it('uses max iterations limit index 1', async () => {
@@ -285,8 +289,13 @@ contract('multi call exchange', function(accounts){
 				maxIterations*callAmounts[i] + "", "correct call balance first account");
 		}
 		var balanceAct1 = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var expectedChange = (Math.ceil(maxIterations*(maxUnderlyingAssetHolder/asset1SubUnits)) + maxIterations*(maxUnderlyingAssetDebtor%asset1SubUnits == 0 ? 0 : 1)).toString();
-		assert.equal(prevBalanceAct1.sub(balanceAct1).toString(), expectedChange, "corrected change account 1 in claimed Tokens in options handler contract");
+		var totalReq = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
+		var reqDebtor = Math.floor( (maxUnderlyingAssetDebtor - price) / asset1SubUnits);
+		var reqHolder = totalReq - reqDebtor;
+		reqHolder *= maxIterations;
+		reqDebtor *= maxIterations;
+		reqHolder -= Math.floor(maxIterations * (maxUnderlyingAssetHolder%asset1SubUnits) / asset1SubUnits);
+		assert.equal(prevBalanceAct1.sub(balanceAct1).toString(), reqHolder, "corrected change account 1 in claimed Tokens in options handler contract");
 	});
 
 });
