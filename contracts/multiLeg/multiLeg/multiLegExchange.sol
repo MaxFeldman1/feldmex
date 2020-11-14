@@ -223,8 +223,7 @@ contract multiLegExchange is mLegData {
         @param bytes32 _legsHash: the settlement price of the the underlying asset at the maturity
         @param uint _price: the amount paid or received for the call or put
         @param uint _amount: the amount of calls or puts that this offer is for
-        @param bool _buy: if true this is a buy order if false this is a sell order
-        @param bool _call: if true this is a call order if false this is a put order
+        @param uint8 _index: the index of the order to be placed
     */
     function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public payable {
         require(_maturity != 0 && _legsHash != 0 && _amount != 0);
@@ -260,8 +259,7 @@ contract multiLegExchange is mLegData {
         @param bytes32 _legsHash: the settlement price of the the underlying asset at the maturity
         @param uint _price: the amount paid or received for the call or put
         @param uint _amount: the amount of calls or puts that this offer is for
-        @param bool _buy: if true this is a buy order if false this is a sell order
-        @param bool _call: if true this is a call order if false this is a put order 
+        @param uint8 _index: the index of the order to be placed
         @param bytes32 _name: the name identifier of the order from which to search for the location to insert this order
     */
     function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) public payable {
@@ -399,15 +397,15 @@ contract multiLegExchange is mLegData {
         @param uint _limitPrice: lowest price to sell at
         @param uint _amount: the amount of calls or puts that this order is for
         @param uint8 _maxInterations: the maximum amount of calls to mintPosition
-        @param bool _call: if true this is a call order if false this is a put order 
+        @param bool _payInUnderlying: if true premium is paid in underlying asset if false premium is paid in strike asset
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public returns(uint unfilled){
+    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) public returns(uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
         //ensure all strikes are contained
-        uint8 index = (_call? 0: 2);
+        uint8 index = (_payInUnderlying? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][index]];
         Offer memory offer = offers[node.hash];
         require(node.name != 0);
@@ -460,15 +458,15 @@ contract multiLegExchange is mLegData {
         @param uint _limitPrice: highest price to buy at
         @param uint _amount: the amount of calls or puts that this order is for
         @param uint8 _maxInterations: the maximum amount of calls to mintPosition
-        @param bool _call: if true this is a call order if false this is a put order 
+        @param bool _payInUnderlying: if true premium is paid in underlying asset if false premium is paid in strike asset
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public returns (uint unfilled){
+    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) public returns (uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
         //ensure all strikes are contained
-        uint8 index = (_call ? 1 : 3);
+        uint8 index = (_payInUnderlying ? 1 : 3);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][index]];
         Offer memory offer = offers[node.hash];
         require(node.name != 0);

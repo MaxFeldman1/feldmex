@@ -45,10 +45,10 @@ contract('multi leg exchange', function(accounts){
 		multiLegExchangeInstance = await multiLegExchange.at(await mOrganizerInstance.exchangeAddresses(optionsInstance.address, 2));
 
 		asset1SubUnitsBN = (new BN("10")).pow(new BN(await asset1.decimals()));
-		asset1SubUnits = asset1SubUnitsBN.toString();
+		asset1SubUnits = asset1SubUnitsBN.toNumber();
 
 		asset2SubUnitsBN = (new BN("10")).pow(await asset2.decimals());
-		asset2SubUnits = asset2SubUnitsBN.toString();
+		asset2SubUnits = asset2SubUnitsBN.toNumber();
 	});
 
 	async function depositFunds(to, asset1Amount, asset2Amount, exchange){
@@ -486,7 +486,7 @@ contract('multi leg exchange', function(accounts){
 	});
 
 
-	it('uses max iterations limit', async () => {
+	it('uses max iterations limit index 0', async () => {
 		maturity++;
 		price = 6;
 		maxIterations = 5;
@@ -501,23 +501,217 @@ contract('multi leg exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-price), amount*maxStrikeAssetDebtor, false);
 
 		for (let i = 0; i < amount; i++)
-			await postOrder(maturity, legsHash, price, 1, 0, {from: deployerAccount});
+			await multiLegExchangeInstance.postOrder(maturity, legsHash, price, 1, 0, {from: deployerAccount});
+
+		var prevBalanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var prevBalanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
 
 		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, true, {from: accounts[1]});
 
 		//check call balances
 		for (var i = 0; i < callStrikes.length; i++){
 			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
-				asset1SubUnitsBN.mul(new BN(maxIterations*callAmounts[i])).toString(), "correct call balance deployer account");
+				(maxIterations*callAmounts[i]).toString(), "correct call balance deployer account");
 			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
-				asset1SubUnitsBN.mul(new BN(-maxIterations*callAmounts[i])).toString(), "correct call balance first account");
+				(-maxIterations*callAmounts[i]).toString(), "correct call balance first account");
 		}
 		//check put balances
 		for (var i = 0; i < putStrikes.length; i++){
 			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
-				asset2SubUnitsBN.mul(new BN(maxIterations*putAmounts[i])).toString(), "correct put balance deployer account");
+				(maxIterations*putAmounts[i]).toString(), "correct put balance deployer account");
 			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
-				asset2SubUnitsBN.mul(new BN(-maxIterations*putAmounts[i])).toString(), "correct put balance first account");
+				(-maxIterations*putAmounts[i]).toString(), "correct put balance first account");
 		}
+
+		var balanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var balanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+
+		var totalReqUnderlying = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
+		var reqUnderlyingHolder = Math.floor( (maxUnderlyingAssetHolder + price) / asset1SubUnits);
+		var reqUnderlyingDebtor = totalReqUnderlying - reqUnderlyingHolder;
+		reqUnderlyingHolder *= maxIterations;
+		reqUnderlyingDebtor *= maxIterations;
+		reqUnderlyingDebtor -= Math.floor(maxIterations * (maxUnderlyingAssetDebtor%asset1SubUnits) / asset1SubUnits);
+		assert.equal(prevBalanceUnderlyingAsset.sub(balanceUnderlyingAsset).toString(), reqUnderlyingDebtor, "corrected change account 1 in claimed Tokens in options handler contract");
+
+		var totalReqStrike = Math.ceil(maxStrikeAssetDebtor/asset2SubUnits) + Math.ceil(maxStrikeAssetHolder/asset2SubUnits);
+		var reqStrikeHolder = Math.floor( maxStrikeAssetHolder / asset2SubUnits);
+		var reqStrikeDebtor = totalReqStrike - reqStrikeHolder;
+		reqStrikeHolder *= maxIterations;
+		reqStrikeDebtor *= maxIterations;
+		reqStrikeDebtor -= Math.floor(maxIterations * (maxStrikeAssetDebtor%asset2SubUnits) / asset2SubUnits);
+		assert.equal(prevBalanceStrikeAsset.sub(balanceStrikeAsset).toString(), reqStrikeDebtor, "corrected change account 1 in claimed Stable in options handler contract");
 	});
+
+	it('uses max iterations limit index 1', async () => {
+		maturity++;
+		price = 6;
+		maxIterations = 5;
+		amount = maxIterations+2;
+		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: accounts[1]});
+		await depositFunds(deployerAccount, amount*(maxUnderlyingAssetDebtor-price), amount*maxStrikeAssetDebtor, true);
+		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+price), amount*maxStrikeAssetHolder, false);
+
+		for (let i = 0; i < amount; i++)
+			await multiLegExchangeInstance.postOrder(maturity, legsHash, price, 1, 1, {from: deployerAccount});
+
+		var prevBalanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var prevBalanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+
+		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, true, {from: accounts[1]});
+
+		//check call balances
+		for (var i = 0; i < callStrikes.length; i++){
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				(-maxIterations*callAmounts[i]).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				(maxIterations*callAmounts[i]).toString(), "correct call balance first account");
+		}
+		//check put balances
+		for (var i = 0; i < putStrikes.length; i++){
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				(-maxIterations*putAmounts[i]).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				(maxIterations*putAmounts[i]).toString(), "correct put balance first account");
+		}
+
+		var balanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var balanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+
+		var totalReqUnderlying = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
+		var reqUnderlyingDebtor = Math.floor( (maxUnderlyingAssetDebtor - price) / asset1SubUnits);
+		var reqUnderlyingHolder = totalReqUnderlying - reqUnderlyingDebtor;
+		reqUnderlyingHolder *= maxIterations;
+		reqUnderlyingDebtor *= maxIterations;
+		reqUnderlyingHolder -= Math.floor(maxIterations * (maxUnderlyingAssetHolder%asset1SubUnits) / asset1SubUnits);
+		assert.equal(prevBalanceUnderlyingAsset.sub(balanceUnderlyingAsset).toString(), reqUnderlyingHolder, "corrected change account 1 in claimed Tokens in options handler contract");
+
+		var totalReqStrike = Math.ceil(maxStrikeAssetDebtor/asset2SubUnits) + Math.ceil(maxStrikeAssetHolder/asset2SubUnits);
+		var reqStrikeDebtor = Math.floor( maxStrikeAssetDebtor / asset2SubUnits);
+		var reqStrikeHolder = totalReqStrike - reqStrikeDebtor;
+		reqStrikeHolder *= maxIterations;
+		reqStrikeDebtor *= maxIterations;
+		reqStrikeHolder -= Math.floor(maxIterations * (maxStrikeAssetHolder%asset2SubUnits) / asset2SubUnits);
+		assert.equal(prevBalanceStrikeAsset.sub(balanceStrikeAsset).toString(), reqStrikeHolder, "corrected change account 1 in claimed Stable in options handler contract");
+	});
+
+	it('uses max iterations limit index 2', async () => {
+		maturity++;
+		price = 6;
+		maxIterations = 5;
+		amount = maxIterations+2;
+		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: accounts[1]});
+		await depositFunds(deployerAccount, amount*maxUnderlyingAssetHolder, amount*(maxStrikeAssetHolder+price), true);
+		await depositFunds(accounts[1], amount*maxUnderlyingAssetDebtor, amount*(maxStrikeAssetDebtor-price), false);
+
+		for (let i = 0; i < amount; i++)
+			await multiLegExchangeInstance.postOrder(maturity, legsHash, price, 1, 2, {from: deployerAccount});
+
+		var prevBalanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var prevBalanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+
+		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, false, {from: accounts[1]});
+
+		//check call balances
+		for (var i = 0; i < callStrikes.length; i++){
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				(maxIterations*callAmounts[i]).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				(-maxIterations*callAmounts[i]).toString(), "correct call balance first account");
+		}
+		//check put balances
+		for (var i = 0; i < putStrikes.length; i++){
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				(maxIterations*putAmounts[i]).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				(-maxIterations*putAmounts[i]).toString(), "correct put balance first account");
+		}
+
+		var balanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var balanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+
+		var totalReqUnderlying = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
+		var reqUnderlyingHolder = Math.floor( maxUnderlyingAssetHolder / asset1SubUnits);
+		var reqUnderlyingDebtor = totalReqUnderlying - reqUnderlyingHolder;
+		reqUnderlyingHolder *= maxIterations;
+		reqUnderlyingDebtor *= maxIterations;
+		reqUnderlyingDebtor -= Math.floor(maxIterations * (maxUnderlyingAssetDebtor%asset1SubUnits) / asset1SubUnits);
+		assert.equal(prevBalanceUnderlyingAsset.sub(balanceUnderlyingAsset).toString(), reqUnderlyingDebtor, "corrected change account 1 in claimed Tokens in options handler contract");
+
+		var totalReqStrike = Math.ceil(maxStrikeAssetDebtor/asset2SubUnits) + Math.ceil(maxStrikeAssetHolder/asset2SubUnits);
+		var reqStrikeHolder = Math.floor( (maxStrikeAssetHolder+price) / asset2SubUnits);
+		var reqStrikeDebtor = totalReqStrike - reqStrikeHolder;
+		reqStrikeHolder *= maxIterations;
+		reqStrikeDebtor *= maxIterations;
+		reqStrikeDebtor -= Math.floor(maxIterations * (maxStrikeAssetDebtor%asset2SubUnits) / asset2SubUnits);
+		assert.equal(prevBalanceStrikeAsset.sub(balanceStrikeAsset).toString(), reqStrikeDebtor, "corrected change account 1 in claimed Stable in options handler contract");
+	});
+
+	it('uses max iterations limit index 3', async () => {
+		maturity++;
+		price = 6;
+		maxIterations = 5;
+		amount = maxIterations+2;
+		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, callStrikes[0], 0, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, callStrikes[1], 1, {from: accounts[1]});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: deployerAccount});
+		await optionsInstance.addStrike(maturity, putStrikes[0], 2, {from: accounts[1]});
+		await depositFunds(deployerAccount, amount*maxUnderlyingAssetDebtor, amount*(maxStrikeAssetDebtor-price), true);
+		await depositFunds(accounts[1], amount*maxUnderlyingAssetHolder, amount*(maxStrikeAssetHolder+price), false);
+
+		for (let i = 0; i < amount; i++)
+			await multiLegExchangeInstance.postOrder(maturity, legsHash, price, 1, 3, {from: deployerAccount});
+
+		var prevBalanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var prevBalanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+
+		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, false, {from: accounts[1]});
+
+		//check call balances
+		for (var i = 0; i < callStrikes.length; i++){
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, callStrikes[i], true)).toString(),
+				(-maxIterations*callAmounts[i]).toString(), "correct call balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
+				(maxIterations*callAmounts[i]).toString(), "correct call balance first account");
+		}
+		//check put balances
+		for (var i = 0; i < putStrikes.length; i++){
+			assert.equal((await optionsInstance.balanceOf(deployerAccount, maturity, putStrikes[i], false)).toString(),
+				(-maxIterations*putAmounts[i]).toString(), "correct put balance deployer account");
+			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
+				(maxIterations*putAmounts[i]).toString(), "correct put balance first account");
+		}
+
+		var balanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var balanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+
+		var totalReqUnderlying = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
+		var reqUnderlyingDebtor = Math.floor( maxUnderlyingAssetDebtor / asset1SubUnits);
+		var reqUnderlyingHolder = totalReqUnderlying - reqUnderlyingDebtor;
+		reqUnderlyingHolder *= maxIterations;
+		reqUnderlyingDebtor *= maxIterations;
+		reqUnderlyingHolder -= Math.floor(maxIterations * (maxUnderlyingAssetHolder%asset1SubUnits) / asset1SubUnits);
+		assert.equal(prevBalanceUnderlyingAsset.sub(balanceUnderlyingAsset).toString(), reqUnderlyingHolder, "corrected change account 1 in claimed Tokens in options handler contract");
+
+		var totalReqStrike = Math.ceil(maxStrikeAssetDebtor/asset2SubUnits) + Math.ceil(maxStrikeAssetHolder/asset2SubUnits);
+		var reqStrikeDebtor = Math.floor( (maxStrikeAssetDebtor - price) / asset2SubUnits);
+		var reqStrikeHolder = totalReqStrike - reqStrikeDebtor;
+		reqStrikeHolder *= maxIterations;
+		reqStrikeDebtor *= maxIterations;
+		reqStrikeHolder -= Math.floor(maxIterations * (maxStrikeAssetHolder%asset2SubUnits) / asset2SubUnits);
+		assert.equal(prevBalanceStrikeAsset.sub(balanceStrikeAsset).toString(), reqStrikeHolder, "corrected change account 1 in claimed Stable in options handler contract");
+	});
+
 });
