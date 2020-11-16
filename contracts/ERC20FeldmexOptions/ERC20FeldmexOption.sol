@@ -1,11 +1,13 @@
 pragma solidity >=0.6.0;
 import "../interfaces/IERC20.sol";
 import "../optionsHandler/options.sol";
+import "./detachedOption.sol";
 
 contract ERC20FeldmexOption is IERC20 {
 
 
 	address public optionsHandlerAddress;
+	address public detachedOptionsAddress;
 
 	address public underlyingAssetAddress;
 	address public strikeAssetAddress;
@@ -39,11 +41,13 @@ contract ERC20FeldmexOption is IERC20 {
 		options optionsContract = options(_optionsHandlerAddress);
 		address _underlyingAssetAddress = optionsContract.underlyingAssetAddress();
 		address _strikeAssetAddress = optionsContract.strikeAssetAddress();
-		decimals = IERC20(_call ? _underlyingAssetAddress : _strikeAssetAddress).decimals();
+		uint8 _decimals = IERC20(_call ? _underlyingAssetAddress : _strikeAssetAddress).decimals();
+		decimals = _decimals;
 		underlyingAssetAddress = _underlyingAssetAddress;
 		strikeAssetAddress = _strikeAssetAddress;
-		name = _call ? "Feldmex Call" : "Feldmex Puts";
-		coinSubUnits = 10 ** uint(IERC20(_call ? underlyingAssetAddress : strikeAssetAddress).decimals());
+		name = _call ? "Feldmex Call" : "Feldmex Put";
+		coinSubUnits = 10 ** uint(_decimals);
+		detachedOptionsAddress = address(new detachedOption(_underlyingAssetAddress, _strikeAssetAddress, _maturity, _strike, _decimals, _call));
 	}
 
 	/*
@@ -108,7 +112,15 @@ contract ERC20FeldmexOption is IERC20 {
 		options optionsContract = options(optionsHandlerAddress);
 		optionsContract.clearPositions();
 		optionsContract.addPosition(_strike, int(_value), _call);
-		optionsContract.setLimits(int(_value * (_call ? coinSubUnits : _strike)), 0);
+		uint limit;
+		if (_call) limit = _value;
+		else {
+			uint temp = _value*_strike;
+			uint _subUnits = coinSubUnits;
+			limit = temp/_subUnits + (temp%_subUnits == 0 ? 0 : 1);
+		}
+		assert(int(limit) >= 0);
+		optionsContract.setLimits(int(limit), 0);
 		optionsContract.setPaymentParams(true, 0);
 		optionsContract.setTrustedAddressFeldmexERC20(maturity, _strike, _call);
 	}
