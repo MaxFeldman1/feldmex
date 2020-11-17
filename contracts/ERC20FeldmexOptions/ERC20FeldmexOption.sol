@@ -47,7 +47,7 @@ contract ERC20FeldmexOption is IERC20 {
 		strikeAssetAddress = _strikeAssetAddress;
 		name = _call ? "Feldmex Call" : "Feldmex Put";
 		coinSubUnits = 10 ** uint(_decimals);
-		detachedOptionsAddress = address(new detachedOption(_underlyingAssetAddress, _strikeAssetAddress, _maturity, _strike, _decimals, _call));
+		detachedOptionsAddress = address(new detachedOption(_optionsHandlerAddress, _underlyingAssetAddress, _strikeAssetAddress, _maturity, _strike, _decimals, _call));
 	}
 
 	/*

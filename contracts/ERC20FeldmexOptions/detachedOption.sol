@@ -29,9 +29,10 @@ contract detachedOption is IERC20 {
 	uint public override totalSupply;
 
 	constructor(
-		address _underlyingAssetAddress, address _strikeAssetAddress,
+		address _optionsHandlerAddress, address _underlyingAssetAddress, address _strikeAssetAddress,
 		uint _maturity, uint _strike, uint8 _decimals, bool _call
 	) public {
+		options(_optionsHandlerAddress).addStrike(_maturity, _strike, 0);
 		baseERC20FeldmexOptionAddress = msg.sender;
 		underlyingAssetAddress = _underlyingAssetAddress;
 		strikeAssetAddress = _strikeAssetAddress;
@@ -77,12 +78,14 @@ contract detachedOption is IERC20 {
 
 
 	function deposit(uint _amount, address _to) public {
+		require(!inPayoutPhase);
 		IERC20(baseERC20FeldmexOptionAddress).transferFrom(_to, address(this), _amount);
 		balanceOf[msg.sender] += _amount;
 		totalSupply += _amount;
 	}
 
 	function withdraw(uint _amount, address _to) public {
+		require(!inPayoutPhase);
 		require(balanceOf[msg.sender] >= _amount);
 		balanceOf[msg.sender] -= _amount;
 		IERC20(baseERC20FeldmexOptionAddress).transfer(_to, _amount);
@@ -109,6 +112,7 @@ contract detachedOption is IERC20 {
 		require(inPayoutPhase, "must be in payout phase before funds may be claimed");
 		_amount = balanceOf[msg.sender];
 		_payout = _amount * totalPayout / totalSupply;
-		IERC20(call ? underlyingAssetAddress : strikeAssetAddress).transfer(_to, _amount);
+		delete balanceOf[msg.sender];
+		IERC20(call ? underlyingAssetAddress : strikeAssetAddress).transfer(_to, _payout);
 	}
 }
