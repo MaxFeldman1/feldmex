@@ -8,9 +8,6 @@ import "./mLegData.sol";
 */
 contract multiLegExchange is mLegData {
 
-    function viewClaimed(bool _token) public view returns(uint ret){ret = _token? claimedToken[msg.sender] : claimedStable[msg.sender];}
-
-
     /*
         @Description: returns arrays callAmounts and callStrikes of a given position
 

@@ -13,7 +13,7 @@ contract exchange{
     mapping(address => uint) claimedStable;
 
     //------------functions to view balances----------------
-    function viewClaimed(bool _token) public view returns(uint ret){ret = _token? claimedToken[msg.sender] : claimedStable[msg.sender];}
+    function viewClaimed(address _owner, bool _token) public view returns(uint ret){ret = _token? claimedToken[_owner] : claimedStable[_owner];}
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{

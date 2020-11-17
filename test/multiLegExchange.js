@@ -136,14 +136,14 @@ contract('multi leg exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-price), amount*maxStrikeAssetDebtor, false);
 
 		await postOrder(maturity, legsHash, price, amount, 0, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toNumber(), 0, "correct underlying asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toNumber(), 0, "correct strike asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 0);
 		await multiLegExchangeInstance.cancelOrder(listHead, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), amount*(maxUnderlyingAssetHolder+price), "correct underlying asset balance after canceling order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), amount*maxStrikeAssetHolder, "correct strike asset balance after cancling order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toNumber(), amount*(maxUnderlyingAssetHolder+price), "correct underlying asset balance after canceling order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toNumber(), amount*maxStrikeAssetHolder, "correct strike asset balance after cancling order");
 
 
 		await postOrder(maturity, legsHash, price, amount, 0, {from: deployerAccount});
@@ -153,8 +153,8 @@ contract('multi leg exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-secondPrice), amount*maxStrikeAssetDebtor, false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 0, {from: deployerAccount});
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toNumber(), 0, "correct underlying asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toNumber(), 0, "correct strike asset balance after posting second order");
 		
 		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, true, {from: accounts[1]});
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 0);
@@ -203,8 +203,8 @@ contract('multi leg exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN(-2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after all orders");
 
 		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toString(), "0", "correct underlying asset balance after all orders");
 		assert.equal((await optionsInstance.claimedStable(accounts[1])).toString(), "0", "correct strike asset balance after all orders");
@@ -229,14 +229,14 @@ contract('multi leg exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+price), amount*maxStrikeAssetHolder, false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 1, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 1);
 		await multiLegExchangeInstance.cancelOrder(listHead, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), amount*(maxUnderlyingAssetDebtor-price), "correct underlying asset balance after canceling order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), amount*maxStrikeAssetDebtor, "correct strike asset balance after cancling order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toNumber(), amount*(maxUnderlyingAssetDebtor-price), "correct underlying asset balance after canceling order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toNumber(), amount*maxStrikeAssetDebtor, "correct strike asset balance after cancling order");
 
 
 		await postOrder(maturity, legsHash, price, amount, 1, {from: deployerAccount});
@@ -246,8 +246,8 @@ contract('multi leg exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+secondPrice), amount*maxStrikeAssetHolder, false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 1, {from: deployerAccount});
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toNumber(), 0, "correct underlying asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toNumber(), 0, "correct strike asset balance after posting second order");
 
 		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, true, {from: accounts[1]});
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 1);
@@ -296,8 +296,8 @@ contract('multi leg exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN(2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after all orders");
 
 		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toString(), "0", "correct underlying asset balance after all orders");
 		assert.equal((await optionsInstance.claimedStable(accounts[1])).toString(), "0", "correct strike asset balance after all orders");
@@ -319,14 +319,14 @@ contract('multi leg exchange', function(accounts){
 		await depositFunds(accounts[1], amount*maxUnderlyingAssetDebtor, amount*(maxStrikeAssetDebtor-price), false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 2, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 2);
 		await multiLegExchangeInstance.cancelOrder(listHead, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), amount*maxUnderlyingAssetHolder, "correct underlying asset balance after canceling order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), amount*(maxStrikeAssetHolder+price), "correct strike asset balance after cancling order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toNumber(), amount*maxUnderlyingAssetHolder, "correct underlying asset balance after canceling order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toNumber(), amount*(maxStrikeAssetHolder+price), "correct strike asset balance after cancling order");
 
 
 		await postOrder(maturity, legsHash, price, amount, 2, {from: deployerAccount});
@@ -337,8 +337,8 @@ contract('multi leg exchange', function(accounts){
 
 		await postOrder(maturity, legsHash, secondPrice, amount, 2, {from: deployerAccount});
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting second order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after posting second order");
 		
 		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, false, {from: accounts[1]});
 
@@ -388,8 +388,8 @@ contract('multi leg exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN(-2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after all orders");
 
 		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toString(), "0", "correct underlying asset balance after all orders");
 		assert.equal((await optionsInstance.claimedStable(accounts[1])).toString(), "0", "correct strike asset balance after all orders");
@@ -410,14 +410,14 @@ contract('multi leg exchange', function(accounts){
 		await depositFunds(accounts[1], amount*maxUnderlyingAssetHolder, amount*(maxStrikeAssetHolder+price), false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 3, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after posting order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 3);
 		await multiLegExchangeInstance.cancelOrder(listHead, {from: deployerAccount});
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toNumber(), amount*maxUnderlyingAssetDebtor, "correct underlying asset balance after canceling order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toNumber(), amount*(maxStrikeAssetDebtor-price), "correct strike asset balance after cancling order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toNumber(), amount*maxUnderlyingAssetDebtor, "correct underlying asset balance after canceling order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toNumber(), amount*(maxStrikeAssetDebtor-price), "correct strike asset balance after cancling order");
 
 
 		await postOrder(maturity, legsHash, price, amount, 3, {from: deployerAccount});
@@ -427,8 +427,8 @@ contract('multi leg exchange', function(accounts){
 		await depositFunds(accounts[1], amount*maxUnderlyingAssetHolder, amount*(maxStrikeAssetHolder+secondPrice), false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 3, {from: deployerAccount});
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting second order");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after posting second order");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after posting second order");
 		
 		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, asset2SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, false, {from: accounts[1]});
 		listHead = await multiLegExchangeInstance.listHeads(maturity, legsHash, 3);
@@ -476,8 +476,8 @@ contract('multi leg exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN(2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
-		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiLegExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after all orders");
 
 		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toNumber(), 0, "correct underlying asset balance after all orders");
 		assert.equal((await optionsInstance.claimedStable(accounts[1])).toNumber(), Math.max(-amount*(maxStrikeAssetHolder+price),0)+Math.max(-amount*(maxStrikeAssetHolder+secondPrice),0),

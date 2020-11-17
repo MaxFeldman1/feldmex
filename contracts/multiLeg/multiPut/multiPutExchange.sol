@@ -8,10 +8,7 @@ import "../../feeOracle.sol";
 */
 contract multiPutExchange {
     //denominated in the legsHash asset scUnits
-    mapping(address => uint) claimedStable;
-
-    //------------functions to view balances----------------
-    function viewClaimed() public view returns(uint ret){ret = claimedStable[msg.sender];}
+    mapping(address => uint) public claimedStable;
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{

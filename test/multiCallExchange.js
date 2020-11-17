@@ -111,12 +111,12 @@ contract('multi call exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-price), false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 0, {from: deployerAccount});
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting order");
+		assert.equal((await multiCallExchangeInstance.claimedToken(deployerAccount)).toNumber(), 0, "correct underlying asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiCallExchangeInstance.listHeads(maturity, legsHash, 0);
 		await multiCallExchangeInstance.cancelOrder(listHead, {from: deployerAccount});
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), amount*(maxUnderlyingAssetHolder+price), "correct underlying asset balance after canceling order");
+		assert.equal((await multiCallExchangeInstance.claimedToken(deployerAccount)).toNumber(), amount*(maxUnderlyingAssetHolder+price), "correct underlying asset balance after canceling order");
 
 
 		await postOrder(maturity, legsHash, price, amount, 0, {from: deployerAccount});
@@ -126,7 +126,7 @@ contract('multi call exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetDebtor-secondPrice), false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 0, {from: deployerAccount});
 
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toString(), "0", "correct underlying asset balance after posting second order");
+		assert.equal((await multiCallExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after posting second order");
 		
 		await multiCallExchangeInstance.marketSell(maturity, legsHash, price, amtBN.sub(asset1SubUnitsBN.mul(new BN('5'))).toString(), maxIterations, {from: accounts[1]});
 		listHead = await multiCallExchangeInstance.listHeads(maturity, legsHash, 0);
@@ -157,9 +157,9 @@ contract('multi call exchange', function(accounts){
 			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
 				asset1SubUnitsBN.mul(new BN(-2*amount*callAmounts[i])), "correct call balance first account");
 		}
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiCallExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after all orders");
 
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: accounts[1]})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiCallExchangeInstance.claimedToken(accounts[1])).toString(), "0", "correct underlying asset balance after all orders");
 
 	});
 
@@ -174,12 +174,12 @@ contract('multi call exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+price), false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 1, {from: deployerAccount});
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting order");
+		assert.equal((await multiCallExchangeInstance.claimedToken(deployerAccount)).toNumber(), 0, "correct underlying asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiCallExchangeInstance.listHeads(maturity, legsHash, 1);
 		await multiCallExchangeInstance.cancelOrder(listHead, {from: deployerAccount});
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), amount*(maxUnderlyingAssetDebtor-price), "correct underlying asset balance after canceling order");
+		assert.equal((await multiCallExchangeInstance.claimedToken(deployerAccount)).toNumber(), amount*(maxUnderlyingAssetDebtor-price), "correct underlying asset balance after canceling order");
 
 
 		await postOrder(maturity, legsHash, price, amount, 1, {from: deployerAccount});
@@ -189,7 +189,7 @@ contract('multi call exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxUnderlyingAssetHolder+secondPrice), false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 1, {from: deployerAccount});
 
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct underlying asset balance after posting second order");
+		assert.equal((await multiCallExchangeInstance.claimedToken(deployerAccount)).toNumber(), 0, "correct underlying asset balance after posting second order");
 		
 		await multiCallExchangeInstance.marketBuy(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, {from: accounts[1]});
 		listHead = await multiCallExchangeInstance.listHeads(maturity, legsHash, 1);
@@ -221,9 +221,9 @@ contract('multi call exchange', function(accounts){
 				asset1SubUnitsBN.mul(new BN(2*amount*callAmounts[i])).toString(), "correct call balance first account");
 		}
 
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiCallExchangeInstance.claimedToken(deployerAccount)).toString(), "0", "correct underlying asset balance after all orders");
 
-		assert.equal((await multiCallExchangeInstance.viewClaimed({from: accounts[1]})).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await multiCallExchangeInstance.claimedToken(accounts[1])).toString(), "0", "correct underlying asset balance after all orders");
 	});
 
 

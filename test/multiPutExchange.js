@@ -117,12 +117,12 @@ contract('multi put exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxStrikeAssetDebtor-price), false);
 		//we will attempt to trade with 
 		await postOrder(maturity, legsHash, price, amount, 0, {from: deployerAccount});
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting order");
+		assert.equal((await multiPutExchangeInstance.claimedStable(deployerAccount)).toNumber(), 0, "correct strike asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiPutExchangeInstance.listHeads(maturity, legsHash, 0);
 		await multiPutExchangeInstance.cancelOrder(listHead, {from: deployerAccount});
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), amount*(maxStrikeAssetHolder+price), "correct strike asset balance after cancling order");
+		assert.equal((await multiPutExchangeInstance.claimedStable(deployerAccount)).toNumber(), amount*(maxStrikeAssetHolder+price), "correct strike asset balance after cancling order");
 
 
 		await postOrder(maturity, legsHash, price, amount, 0, {from: deployerAccount});
@@ -132,7 +132,7 @@ contract('multi put exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxStrikeAssetDebtor-secondPrice), false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 0, {from: deployerAccount});
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
+		assert.equal((await multiPutExchangeInstance.claimedStable(deployerAccount)).toNumber(), 0, "correct strike asset balance after posting second order");
 		
 		await multiPutExchangeInstance.marketSell(maturity, legsHash, price, asset2SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, {from: accounts[1]});
 		listHead = await multiPutExchangeInstance.listHeads(maturity, legsHash, 0);
@@ -164,9 +164,9 @@ contract('multi put exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN(-2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await multiPutExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await multiPutExchangeInstance.claimedStable(accounts[1])).toString(), "0", "correct strike asset balance after all orders");
 
 	});
 
@@ -182,12 +182,12 @@ contract('multi put exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxStrikeAssetHolder+price), false);
 		//we will attempt to trade with
 		await postOrder(maturity, legsHash, price, amount, 1, {from: deployerAccount});
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting order");
+		assert.equal((await multiPutExchangeInstance.claimedStable(deployerAccount)).toNumber(), 0, "correct strike asset balance after posting order");
 
 		//cancels order correctly
 		listHead = await multiPutExchangeInstance.listHeads(maturity, legsHash, 1);
 		await multiPutExchangeInstance.cancelOrder(listHead, {from: deployerAccount});
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), amount*(maxStrikeAssetDebtor-price), "correct strike asset balance after cancling order");
+		assert.equal((await multiPutExchangeInstance.claimedStable(deployerAccount)).toNumber(), amount*(maxStrikeAssetDebtor-price), "correct strike asset balance after cancling order");
 
 
 		await postOrder(maturity, legsHash, price, amount, 1, {from: deployerAccount});
@@ -197,7 +197,7 @@ contract('multi put exchange', function(accounts){
 		await depositFunds(accounts[1], amount*(maxStrikeAssetHolder+secondPrice), false);
 		await postOrder(maturity, legsHash, secondPrice, amount, 1, {from: deployerAccount});
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toNumber(), 0, "correct strike asset balance after posting second order");
+		assert.equal((await multiPutExchangeInstance.claimedStable(deployerAccount)).toNumber(), 0, "correct strike asset balance after posting second order");
 		
 		await multiPutExchangeInstance.marketBuy(maturity, legsHash, price, asset2SubUnitsBN.mul(new BN(amount-5)).toString(), maxIterations, {from: accounts[1]});
 		listHead = await multiPutExchangeInstance.listHeads(maturity, legsHash, 1);
@@ -230,9 +230,9 @@ contract('multi put exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN(2*amount*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await multiPutExchangeInstance.claimedStable(deployerAccount)).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await multiPutExchangeInstance.viewClaimed({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await multiPutExchangeInstance.claimedStable(accounts[1])).toString(), "0", "correct strike asset balance after all orders");
 
 	});
 

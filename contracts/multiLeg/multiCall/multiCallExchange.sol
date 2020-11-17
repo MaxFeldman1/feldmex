@@ -8,11 +8,7 @@ import "../../feeOracle.sol";
 */
 contract multiCallExchange {
     //denominated in Underlying Token satUnits
-    mapping(address => uint) claimedToken;
-    
-
-    //------------functions to view balances----------------
-    function viewClaimed() public view returns(uint ret){ret = claimedToken[msg.sender];}
+    mapping(address => uint) public claimedToken;
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{

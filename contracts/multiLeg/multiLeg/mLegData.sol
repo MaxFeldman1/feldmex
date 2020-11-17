@@ -2,10 +2,10 @@ pragma solidity >=0.6.0;
 
 contract mLegData {
 	   //denominated in Underlying Token satUnits
-    mapping(address => uint) claimedToken;
+    mapping(address => uint) public claimedToken;
     
     //denominated in the legsHash asset scUnits
-    mapping(address => uint) claimedStable;
+    mapping(address => uint) public claimedStable;
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{

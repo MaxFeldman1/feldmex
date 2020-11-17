@@ -136,7 +136,7 @@ contract('exchange', async function(accounts) {
 		await strikeAssetInstance.transfer(receiverAccount, 10*transferAmount*strike*scUnits, {from: defaultAccount});
 		await depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, true, {from: defaultAccount});
 		await depositFunds(10*transferAmount*satUnits, 10*transferAmount*strike*scUnits, false, {from: receiverAccount});
-		res = (await exchangeInstance.viewClaimed(true, {from: defaultAccount})).toNumber();
+		res = (await exchangeInstance.viewClaimed(defaultAccount, true)).toNumber();
 		assert.equal(res, 10*satUnits*transferAmount, "correct amount of collateral claimed for " + defaultAccount);
 		defaultAccountBalance = res;
 		res = (await optionsInstance.claimedTokens(receiverAccount)).toNumber();
@@ -185,7 +185,7 @@ contract('exchange', async function(accounts) {
 		await exchangeInstance.cancelOrder(res.name, {from: defaultAccount});
 		assert.equal(await exchangeInstance.listHeads(maturity, strike, 0), defaultBytes32, "the order cancellation has been recognized");
 		//now we make sure the balances of each user are correct
-		assert.equal((await exchangeInstance.viewClaimed(true, {from: defaultAccount})).toNumber(), defaultAccountBalance, "default Account balance is correct");
+		assert.equal((await exchangeInstance.viewClaimed(defaultAccount, true)).toNumber(), defaultAccountBalance, "default Account balance is correct");
 		assert.equal((await optionsInstance.claimedTokens(receiverAccount)).toNumber(), receiverAccountBalance, "receiver Account balance is correct");
 	});
 
@@ -221,9 +221,9 @@ contract('exchange', async function(accounts) {
 		await exchangeInstance.cancelOrder(res.name, {from: defaultAccount});
 		res = await exchangeInstance.listHeads(maturity, strike, 1);
 		assert.equal(res, defaultBytes32, "the order cancellation has been recognized");
-		defaultTotal = (await exchangeInstance.viewClaimed(true, {from: defaultAccount})).add(await optionsInstance.claimedTokens(defaultAccount)).toString();
+		defaultTotal = (await exchangeInstance.viewClaimed(defaultAccount, true)).add(await optionsInstance.claimedTokens(defaultAccount)).toString();
 		assert.equal(defaultTotal, 10*transferAmount*satUnits+"", "defaultAccount has correct balance");
-		recTotal = (await exchangeInstance.viewClaimed(true, {from: receiverAccount})).add(await optionsInstance.claimedTokens(receiverAccount)).toString();
+		recTotal = (await exchangeInstance.viewClaimed(receiverAccount, true)).add(await optionsInstance.claimedTokens(receiverAccount)).toString();
 		assert.equal(recTotal, 10*transferAmount*satUnits+"", "receiverAccount has the correct balance");
 	});
 
@@ -231,7 +231,7 @@ contract('exchange', async function(accounts) {
 		//price must be lower than strike
 		strike = Math.floor(scUnits*0.7);
 		price = strike - Math.floor(strike/2);
-		defaultAccountBalance = (await exchangeInstance.viewClaimed(false, {from: defaultAccount})).toNumber();
+		defaultAccountBalance = (await exchangeInstance.viewClaimed(defaultAccount, false)).toNumber();
 		receiverAccountPosition = 0;
 		defaultAccountPosition = 0;
 		receiverAccountBalance = (await optionsInstance.claimedStable(receiverAccount)).toNumber();
@@ -278,13 +278,13 @@ contract('exchange', async function(accounts) {
 		res = await exchangeInstance.offers((await exchangeInstance.linkedNodes(head)).hash);
 		assert.equal(res.amount.toString(), amtBN.sub(fsamtBN).sub(scUnitsBN).toString(), "the amount in the orders after three orders is still correct");
 		receiverAccountBalance -= (amount+firstSellAmount+1)*strike -(amount*(price+5000)+(1+firstSellAmount)*price);
-		assert.equal((await exchangeInstance.viewClaimed(false, {from: defaultAccount})).toNumber(), defaultAccountBalance, "default account balance is correct");
+		assert.equal((await exchangeInstance.viewClaimed(defaultAccount, false)).toNumber(), defaultAccountBalance, "default account balance is correct");
 		assert.equal((await optionsInstance.claimedStable(receiverAccount)).toNumber(), receiverAccountBalance, "receiver account balance is correct");
 		halfPutAmount = (await optionsInstance.balanceOf(defaultAccount, maturity, strike, false)).toNumber();
 	});
 
 	it('can post and take sell orders of puts', async () => {
-		defaultAccountBalance = (await exchangeInstance.viewClaimed(false, {from: defaultAccount})).toNumber();
+		defaultAccountBalance = (await exchangeInstance.viewClaimed(defaultAccount, false)).toNumber();
 		receiverAccountBalance = (await optionsInstance.claimedStable(receiverAccount)).toNumber();
 		defaultAccountBalance -= strike*amount - price*amount;
 		await mintHandler.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
@@ -327,7 +327,7 @@ contract('exchange', async function(accounts) {
 		receiverAccountBalance += strike*(amount+firstBuyAmount+1); //account for unlocked collateral
 		//add (halfPutAmount*strike) to make up for the amount that was bought and then sold as we subtracted it out when puts were sold
 		defaultAccountBalance += (new BN(halfPutAmount)).mul(new BN(strike)).div(scUnitsBN).toNumber();
-		defaultTotal = (await exchangeInstance.viewClaimed(false, {from: defaultAccount})).add(await optionsInstance.claimedStable(defaultAccount)).toString();
+		defaultTotal = (await exchangeInstance.viewClaimed(defaultAccount, false)).add(await optionsInstance.claimedStable(defaultAccount)).toString();
 		assert.equal(defaultTotal, defaultAccountBalance, "defaultAccount has the correct balance");
 		assert.equal((await optionsInstance.claimedStable(receiverAccount)).toNumber(), receiverAccountBalance, "receiverAccount has the correct balance");
 	});
@@ -424,27 +424,27 @@ contract('exchange', async function(accounts) {
 	});
 
 	it('withdraws funds', async () => {
-		defTokens = (await exchangeInstance.viewClaimed(true, {from: defaultAccount})).toNumber();
-		recTokens = (await exchangeInstance.viewClaimed(true, {from: receiverAccount})).toNumber();
+		defTokens = (await exchangeInstance.viewClaimed(defaultAccount, true)).toNumber();
+		recTokens = (await exchangeInstance.viewClaimed(receiverAccount, true)).toNumber();
 		defBalance = (await tokenInstance.balanceOf(defaultAccount)).toNumber();
 		recBalance = (await tokenInstance.balanceOf(receiverAccount)).toNumber();
 		await exchangeInstance.withdrawAllFunds(true, {from: defaultAccount});
 		await exchangeInstance.withdrawAllFunds(true, {from: receiverAccount});
 		assert.equal((await tokenInstance.balanceOf(defaultAccount)).toNumber(), defTokens+defBalance, "awarded correct amount");
 		assert.equal((await tokenInstance.balanceOf(receiverAccount)).toNumber(), recTokens+recBalance, "awarded correct amount");
-		assert.equal((await exchangeInstance.viewClaimed(true, {from: defaultAccount})).toNumber(), 0, "funds correctly deducted when withdrawing funds");
-		assert.equal((await exchangeInstance.viewClaimed(true, {from: receiverAccount})).toNumber(), 0, "funds correctly deducted when withdrawing funds");
+		assert.equal((await exchangeInstance.viewClaimed(defaultAccount, true)).toNumber(), 0, "funds correctly deducted when withdrawing funds");
+		assert.equal((await exchangeInstance.viewClaimed(receiverAccount, true)).toNumber(), 0, "funds correctly deducted when withdrawing funds");
 		//now test for the same for strike asset
-		defStable = (await exchangeInstance.viewClaimed(false, {from: defaultAccount})).toNumber();
-		recStable = (await exchangeInstance.viewClaimed(false, {from: receiverAccount})).toNumber();
+		defStable = (await exchangeInstance.viewClaimed(defaultAccount, false)).toNumber();
+		recStable = (await exchangeInstance.viewClaimed(receiverAccount, false)).toNumber();
 		defBalance = (await strikeAssetInstance.balanceOf(defaultAccount)).toNumber();
 		recBalance = (await strikeAssetInstance.balanceOf(receiverAccount)).toNumber();
 		await exchangeInstance.withdrawAllFunds(false, {from: defaultAccount});
 		await exchangeInstance.withdrawAllFunds(false, {from: receiverAccount});
 		assert.equal((await strikeAssetInstance.balanceOf(defaultAccount)).toNumber(), defStable+defBalance, "awarded correct amount");
 		assert.equal((await strikeAssetInstance.balanceOf(receiverAccount)).toNumber(), recStable+recBalance, "awarded correct amount");
-		assert.equal((await exchangeInstance.viewClaimed(false, {from: defaultAccount})).toNumber(), 0, "funds correctly deducted when withdrawing funds");
-		assert.equal((await exchangeInstance.viewClaimed(false, {from: receiverAccount})).toNumber(), 0, "funds correctly deducted when withdrawing funds");
+		assert.equal((await exchangeInstance.viewClaimed(defaultAccount, false)).toNumber(), 0, "funds correctly deducted when withdrawing funds");
+		assert.equal((await exchangeInstance.viewClaimed(receiverAccount, false)).toNumber(), 0, "funds correctly deducted when withdrawing funds");
 		//now witdraw all funds from options smart contract for tidyness
 		await optionsInstance.withdrawFunds({from: receiverAccount});
 	});
@@ -600,47 +600,47 @@ contract('exchange', async function(accounts) {
 		maturity +=1;
 		price = Math.floor(satUnits*0.9);
 		//test taking long call offers
-		balance = await exchangeInstance.viewClaimed(true, {from: defaultAccount});
+		balance = await exchangeInstance.viewClaimed(defaultAccount, true);
 		await mintHandler.postOrder(maturity, strike, price, amount, true, true, {from: defaultAccount});
 		await exchangeInstance.marketSell(maturity, strike, price, amtBN.sub((new BN(4)).mul(satUnitsBN)).toString(), maxIterations, true, {from: defaultAccount});
-		res = await exchangeInstance.viewClaimed(true, {from: defaultAccount});
+		res = await exchangeInstance.viewClaimed(defaultAccount, true);
 		assert.equal(balance.sub(res).toString(), (new BN(price)).mul(new BN(4)).toString(), "executes trades with self in marketSell of calls");
 		balance = res
 		rec = await exchangeInstance.marketSell(maturity, strike, price, amt, maxIterations, true, {from: defaultAccount});
-		res = await exchangeInstance.viewClaimed(true, {from: defaultAccount});
+		res = await exchangeInstance.viewClaimed(defaultAccount, true);
 		assert.equal(res.sub(balance).toString(), (new BN(price)).mul(new BN(4)).toString(), "executes trades with self in takeSellOffer of calls");
 		balance = res;
 		//test taking short call offers
 		await mintHandler.postOrder(maturity, strike, price, amount, false, true, {from: defaultAccount});
 		await exchangeInstance.marketBuy(maturity, strike, price, amtBN.sub((new BN(4)).mul(satUnitsBN)).toString(), maxIterations, true, {from: defaultAccount});
-		res = await exchangeInstance.viewClaimed(true, {from: defaultAccount});
+		res = await exchangeInstance.viewClaimed(defaultAccount, true);
 		assert.equal(balance.sub(res).toString(), (new BN(4)).mul(new BN(satUnits-price)).toString(), "executes tades with self in marketBuy of calls");
 		balance = res;
 		await exchangeInstance.marketBuy(maturity, strike, price, amt, maxIterations, true, {from: defaultAccount});
-		res = await exchangeInstance.viewClaimed(true, {from: defaultAccount});
+		res = await exchangeInstance.viewClaimed(defaultAccount, true);
 		assert.equal(res.sub(balance).toString(), (new BN(4)).mul(new BN(satUnits-price)).toString(), "executes  trades with self in takeBuyOffer of calls");
-		res = await exchangeInstance.viewClaimed(false, {from: defaultAccount});
+		res = await exchangeInstance.viewClaimed(defaultAccount, false);
 		balance = res;
 		//for puts strike must be greater than price
 		price = Math.floor(0.9*strike);
 		//test taking long put offers
 		await mintHandler.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
 		await exchangeInstance.marketSell(maturity, strike, price, amtBN.sub((new BN(4)).mul(scUnitsBN)).toString(), maxIterations, false, {from: defaultAccount});
-		res = await exchangeInstance.viewClaimed(false, {from: defaultAccount});
+		res = await exchangeInstance.viewClaimed(defaultAccount, false);
 		assert.equal(balance.sub(res).toString(), (new BN(4)).mul(new BN(price)).toString(), "executes trades with self in marketSell of puts");
 		balance = res;
 		await exchangeInstance.marketSell(maturity, strike, price, amt, maxIterations, false, {from: defaultAccount});
-		res = await exchangeInstance.viewClaimed(false, {from: defaultAccount});			
+		res = await exchangeInstance.viewClaimed(defaultAccount, false);
 		assert.equal(res.sub(balance).toString(), (new BN(4)).mul(new BN(price)).toString(), "executes trades with self in takeSellOffer of puts");
 		balance = res;
 		//test taking short put offers
 		await mintHandler.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
 		await exchangeInstance.marketBuy(maturity, strike, price, amtBN.sub((new BN(4)).mul(scUnitsBN)).toString(), maxIterations, false, {from: defaultAccount});
-		res = await exchangeInstance.viewClaimed(false, {from: defaultAccount});
+		res = await exchangeInstance.viewClaimed(defaultAccount, false);
 		assert.equal(balance.sub(res).toString(), (new BN(4)).mul(new BN(strike-price)).toString(), "executes trades with self in marketBuy of puts");
 		balance = res;
 		await exchangeInstance.marketBuy(maturity, strike, price, amt, maxIterations, false, {from: defaultAccount});
-		res = await exchangeInstance.viewClaimed(false, {from: defaultAccount});			
+		res = await exchangeInstance.viewClaimed(defaultAccount, false);
 		assert.equal(res.sub(balance).toString(), (new BN(4)).mul(new BN(strike-price)).toString(), "executes trades with self in takeBuyOffer of puts");
 	});
 
