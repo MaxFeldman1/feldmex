@@ -81,10 +81,10 @@ contract mLegData {
             the underlying asset maximums are inflated by satUnits
             the strike asset maximums are inflated by scUnits
         */
-        uint maxUnderlyingAssetDebtor;
-        uint maxUnderlyingAssetHolder;
-        uint maxStrikeAssetDebtor;
-        uint maxStrikeAssetHolder;
+        int maxUnderlyingAssetDebtor;
+        int maxUnderlyingAssetHolder;
+        int maxStrikeAssetDebtor;
+        int maxStrikeAssetHolder;
     }
 
     //hash of position information => position

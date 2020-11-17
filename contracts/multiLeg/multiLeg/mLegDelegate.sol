@@ -44,26 +44,26 @@ contract mLegDelegate is mLegData {
         delete offers[node.hash];
         position memory pos = positions[offer.legsHash];
         if (offer.index == 0){
-            uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price)) / satUnits;
+            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetHolder + offer.price)) / satUnits;
             if (int(req) < 0) req = 0;
             claimedToken[offer.offerer] += req;
-            claimedStable[offer.offerer] += offer.amount * pos.maxStrikeAssetHolder / scUnits;
+            claimedStable[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetHolder) / scUnits;
         }
         else if (offer.index == 1){
-            uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price)) / satUnits;
+            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetDebtor - offer.price)) / satUnits;
             if (int(req) < 0) req = 0;
             claimedToken[offer.offerer] += req;
-            claimedStable[offer.offerer] += offer.amount * pos.maxStrikeAssetDebtor / scUnits;
+            claimedStable[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetDebtor) / scUnits;
         }
         else if (offer.index == 2){
-            claimedToken[offer.offerer] += offer.amount * pos.maxUnderlyingAssetHolder / satUnits;
-            uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetHolder) + offer.price)) / scUnits;
+            claimedToken[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetHolder) / satUnits;
+            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetHolder + offer.price)) / scUnits;
             if (int(req) < 0) req = 0;
             claimedStable[offer.offerer] += req;
         }
         else {
-            claimedToken[offer.offerer] += offer.amount * pos.maxUnderlyingAssetDebtor / satUnits;
-            uint req = uint(int(offer.amount) * (int(pos.maxStrikeAssetDebtor) - offer.price)) / scUnits;
+            claimedToken[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetDebtor) / satUnits;
+            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetDebtor - offer.price)) / scUnits;
             if (int(req) < 0) req = 0;
             claimedStable[offer.offerer] += req;
         }
@@ -217,11 +217,11 @@ contract mLegDelegate is mLegData {
 
             {
                 //accounting for holder and debtor must be done seperately as that is how it is done in the options handler
-                uint temp = _amount * pos.maxUnderlyingAssetHolder;
+                uint temp = _amount * uint(pos.maxUnderlyingAssetHolder);
                 holderReq = temp/_subUnits + (temp%_subUnits == 0 ? 0 : 1);
                 totalReq = holderReq;
 
-                temp = _amount * pos.maxUnderlyingAssetDebtor;
+                temp = _amount * uint(pos.maxUnderlyingAssetDebtor);
                 totalReq += temp/_subUnits + (temp%_subUnits == 0 ? 0 : 1);            
             }
 
@@ -233,21 +233,21 @@ contract mLegDelegate is mLegData {
                 premium = pos.maxUnderlyingAssetHolder - holderReq
             */
             if (_index == 0) {
-                pos.maxUnderlyingAssetHolder = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price) / int(_subUnits));
-                pos.maxUnderlyingAssetDebtor = uint(int(totalReq) - int(pos.maxUnderlyingAssetHolder));
+                pos.maxUnderlyingAssetHolder = int(_amount) * (pos.maxUnderlyingAssetHolder + _price) / int(_subUnits);
+                pos.maxUnderlyingAssetDebtor = int(totalReq) - pos.maxUnderlyingAssetHolder;
             } else if (_index == 1) {
-                pos.maxUnderlyingAssetDebtor = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - _price) / int(_subUnits));
-                pos.maxUnderlyingAssetHolder = uint(int(totalReq) - int(pos.maxUnderlyingAssetDebtor));
+                pos.maxUnderlyingAssetDebtor = int(_amount) * (pos.maxUnderlyingAssetDebtor - _price) / int(_subUnits);
+                pos.maxUnderlyingAssetHolder = int(totalReq) - pos.maxUnderlyingAssetDebtor;
             } else if (_index == 2) {
-                pos.maxUnderlyingAssetHolder = uint(int(_amount) * int(pos.maxUnderlyingAssetHolder) / int(_subUnits));
-                pos.maxUnderlyingAssetDebtor = uint(int(totalReq) - int(pos.maxUnderlyingAssetHolder));
+                pos.maxUnderlyingAssetHolder = int(_amount) * pos.maxUnderlyingAssetHolder / int(_subUnits);
+                pos.maxUnderlyingAssetDebtor = int(totalReq) - pos.maxUnderlyingAssetHolder;
             } else {
-                pos.maxUnderlyingAssetDebtor = uint(int(_amount) * int(pos.maxUnderlyingAssetDebtor) / int(_subUnits));
-                pos.maxUnderlyingAssetHolder = uint(int(totalReq) - int(pos.maxUnderlyingAssetDebtor));                
+                pos.maxUnderlyingAssetDebtor = int(_amount) * pos.maxUnderlyingAssetDebtor / int(_subUnits);
+                pos.maxUnderlyingAssetHolder = int(totalReq) - pos.maxUnderlyingAssetDebtor;
             }
-            premium = int(pos.maxUnderlyingAssetHolder) - int(holderReq);
+            premium = pos.maxUnderlyingAssetHolder - int(holderReq);
         }
-        optionsContract.setLimits(int(pos.maxUnderlyingAssetDebtor), int(pos.maxUnderlyingAssetHolder));
+        optionsContract.setLimits(pos.maxUnderlyingAssetDebtor, pos.maxUnderlyingAssetHolder);
         optionsContract.setPaymentParams(_index%2 == 0, premium);
 
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
@@ -258,10 +258,10 @@ contract mLegDelegate is mLegData {
         int optionsTransfer;
         if (_index%2 == 0) {
             optionsTransfer = optionsContract.transferAmountHolder();
-            transferAmount = int(pos.maxUnderlyingAssetHolder) - optionsTransfer;
+            transferAmount = pos.maxUnderlyingAssetHolder - optionsTransfer;
         } else {
             optionsTransfer = optionsContract.transferAmountDebtor();
-            transferAmount = int(pos.maxUnderlyingAssetDebtor) - optionsTransfer;
+            transferAmount = pos.maxUnderlyingAssetDebtor - optionsTransfer;
         }
 
         //load put position
@@ -276,11 +276,11 @@ contract mLegDelegate is mLegData {
 
             {
                 //accounting for holder and debtor must be done seperately as that is how it is done in the options handler
-                uint temp = _amount * pos.maxStrikeAssetHolder;
+                uint temp = _amount * uint(pos.maxStrikeAssetHolder);
                 holderReq = temp/_subUnits + (temp%_subUnits == 0 ? 0 : 1);
                 totalReq = holderReq;
 
-                temp = _amount * pos.maxStrikeAssetDebtor;
+                temp = _amount * uint(pos.maxStrikeAssetDebtor);
                 totalReq += temp/_subUnits + (temp%_subUnits == 0 ? 0 : 1);
             }
 
@@ -292,21 +292,21 @@ contract mLegDelegate is mLegData {
                 premium = pos.maxStrikeAssetHolder - holderReq
             */
             if (_index == 0) {
-                pos.maxStrikeAssetHolder = uint(int(_amount) * int(pos.maxStrikeAssetHolder) / int(_subUnits));
-                pos.maxStrikeAssetDebtor = uint(int(totalReq) - int(pos.maxStrikeAssetHolder));
+                pos.maxStrikeAssetHolder = int(_amount) * pos.maxStrikeAssetHolder / int(_subUnits);
+                pos.maxStrikeAssetDebtor = int(totalReq) - pos.maxStrikeAssetHolder;
             } else if (_index == 1) {
-                pos.maxStrikeAssetDebtor = uint(int(_amount) * int(pos.maxStrikeAssetDebtor) / int(_subUnits));
-                pos.maxStrikeAssetHolder = uint(int(totalReq) - int(pos.maxStrikeAssetDebtor));
+                pos.maxStrikeAssetDebtor = int(_amount) * pos.maxStrikeAssetDebtor / int(_subUnits);
+                pos.maxStrikeAssetHolder = int(totalReq) - pos.maxStrikeAssetDebtor;
             } else if (_index == 2) {
-                pos.maxStrikeAssetHolder = uint(int(_amount) * (int(pos.maxStrikeAssetHolder) + _price) / int(_subUnits));
-                pos.maxStrikeAssetDebtor = uint(int(totalReq) - int(pos.maxStrikeAssetHolder));
+                pos.maxStrikeAssetHolder = int(_amount) * (pos.maxStrikeAssetHolder + _price) / int(_subUnits);
+                pos.maxStrikeAssetDebtor = int(totalReq) - pos.maxStrikeAssetHolder;
             } else {
-                pos.maxStrikeAssetDebtor = uint(int(_amount) * (int(pos.maxStrikeAssetDebtor) - _price) / int(_subUnits));
-                pos.maxStrikeAssetHolder = uint(int(totalReq) - int(pos.maxStrikeAssetDebtor));
+                pos.maxStrikeAssetDebtor = int(_amount) * (pos.maxStrikeAssetDebtor - _price) / int(_subUnits);
+                pos.maxStrikeAssetHolder = int(totalReq) - pos.maxStrikeAssetDebtor;
             }
-            premium = int(pos.maxStrikeAssetHolder) - int(holderReq);
+            premium = pos.maxStrikeAssetHolder - int(holderReq);
         }
-        optionsContract.setLimits(int(pos.maxStrikeAssetDebtor), int(pos.maxStrikeAssetHolder));
+        optionsContract.setLimits(pos.maxStrikeAssetDebtor, pos.maxStrikeAssetHolder);
         optionsContract.setPaymentParams(_index%2 == 0, premium);
 
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
@@ -323,10 +323,10 @@ contract mLegDelegate is mLegData {
         optionsTransfer;
         if (_index%2==0){
             optionsTransfer = optionsContract.transferAmountHolder();
-            transferAmount = int(pos.maxStrikeAssetHolder) - optionsTransfer;
+            transferAmount = pos.maxStrikeAssetHolder - optionsTransfer;
         } else {
             optionsTransfer = optionsContract.transferAmountDebtor();
-            transferAmount = int(pos.maxStrikeAssetDebtor) - optionsTransfer;
+            transferAmount = pos.maxStrikeAssetDebtor - optionsTransfer;
         }
         scReserves = uint(int(scReserves)-optionsTransfer);
         if (int(claimedStable[addr]) < -transferAmount) return false;

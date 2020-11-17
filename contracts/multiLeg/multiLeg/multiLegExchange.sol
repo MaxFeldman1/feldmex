@@ -53,7 +53,8 @@ contract multiLegExchange is mLegData {
             optionsContract.addPosition(_callStrikes[i], _subUnits*_callAmounts[i], true);
         }
         (uint maxUnderlyingAssetDebtor, uint maxUnderlyingAssetHolder) = optionsContract.transferAmount(true);
-
+        require(int(maxUnderlyingAssetHolder) > -1);
+        require(int(maxUnderlyingAssetDebtor) > -1);
         prevStrike = 0;
         _subUnits = int(scUnits);    //gas savings
         optionsContract.clearPositions();
@@ -63,7 +64,18 @@ contract multiLegExchange is mLegData {
             optionsContract.addPosition(_putStrikes[i], _subUnits*_putAmounts[i], false);
         }
         (uint maxStrikeAssetDebtor, uint maxStrikeAssetHolder) = optionsContract.transferAmount(false);
-        position memory pos = position(_callAmounts, _callStrikes, _putAmounts, _putStrikes, maxUnderlyingAssetDebtor, maxUnderlyingAssetHolder, maxStrikeAssetDebtor, maxStrikeAssetHolder);
+        require(int(maxStrikeAssetHolder) > -1);
+        require(int(maxStrikeAssetDebtor) > -1);
+        position memory pos = position(
+            _callAmounts,
+            _callStrikes,
+            _putAmounts,
+            _putStrikes,
+            int(maxUnderlyingAssetDebtor),
+            int(maxUnderlyingAssetHolder),
+            int(maxStrikeAssetDebtor),
+            int(maxStrikeAssetHolder)
+        );
         positions[hash] = pos;
         emit legsHashCreated(hash);
     }
@@ -192,7 +204,7 @@ contract multiLegExchange is mLegData {
 
         //lock collateral for calls
         uint req = _amount * uint(
-            int(_index%2 == 0 ? pos.maxUnderlyingAssetHolder : pos.maxUnderlyingAssetDebtor)
+            (_index%2 == 0 ? pos.maxUnderlyingAssetHolder : pos.maxUnderlyingAssetDebtor)
             + (_index < 2 ? _price : 0)
             );
         if (int(req) > 0) {
@@ -204,7 +216,7 @@ contract multiLegExchange is mLegData {
 
         //lock collateral for puts
         req = _amount * uint(
-            int(_index%2 == 0 ? pos.maxStrikeAssetHolder : pos.maxStrikeAssetDebtor)
+            (_index%2 == 0 ? pos.maxStrikeAssetHolder : pos.maxStrikeAssetDebtor)
             + (_index < 2 ? 0 : _price)
             );
         if (int(req) > 0) {
@@ -419,13 +431,13 @@ contract multiLegExchange is mLegData {
                     */
                     position memory pos = positions[offer.legsHash];
                     if (offer.index == 0){
-                        uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
+                        uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + offer.price));
                         if (int(req) > 0)
                             claimedToken[msg.sender] += req / satUnits;
-                        claimedStable[msg.sender] += _amount * pos.maxStrikeAssetHolder / scUnits;
+                        claimedStable[msg.sender] += _amount * uint(pos.maxStrikeAssetHolder) / scUnits;
                     } else {
-                        claimedToken[msg.sender] += _amount * pos.maxUnderlyingAssetHolder / satUnits;
-                        uint req = uint(int(_amount) * (int(pos.maxStrikeAssetHolder) + offer.price));
+                        claimedToken[msg.sender] += _amount * uint(pos.maxUnderlyingAssetHolder) / satUnits;
+                        uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + offer.price));
                         if (int(req) > 0)
                             claimedStable[msg.sender] += req / scUnits;
                     }
@@ -480,13 +492,13 @@ contract multiLegExchange is mLegData {
                     */
                     position memory pos = positions[offer.legsHash];
                     if (offer.index == 1){
-                        uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
+                        uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
                         if (int(req) > 0)
                             claimedToken[msg.sender] += req / satUnits;
-                        claimedStable[msg.sender] += _amount * pos.maxStrikeAssetDebtor / scUnits;
+                        claimedStable[msg.sender] += _amount * uint(pos.maxStrikeAssetDebtor) / scUnits;
                     } else {
-                        claimedToken[msg.sender] += _amount * pos.maxUnderlyingAssetDebtor / satUnits;
-                        uint req = uint(int(_amount) * (int(pos.maxStrikeAssetDebtor) - offer.price));
+                        claimedToken[msg.sender] += _amount * uint(pos.maxUnderlyingAssetDebtor) / satUnits;
+                        uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - offer.price));
                         if (int(req) > 0)
                         claimedStable[msg.sender] += req / scUnits;
                     }
