@@ -81,9 +81,9 @@ contract multiCallExchange {
         int[] callAmounts;
         uint[] callStrikes;
         //inflated by satUnits
-        uint maxUnderlyingAssetDebtor;
+        int maxUnderlyingAssetDebtor;
         //inflated by satUnits
-        uint maxUnderlyingAssetHolder;
+        int maxUnderlyingAssetHolder;
     }
     //hash of position information => position
     mapping(bytes32 => position) public positions;
@@ -124,7 +124,9 @@ contract multiCallExchange {
             optionsContract.addPosition(_callStrikes[i], _satUnits*_callAmounts[i], true);
         }
         (uint maxUnderlyingAssetDebtor, uint maxUnderlyingAssetHolder) = optionsContract.transferAmount(true);
-        position memory pos = position(_callAmounts, _callStrikes, maxUnderlyingAssetDebtor, maxUnderlyingAssetHolder);
+        require(int(maxUnderlyingAssetDebtor) > -1);
+        require(int(maxUnderlyingAssetHolder) > -1);
+        position memory pos = position(_callAmounts, _callStrikes, int(maxUnderlyingAssetDebtor), int(maxUnderlyingAssetHolder));
         positions[hash] = pos;
         emit legsHashCreated(hash);
     }
@@ -252,8 +254,8 @@ contract multiCallExchange {
         }
         //only continue execution here if listHead[_maturity][_legsHash][index] == 0
 
-        require(_price < int(pos.maxUnderlyingAssetDebtor) && _price > int(-pos.maxUnderlyingAssetHolder));
-        require(containsStrikes(_maturity, _legsHash) && _price > int(-pos.maxUnderlyingAssetDebtor));
+        require(_price < pos.maxUnderlyingAssetDebtor && _price > -pos.maxUnderlyingAssetHolder);
+        require(containsStrikes(_maturity, _legsHash) && _price > -pos.maxUnderlyingAssetDebtor);
 
         if (_index == 0){
             uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price));
@@ -308,10 +310,10 @@ contract multiCallExchange {
 
         require(pos.callAmounts.length > 0);
 
-        require(_price < int(pos.maxUnderlyingAssetDebtor) && _price > int(-pos.maxUnderlyingAssetHolder));
+        require(_price < pos.maxUnderlyingAssetDebtor && _price > -pos.maxUnderlyingAssetHolder);
 
         if (_index == 0){
-            uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price));
+            uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + _price));
             if (int(req) > 0) {
                 uint _satUnits = satUnits;
                 req = req/_satUnits + (req%satUnits == 0 ? 0 : 1);
@@ -320,7 +322,7 @@ contract multiCallExchange {
             }
         }
         else {
-            uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - _price));
+            uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - _price));
             if (int(req) > 0) {
                 uint _satUnits = satUnits;
                 req = req/_satUnits + (req%satUnits == 0 ? 0 : 1);
@@ -426,12 +428,12 @@ contract multiCallExchange {
         delete offers[node.hash];
         position memory pos = positions[offer.legsHash];
         if (offer.index == 0){
-            uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
+            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetHolder + offer.price));
             if (int(req) > 0)
                 claimedToken[offer.offerer] += req/satUnits;
         }
         else {
-            uint req = uint(int(offer.amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
+            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
             if (int(req) > 0)
                 claimedToken[offer.offerer] += req/satUnits;
         }
@@ -579,7 +581,7 @@ contract multiCallExchange {
                         therefore we do not need to call mintPosition
                     */
                     position memory pos = positions[offer.legsHash];
-                    uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + offer.price));
+                    uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + offer.price));
                     if (int(req) > 0)
                         claimedToken[msg.sender] += req/satUnits;
                 }
@@ -629,7 +631,7 @@ contract multiCallExchange {
                         therefore we do not need to call mintPosition
                     */
                     position memory pos = positions[offer.legsHash];
-                    uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - offer.price));
+                    uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
                     if (int(req) > 0)
                         claimedToken[msg.sender] += req/satUnits;
                 }
@@ -688,11 +690,11 @@ contract multiCallExchange {
 
             {
                 //accounting for holder and debtor must be done seperately as that is how it is done in the options handler
-                uint temp = _amount * pos.maxUnderlyingAssetHolder;
+                uint temp = _amount * uint(pos.maxUnderlyingAssetHolder);
                 holderReq = temp/_satUnits + (temp%_satUnits == 0 ? 0 : 1);
                 totalReq = holderReq;
 
-                temp = _amount * pos.maxUnderlyingAssetDebtor;
+                temp = _amount * uint(pos.maxUnderlyingAssetDebtor);
                 totalReq += temp/_satUnits + (temp%_satUnits == 0 ? 0 : 1);            
             }
 
@@ -706,16 +708,16 @@ contract multiCallExchange {
             */
 
             if (_index == 0) {
-                pos.maxUnderlyingAssetHolder = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price) / int(_satUnits));
-                pos.maxUnderlyingAssetDebtor = uint(int(totalReq) - int(pos.maxUnderlyingAssetHolder));
+                pos.maxUnderlyingAssetHolder = int(_amount) * (pos.maxUnderlyingAssetHolder + _price) / int(_satUnits);
+                pos.maxUnderlyingAssetDebtor = int(totalReq) - pos.maxUnderlyingAssetHolder;
             } else {
-                pos.maxUnderlyingAssetDebtor = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - _price) / int(_satUnits));
-                pos.maxUnderlyingAssetHolder = uint(int(totalReq) - int(pos.maxUnderlyingAssetDebtor));
+                pos.maxUnderlyingAssetDebtor = int(_amount) * (pos.maxUnderlyingAssetDebtor - _price) / int(_satUnits);
+                pos.maxUnderlyingAssetHolder = int(totalReq) - pos.maxUnderlyingAssetDebtor;
             }
-            premium = int(pos.maxUnderlyingAssetHolder) - int(holderReq);
+            premium = pos.maxUnderlyingAssetHolder - int(holderReq);
         }
 
-        optionsContract.setLimits(int(pos.maxUnderlyingAssetDebtor), int(pos.maxUnderlyingAssetHolder));
+        optionsContract.setLimits(pos.maxUnderlyingAssetDebtor, pos.maxUnderlyingAssetHolder);
         optionsContract.setPaymentParams(_index==0, premium);
 
         (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
@@ -725,11 +727,11 @@ contract multiCallExchange {
         if (_index==0){
             address addr = _holder; //prevent stack too deep
             transferAmount = optionsContract.transferAmountHolder();
-            claimedToken[addr] += uint( int(pos.maxUnderlyingAssetHolder) - transferAmount);
+            claimedToken[addr] += uint( pos.maxUnderlyingAssetHolder - transferAmount);
         } else {
             address addr = _debtor; //prevent stack too deep
             transferAmount = optionsContract.transferAmountDebtor();
-            claimedToken[addr] += uint( int(pos.maxUnderlyingAssetDebtor) - transferAmount);
+            claimedToken[addr] += uint( pos.maxUnderlyingAssetDebtor - transferAmount);
         }
         satReserves = uint(int(satReserves)-transferAmount);
     }
