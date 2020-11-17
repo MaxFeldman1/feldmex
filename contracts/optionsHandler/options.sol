@@ -397,19 +397,7 @@ contract options is FeldmexOptionsData, Ownable {
         maxHolderTransfer = _maxHolderTransfer;
     }
 
-    //---------------------view functions---------------
-    function viewClaimedTokens() public view returns(uint){return claimedTokens[msg.sender];}
 
-    function viewClaimedStable() public view returns(uint){return claimedStable[msg.sender];}
-
-    function viewSatCollateral(uint _maturity) public view returns(uint){return satCollateral[msg.sender][_maturity];}
-
-    function viewScCollateral(uint _maturity) public view returns(uint){return scCollateral[msg.sender][_maturity];}
-
-    function viewStrikes(uint _maturity) public view returns(uint[] memory){return strikes[msg.sender][_maturity];}
-
-    function viewSatDeduction(uint _maturity) public view returns(uint){return satDeduction[msg.sender][_maturity];}
-
-    function viewScDeduction(uint _maturity) public view returns(uint){return scDeduction[msg.sender][_maturity];}
-    //---------------------end view functions-----------
+    //----------returns entire strikes array------------------
+    function viewStrikes(address _addr, uint _maturity) public view returns(uint[] memory){return strikes[_addr][_maturity];}
 }

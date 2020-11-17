@@ -109,14 +109,14 @@ contract('exchange', async function(accounts) {
 		};
 	});
 
-	async function addStrike(from, maturity, strike) {
-		strikes = await optionsInstance.viewStrikes(maturity, {from});
+	async function addStrike(addr, maturity, strike) {
+		strikes = await optionsInstance.viewStrikes(addr, maturity);
 		var index = 0;
 		for (;index < strikes.length; index++){ 
 			if (strikes[index] == strike) return;
 			if (strikes[index] > strike) break;
 		}
-		await optionsInstance.addStrike(maturity, strike, index, {from});
+		await optionsInstance.addStrike(maturity, strike, index, {from: addr});
 	}
 
 	async function depositFunds(sats, sc, exchange, params) {
@@ -139,7 +139,7 @@ contract('exchange', async function(accounts) {
 		res = (await exchangeInstance.viewClaimed(true, {from: defaultAccount})).toNumber();
 		assert.equal(res, 10*satUnits*transferAmount, "correct amount of collateral claimed for " + defaultAccount);
 		defaultAccountBalance = res;
-		res = (await optionsInstance.viewClaimedTokens({from: receiverAccount})).toNumber();
+		res = (await optionsInstance.claimedTokens(receiverAccount)).toNumber();
 		assert.equal(res, 10*satUnits*transferAmount, "correct amount of collateral claimed for " + receiverAccount);
 		receiverAccountBalance = res;
 		defaultAccountBalance -= amount*price;
@@ -186,7 +186,7 @@ contract('exchange', async function(accounts) {
 		assert.equal(await exchangeInstance.listHeads(maturity, strike, 0), defaultBytes32, "the order cancellation has been recognized");
 		//now we make sure the balances of each user are correct
 		assert.equal((await exchangeInstance.viewClaimed(true, {from: defaultAccount})).toNumber(), defaultAccountBalance, "default Account balance is correct");
-		assert.equal((await optionsInstance.viewClaimedTokens({from: receiverAccount})).toNumber(), receiverAccountBalance, "receiver Account balance is correct");
+		assert.equal((await optionsInstance.claimedTokens(receiverAccount)).toNumber(), receiverAccountBalance, "receiver Account balance is correct");
 	});
 
 	it('can post and take sell orders of calls', async () => {
@@ -221,9 +221,9 @@ contract('exchange', async function(accounts) {
 		await exchangeInstance.cancelOrder(res.name, {from: defaultAccount});
 		res = await exchangeInstance.listHeads(maturity, strike, 1);
 		assert.equal(res, defaultBytes32, "the order cancellation has been recognized");
-		defaultTotal = (await exchangeInstance.viewClaimed(true, {from: defaultAccount})).add(await optionsInstance.viewClaimedTokens({from: defaultAccount})).toString();
+		defaultTotal = (await exchangeInstance.viewClaimed(true, {from: defaultAccount})).add(await optionsInstance.claimedTokens(defaultAccount)).toString();
 		assert.equal(defaultTotal, 10*transferAmount*satUnits+"", "defaultAccount has correct balance");
-		recTotal = (await exchangeInstance.viewClaimed(true, {from: receiverAccount})).add(await optionsInstance.viewClaimedTokens({from: receiverAccount})).toString();
+		recTotal = (await exchangeInstance.viewClaimed(true, {from: receiverAccount})).add(await optionsInstance.claimedTokens(receiverAccount)).toString();
 		assert.equal(recTotal, 10*transferAmount*satUnits+"", "receiverAccount has the correct balance");
 	});
 
@@ -234,7 +234,7 @@ contract('exchange', async function(accounts) {
 		defaultAccountBalance = (await exchangeInstance.viewClaimed(false, {from: defaultAccount})).toNumber();
 		receiverAccountPosition = 0;
 		defaultAccountPosition = 0;
-		receiverAccountBalance = (await optionsInstance.viewClaimedStable({from: receiverAccount})).toNumber();
+		receiverAccountBalance = (await optionsInstance.claimedStable(receiverAccount)).toNumber();
 		defaultAccountBalance -= price*amount;
 		await mintHandler.postOrder(maturity, strike, price, amount, true, false, {from: defaultAccount});
 		defaultAccountBalance -= (price+10000)*amount;
@@ -279,13 +279,13 @@ contract('exchange', async function(accounts) {
 		assert.equal(res.amount.toString(), amtBN.sub(fsamtBN).sub(scUnitsBN).toString(), "the amount in the orders after three orders is still correct");
 		receiverAccountBalance -= (amount+firstSellAmount+1)*strike -(amount*(price+5000)+(1+firstSellAmount)*price);
 		assert.equal((await exchangeInstance.viewClaimed(false, {from: defaultAccount})).toNumber(), defaultAccountBalance, "default account balance is correct");
-		assert.equal((await optionsInstance.viewClaimedStable({from: receiverAccount})).toNumber(), receiverAccountBalance, "receiver account balance is correct");
+		assert.equal((await optionsInstance.claimedStable(receiverAccount)).toNumber(), receiverAccountBalance, "receiver account balance is correct");
 		halfPutAmount = (await optionsInstance.balanceOf(defaultAccount, maturity, strike, false)).toNumber();
 	});
 
 	it('can post and take sell orders of puts', async () => {
 		defaultAccountBalance = (await exchangeInstance.viewClaimed(false, {from: defaultAccount})).toNumber();
-		receiverAccountBalance = (await optionsInstance.viewClaimedStable({from: receiverAccount})).toNumber();
+		receiverAccountBalance = (await optionsInstance.claimedStable(receiverAccount)).toNumber();
 		defaultAccountBalance -= strike*amount - price*amount;
 		await mintHandler.postOrder(maturity, strike, price, amount, false, false, {from: defaultAccount});
 		defaultAccountBalance -= strike*amount - (price-10000)*amount;
@@ -327,9 +327,9 @@ contract('exchange', async function(accounts) {
 		receiverAccountBalance += strike*(amount+firstBuyAmount+1); //account for unlocked collateral
 		//add (halfPutAmount*strike) to make up for the amount that was bought and then sold as we subtracted it out when puts were sold
 		defaultAccountBalance += (new BN(halfPutAmount)).mul(new BN(strike)).div(scUnitsBN).toNumber();
-		defaultTotal = (await exchangeInstance.viewClaimed(false, {from: defaultAccount})).add(await optionsInstance.viewClaimedStable({from: defaultAccount})).toString();
+		defaultTotal = (await exchangeInstance.viewClaimed(false, {from: defaultAccount})).add(await optionsInstance.claimedStable(defaultAccount)).toString();
 		assert.equal(defaultTotal, defaultAccountBalance, "defaultAccount has the correct balance");
-		assert.equal((await optionsInstance.viewClaimedStable({from: receiverAccount})).toNumber(), receiverAccountBalance, "receiverAccount has the correct balance");
+		assert.equal((await optionsInstance.claimedStable(receiverAccount)).toNumber(), receiverAccountBalance, "receiverAccount has the correct balance");
 	});
 
 	it('inserts orders', async () => {
@@ -682,7 +682,7 @@ contract('exchange', async function(accounts) {
 		}).then(() => {
 			return exchangeInstance.marketBuy(maturity, strike, price, amount, maxIterations, false, {from: receiverAccount});
 		}).then((rec) => {
-			return optionsInstance.viewStrikes(maturity, {from: receiverAccount});
+			return optionsInstance.viewStrikes(receiverAccount, maturity);
 		}).then((res) => {
 			return "OK";
 		}).catch((err) => {
@@ -717,7 +717,7 @@ contract('exchange', async function(accounts) {
 		var headOffer = await exchangeInstance.offers(headNode.hash);
 		assert.equal(headOffer.amount.toString(), amt, "correct amount left after market sell");
 		assert.equal(headNode.next, defaultBytes32, "no next offer");
-		assert.equal((await optionsInstance.viewClaimedTokens({from: receiverAccount})).toNumber(), (amount-1)*(satUnits-price), "correct balance for receiverAccount");
+		assert.equal((await optionsInstance.claimedTokens(receiverAccount)).toNumber(), (amount-1)*(satUnits-price), "correct balance for receiverAccount");
 		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
 		//now try setting amount to less than the amount in the market order to less than the amount in the second order so that this acceptBuyOffer is only called once
 		//we expect the second order in the linked list to not be affected
@@ -730,7 +730,7 @@ contract('exchange', async function(accounts) {
 		headOffer = await exchangeInstance.offers(headNode.hash);
 		assert.equal(headOffer.amount.toString(), satUnitsBN.toString(), "correct amount left after market sell");
 		assert.equal(headNode.next, defaultBytes32, "no next offer");
-		assert.equal((await optionsInstance.viewClaimedTokens({from: receiverAccount})).toString(), "0", "correct balance for receiverAccount");
+		assert.equal((await optionsInstance.claimedTokens(receiverAccount)).toString(), "0", "correct balance for receiverAccount");
 		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
 	});
 
@@ -751,7 +751,7 @@ contract('exchange', async function(accounts) {
 		var headOffer = await exchangeInstance.offers(headNode.hash);
 		assert.equal(headOffer.amount.toString(), amt, "correct amount left after market buy");
 		assert.equal(headNode.next, defaultBytes32, "no next offer");
-		assert.equal((await optionsInstance.viewClaimedTokens({from: receiverAccount})).toNumber(), (amount-1)*price, "correct balance for receiverAccount");
+		assert.equal((await optionsInstance.claimedTokens(receiverAccount)).toNumber(), (amount-1)*price, "correct balance for receiverAccount");
 		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
 
 		await depositFunds(amount*price, 0, false, {from: receiverAccount});
@@ -763,7 +763,7 @@ contract('exchange', async function(accounts) {
 		headOffer = await exchangeInstance.offers(headNode.hash);
 		assert.equal(headOffer.amount.toString(), satUnitsBN.toString(), "correct amount left after market buy");
 		assert.equal(headNode.next, defaultBytes32, "no next offer");
-		assert.equal((await optionsInstance.viewClaimedTokens({from: receiverAccount})).toString(), "0", "correct balance for receiverAccount");
+		assert.equal((await optionsInstance.claimedTokens(receiverAccount)).toString(), "0", "correct balance for receiverAccount");
 		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
 	});
 
@@ -786,7 +786,7 @@ contract('exchange', async function(accounts) {
 		var headOffer = await exchangeInstance.offers(headNode.hash);
 		assert.equal(headOffer.amount.toString(), amt, "correct amount left after market sell");
 		assert.equal(headNode.next, defaultBytes32, "no next offer");
-		assert.equal((await optionsInstance.viewClaimedStable({from: receiverAccount})).toNumber(), (amount-1)*(strike-price), "correct balance for receiverAccount");
+		assert.equal((await optionsInstance.claimedStable(receiverAccount)).toNumber(), (amount-1)*(strike-price), "correct balance for receiverAccount");
 		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
 
 		await depositFunds(0, amount*(strike-price), false, {from: receiverAccount});
@@ -798,7 +798,7 @@ contract('exchange', async function(accounts) {
 		headOffer = await exchangeInstance.offers(headNode.hash);
 		assert.equal(headOffer.amount.toString(), satUnitsBN.toString(), "correct amount left after market sell");
 		assert.equal(headNode.next, defaultBytes32, "no next offer");
-		assert.equal((await optionsInstance.viewClaimedStable({from: receiverAccount})).toString(), "0", "correct balance for receiverAccount");
+		assert.equal((await optionsInstance.claimedStable(receiverAccount)).toString(), "0", "correct balance for receiverAccount");
 		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
 	});
 
@@ -821,7 +821,7 @@ contract('exchange', async function(accounts) {
 		var headOffer = await exchangeInstance.offers(headNode.hash);
 		assert.equal(headOffer.amount.toString(), amt, "correct amount left after market buy");
 		assert.equal(headNode.next, defaultBytes32, "no next offer");
-		assert.equal((await optionsInstance.viewClaimedStable({from: receiverAccount})).toNumber(), (amount-1)*price, "correct balance for receiverAccount");
+		assert.equal((await optionsInstance.claimedStable(receiverAccount)).toNumber(), (amount-1)*price, "correct balance for receiverAccount");
 		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
 
 		await depositFunds(0, amount*price, false, {from: receiverAccount});
@@ -833,7 +833,7 @@ contract('exchange', async function(accounts) {
 		headOffer = await exchangeInstance.offers(headNode.hash);
 		assert.equal(headOffer.amount.toString(), satUnitsBN.toString(), "correct amount left after market buy");
 		assert.equal(headNode.next, defaultBytes32, "no next offer");
-		assert.equal((await optionsInstance.viewClaimedStable({from: receiverAccount})).toString(), "0", "correct balance for receiverAccount");
+		assert.equal((await optionsInstance.claimedStable(receiverAccount)).toString(), "0", "correct balance for receiverAccount");
 		await exchangeInstance.cancelOrder(headName, {from: defaultAccount});
 	});
 
@@ -849,11 +849,11 @@ contract('exchange', async function(accounts) {
 			await exchangeInstance.postOrder(maturity, strike, 1, 1, false, false, {from: defaultAccount});
 
 		await depositFunds(0, 100, false, {from: receiverAccount});
-		var prevBalanceRecAct = await optionsInstance.viewClaimedStable({from: receiverAccount});
+		var prevBalanceRecAct = await optionsInstance.claimedStable(receiverAccount);
 		await exchangeInstance.marketBuy(maturity, strike, 1, (new BN(100)).mul(scUnitsBN).toString(), maxIterations, false, {from: receiverAccount});
 		assert.equal((await optionsInstance.balanceOf(receiverAccount, maturity, 2, false)).toNumber(), maxIterations, "correct balance of puts for receiver account");
 		assert.equal((await optionsInstance.balanceOf(defaultAccount, maturity, 2, false)).toNumber(), -maxIterations, "correct balance of puts for default account");
-		var balanceRecAct = await optionsInstance.viewClaimedStable({from: receiverAccount});
+		var balanceRecAct = await optionsInstance.claimedStable(receiverAccount);
 		assert.equal(prevBalanceRecAct.sub(balanceRecAct).toString(), (new BN(maxIterations)).toString(), "market taker requirement rounds up");
 	});
 
@@ -869,11 +869,11 @@ contract('exchange', async function(accounts) {
 			await exchangeInstance.postOrder(maturity, strike, 1, 1, true, false, {from: defaultAccount});
 
 		await depositFunds(0, 100, false, {from: receiverAccount});
-		var prevBalanceRecAct = await optionsInstance.viewClaimedStable({from: receiverAccount});
+		var prevBalanceRecAct = await optionsInstance.claimedStable(receiverAccount);
 		await exchangeInstance.marketSell(maturity, strike, 1, (new BN(100)).mul(scUnitsBN).toString(), maxIterations, false, {from: receiverAccount});
 		assert.equal((await optionsInstance.balanceOf(receiverAccount, maturity, 2, false)).toNumber(), -maxIterations, "correct balance of puts for receiver account");
 		assert.equal((await optionsInstance.balanceOf(defaultAccount, maturity, 2, false)).toNumber(), maxIterations, "correct balance of puts for default account");
-		var balanceRecAct = await optionsInstance.viewClaimedStable({from: receiverAccount});
+		var balanceRecAct = await optionsInstance.claimedStable(receiverAccount);
 		//because the strike price is less than 1 full unit of the strike asset  and the amount is also a sub unit the collateral requirement is constant after the first iteration at 1 sub unit
 		assert.equal(prevBalanceRecAct.sub(balanceRecAct).toString(), "1", "market taker requirement rounds up");
 	});
@@ -889,11 +889,11 @@ contract('exchange', async function(accounts) {
 		for (let i = 0; i < maxIterations+2; i++)
 			await exchangeInstance.postOrder(maturity, strike, 1, 1, true, true, {from: defaultAccount});
 		await depositFunds(10000000, 0, false, {from: receiverAccount});
-		var prevBalanceRecAct = await optionsInstance.viewClaimedTokens({from: receiverAccount});
+		var prevBalanceRecAct = await optionsInstance.claimedTokens(receiverAccount);
 		await exchangeInstance.marketSell(maturity, strike, 1, (new BN(100)).mul(satUnitsBN).toString(), maxIterations, true, {from: receiverAccount});
 		assert.equal((await optionsInstance.balanceOf(receiverAccount, maturity, 2, true)).toNumber(), -maxIterations, "correct balance of puts for receiver account");
 		assert.equal((await optionsInstance.balanceOf(defaultAccount, maturity, 2, true)).toNumber(), maxIterations, "correct balance of puts for default account");
-		var balanceRecAct = await optionsInstance.viewClaimedTokens({from: receiverAccount});
+		var balanceRecAct = await optionsInstance.claimedTokens(receiverAccount);
 		assert.equal(prevBalanceRecAct.sub(balanceRecAct).toString(), (new BN(maxIterations)).toString(), "market taker requirement rounds up");
 	});
 
@@ -908,11 +908,11 @@ contract('exchange', async function(accounts) {
 		for (let i = 0; i < maxIterations+2; i++)
 			await exchangeInstance.postOrder(maturity, strike, 1, 1, false, true, {from: defaultAccount});
 		await depositFunds(10000000, 0, false, {from: receiverAccount});
-		var prevBalanceRecAct = await optionsInstance.viewClaimedTokens({from: receiverAccount});
+		var prevBalanceRecAct = await optionsInstance.claimedTokens(receiverAccount);
 		await exchangeInstance.marketBuy(maturity, strike, 1, (new BN(100)).mul(satUnitsBN).toString(), maxIterations, true, {from: receiverAccount});
 		assert.equal((await optionsInstance.balanceOf(receiverAccount, maturity, 2, true)).toNumber(), maxIterations, "correct balance of puts for receiver account");
 		assert.equal((await optionsInstance.balanceOf(defaultAccount, maturity, 2, true)).toNumber(), -maxIterations, "correct balance of puts for default account");
-		var balanceRecAct = await optionsInstance.viewClaimedTokens({from: receiverAccount});
+		var balanceRecAct = await optionsInstance.claimedTokens(receiverAccount);
 		assert.equal(prevBalanceRecAct.sub(balanceRecAct).toString(), (new BN(maxIterations)).toString(), "market taker requirement rounds up");
 	});
 

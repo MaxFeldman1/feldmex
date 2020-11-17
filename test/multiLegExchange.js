@@ -178,9 +178,9 @@ contract('multi leg exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN(-(amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(),
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toNumber(),
 			5*(maxUnderlyingAssetDebtor-price)+ amount*(maxUnderlyingAssetDebtor-secondPrice), "correct underlying asset balance after market sell");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(),
+		assert.equal((await optionsInstance.claimedStable(accounts[1])).toNumber(),
 			(amount+5)*maxStrikeAssetDebtor, "correct strike asset balance after market sell");
 
 		await multiLegExchangeInstance.marketSell(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, true, {from: accounts[1]});
@@ -206,8 +206,8 @@ contract('multi leg exchange', function(accounts){
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
 		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toString(), "0", "correct underlying asset balance after all orders");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await optionsInstance.claimedStable(accounts[1])).toString(), "0", "correct strike asset balance after all orders");
 
 		assert.equal((await asset1.balanceOf(multiLegExchangeInstance.address)).toString(), "0", "correct asset1 balance of contract");
 		assert.equal((await asset2.balanceOf(multiLegExchangeInstance.address)).toString(), "0", "correct asset2 balance of contract");
@@ -271,9 +271,9 @@ contract('multi leg exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN((amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(),
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toNumber(),
 			5*(maxUnderlyingAssetHolder+price)+ amount*(maxUnderlyingAssetHolder+secondPrice), "correct underlying asset balance after market sell");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(),
+		assert.equal((await optionsInstance.claimedStable(accounts[1])).toNumber(),
 			(amount+5)*maxStrikeAssetHolder, "correct strike asset balance after market buy");
 
 		await multiLegExchangeInstance.marketBuy(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, true, {from: accounts[1]});
@@ -299,8 +299,8 @@ contract('multi leg exchange', function(accounts){
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
 		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toString(), "0", "correct underlying asset balance after all orders");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await optionsInstance.claimedStable(accounts[1])).toString(), "0", "correct strike asset balance after all orders");
 
 	});
 
@@ -363,9 +363,9 @@ contract('multi leg exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN(-(amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(),
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toNumber(),
 			(amount+5)*maxUnderlyingAssetDebtor, "correct underlying asset balance after market sell");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(),
+		assert.equal((await optionsInstance.claimedStable(accounts[1])).toNumber(),
 			5*(maxStrikeAssetDebtor-price) + amount*(maxStrikeAssetDebtor-secondPrice) , "correct strike asset balance after market sell");
 
 		await multiLegExchangeInstance.marketSell(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, false, {from: accounts[1]});
@@ -391,8 +391,8 @@ contract('multi leg exchange', function(accounts){
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
 		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toString(), "0", "correct underlying asset balance after all orders");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toString(), "0", "correct strike asset balance after all orders");
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toString(), "0", "correct underlying asset balance after all orders");
+		assert.equal((await optionsInstance.claimedStable(accounts[1])).toString(), "0", "correct strike asset balance after all orders");
 
 	});
 
@@ -452,8 +452,8 @@ contract('multi leg exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN((amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), (amount+5)*maxUnderlyingAssetHolder, "correct underlying asset balance after market sell");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), Math.max(5*(maxStrikeAssetHolder+price), 0)+Math.max((5-amount)*(maxStrikeAssetHolder+price), 0)
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toNumber(), (amount+5)*maxUnderlyingAssetHolder, "correct underlying asset balance after market sell");
+		assert.equal((await optionsInstance.claimedStable(accounts[1])).toNumber(), Math.max(5*(maxStrikeAssetHolder+price), 0)+Math.max((5-amount)*(maxStrikeAssetHolder+price), 0)
 			+amount*(maxStrikeAssetHolder+secondPrice), "correct strike asset balance after market buy");
 
 		await multiLegExchangeInstance.marketBuy(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, false, {from: accounts[1]});
@@ -479,8 +479,8 @@ contract('multi leg exchange', function(accounts){
 		assert.equal((await multiLegExchangeInstance.viewClaimed(true, {from: deployerAccount})).toString(), "0", "correct underlying asset balance after all orders");
 		assert.equal((await multiLegExchangeInstance.viewClaimed(false, {from: deployerAccount})).toString(), "0", "correct strike asset balance after all orders");
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 0, "correct underlying asset balance after all orders");
-		assert.equal((await optionsInstance.viewClaimedStable({from: accounts[1]})).toNumber(), Math.max(-amount*(maxStrikeAssetHolder+price),0)+Math.max(-amount*(maxStrikeAssetHolder+secondPrice),0),
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toNumber(), 0, "correct underlying asset balance after all orders");
+		assert.equal((await optionsInstance.claimedStable(accounts[1])).toNumber(), Math.max(-amount*(maxStrikeAssetHolder+price),0)+Math.max(-amount*(maxStrikeAssetHolder+secondPrice),0),
 			"correct strike asset balance after all orders");
 
 	});
@@ -503,8 +503,8 @@ contract('multi leg exchange', function(accounts){
 		for (let i = 0; i < amount; i++)
 			await multiLegExchangeInstance.postOrder(maturity, legsHash, price, 1, 0, {from: deployerAccount});
 
-		var prevBalanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var prevBalanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+		var prevBalanceUnderlyingAsset = await optionsInstance.claimedTokens(accounts[1]);
+		var prevBalanceStrikeAsset = await optionsInstance.claimedStable(accounts[1]);
 
 		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, true, {from: accounts[1]});
 
@@ -523,8 +523,8 @@ contract('multi leg exchange', function(accounts){
 				(-maxIterations*putAmounts[i]).toString(), "correct put balance first account");
 		}
 
-		var balanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var balanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+		var balanceUnderlyingAsset = await optionsInstance.claimedTokens(accounts[1]);
+		var balanceStrikeAsset = await optionsInstance.claimedStable(accounts[1]);
 
 		var totalReqUnderlying = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
 		var reqUnderlyingHolder = Math.floor( (maxUnderlyingAssetHolder + price) / asset1SubUnits);
@@ -560,8 +560,8 @@ contract('multi leg exchange', function(accounts){
 		for (let i = 0; i < amount; i++)
 			await multiLegExchangeInstance.postOrder(maturity, legsHash, price, 1, 1, {from: deployerAccount});
 
-		var prevBalanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var prevBalanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+		var prevBalanceUnderlyingAsset = await optionsInstance.claimedTokens(accounts[1]);
+		var prevBalanceStrikeAsset = await optionsInstance.claimedStable(accounts[1]);
 
 		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, true, {from: accounts[1]});
 
@@ -580,8 +580,8 @@ contract('multi leg exchange', function(accounts){
 				(maxIterations*putAmounts[i]).toString(), "correct put balance first account");
 		}
 
-		var balanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var balanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+		var balanceUnderlyingAsset = await optionsInstance.claimedTokens(accounts[1]);
+		var balanceStrikeAsset = await optionsInstance.claimedStable(accounts[1]);
 
 		var totalReqUnderlying = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
 		var reqUnderlyingDebtor = Math.floor( (maxUnderlyingAssetDebtor - price) / asset1SubUnits);
@@ -617,8 +617,8 @@ contract('multi leg exchange', function(accounts){
 		for (let i = 0; i < amount; i++)
 			await multiLegExchangeInstance.postOrder(maturity, legsHash, price, 1, 2, {from: deployerAccount});
 
-		var prevBalanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var prevBalanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+		var prevBalanceUnderlyingAsset = await optionsInstance.claimedTokens(accounts[1]);
+		var prevBalanceStrikeAsset = await optionsInstance.claimedStable(accounts[1]);
 
 		await multiLegExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, false, {from: accounts[1]});
 
@@ -637,8 +637,8 @@ contract('multi leg exchange', function(accounts){
 				(-maxIterations*putAmounts[i]).toString(), "correct put balance first account");
 		}
 
-		var balanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var balanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+		var balanceUnderlyingAsset = await optionsInstance.claimedTokens(accounts[1]);
+		var balanceStrikeAsset = await optionsInstance.claimedStable(accounts[1]);
 
 		var totalReqUnderlying = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
 		var reqUnderlyingHolder = Math.floor( maxUnderlyingAssetHolder / asset1SubUnits);
@@ -674,8 +674,8 @@ contract('multi leg exchange', function(accounts){
 		for (let i = 0; i < amount; i++)
 			await multiLegExchangeInstance.postOrder(maturity, legsHash, price, 1, 3, {from: deployerAccount});
 
-		var prevBalanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var prevBalanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+		var prevBalanceUnderlyingAsset = await optionsInstance.claimedTokens(accounts[1]);
+		var prevBalanceStrikeAsset = await optionsInstance.claimedStable(accounts[1]);
 
 		await multiLegExchangeInstance.marketBuy(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, false, {from: accounts[1]});
 
@@ -694,8 +694,8 @@ contract('multi leg exchange', function(accounts){
 				(maxIterations*putAmounts[i]).toString(), "correct put balance first account");
 		}
 
-		var balanceUnderlyingAsset = await optionsInstance.viewClaimedTokens({from: accounts[1]});
-		var balanceStrikeAsset = await optionsInstance.viewClaimedStable({from: accounts[1]});
+		var balanceUnderlyingAsset = await optionsInstance.claimedTokens(accounts[1]);
+		var balanceStrikeAsset = await optionsInstance.claimedStable(accounts[1]);
 
 		var totalReqUnderlying = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
 		var reqUnderlyingDebtor = Math.floor( maxUnderlyingAssetDebtor / asset1SubUnits);

@@ -143,7 +143,7 @@ contract('multi call exchange', function(accounts){
 				asset1SubUnitsBN.mul(new BN(-(amount-5)*callAmounts[i])).toString(), "correct call balance first account");
 		}
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetDebtor-price)+ amount*(maxUnderlyingAssetDebtor-secondPrice), "correct underlying asset balance after market sell");
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toNumber(), 5*(maxUnderlyingAssetDebtor-price)+ amount*(maxUnderlyingAssetDebtor-secondPrice), "correct underlying asset balance after market sell");
 
 		await multiCallExchangeInstance.marketSell(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, {from: accounts[1]});
 
@@ -206,7 +206,7 @@ contract('multi call exchange', function(accounts){
 				asset1SubUnitsBN.mul(new BN((amount-5)*callAmounts[i])).toString(), "correct call balance first account");
 		}
 
-		assert.equal((await optionsInstance.viewClaimedTokens({from: accounts[1]})).toNumber(), 5*(maxUnderlyingAssetHolder+price)+ amount*(maxUnderlyingAssetHolder+secondPrice), "correct underlying asset balance after market sell");
+		assert.equal((await optionsInstance.claimedTokens(accounts[1])).toNumber(), 5*(maxUnderlyingAssetHolder+price)+ amount*(maxUnderlyingAssetHolder+secondPrice), "correct underlying asset balance after market sell");
 
 		await multiCallExchangeInstance.marketBuy(maturity, legsHash, secondPrice, asset1SubUnitsBN.mul(new BN(5+amount)), maxIterations, {from: accounts[1]});
 
@@ -242,7 +242,7 @@ contract('multi call exchange', function(accounts){
 		for (let i = 0; i < amount; i++)
 			await multiCallExchangeInstance.postOrder(maturity, legsHash, price, 1, 0, {from: deployerAccount});
 
-		var prevBalanceAct1 = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var prevBalanceAct1 = await optionsInstance.claimedTokens(accounts[1]);
 
 		await multiCallExchangeInstance.marketSell(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, {from: accounts[1]});
 		//check call balances
@@ -252,7 +252,7 @@ contract('multi call exchange', function(accounts){
 			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
 				-maxIterations*callAmounts[i] + "", "correct call balance first account");
 		}
-		var balanceAct1 = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var balanceAct1 = await optionsInstance.claimedTokens(accounts[1]);
 		var totalReq = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
 		var reqHolder = Math.floor( (maxUnderlyingAssetHolder + price) / asset1SubUnits);
 		var reqDebtor = totalReq - reqHolder;
@@ -277,7 +277,7 @@ contract('multi call exchange', function(accounts){
 		for (let i = 0; i < amount; i++)
 			await multiCallExchangeInstance.postOrder(maturity, legsHash, price, 1, 1, {from: deployerAccount});
 
-		var prevBalanceAct1 = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var prevBalanceAct1 = await optionsInstance.claimedTokens(accounts[1]);
 
 		await multiCallExchangeInstance.marketBuy(maturity, legsHash, price, asset1SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, {from: accounts[1]});
 
@@ -288,7 +288,7 @@ contract('multi call exchange', function(accounts){
 			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, callStrikes[i], true)).toString(),
 				maxIterations*callAmounts[i] + "", "correct call balance first account");
 		}
-		var balanceAct1 = await optionsInstance.viewClaimedTokens({from: accounts[1]});
+		var balanceAct1 = await optionsInstance.claimedTokens(accounts[1]);
 		var totalReq = Math.ceil(maxUnderlyingAssetDebtor/asset1SubUnits) + Math.ceil(maxUnderlyingAssetHolder/asset1SubUnits);
 		var reqDebtor = Math.floor( (maxUnderlyingAssetDebtor - price) / asset1SubUnits);
 		var reqHolder = totalReq - reqDebtor;

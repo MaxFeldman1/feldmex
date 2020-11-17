@@ -75,7 +75,7 @@ contract('ERC20FeldmexOptions', async function(accounts){
 		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, true)).toString(), amt, "correct call balance of first account in options instance");
 		assert.equal((await feldmexERC20CallInstance.balanceOf(deployerAccount)).toString(), "0", "correct balance in call erc20 wrapper instance for deployerAccount");
 		assert.equal((await feldmexERC20CallInstance.balanceOf(accounts[1])).toString(), amt, "correct balance in call erc20 wrapper instance for first account");
-		assert.equal((await optionsInstance.viewClaimedTokens({from: deployerAccount})).toString(), "0", "correct balance of claimed tokens in the options handler for deployerAccount");
+		assert.equal((await optionsInstance.claimedTokens(deployerAccount)).toString(), "0", "correct balance of claimed tokens in the options handler for deployerAccount");
 		secondAmount = "15";
 		var amt2BN = (new BN(secondAmount)).mul(tokenSubUnitsBN);
 		var amt2 = amt2BN.toString();
@@ -84,7 +84,7 @@ contract('ERC20FeldmexOptions', async function(accounts){
 		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, true)).toString(), amtBN.sub(amt2BN).toString(), "correct call balance of first account in options instance");
 		assert.equal((await feldmexERC20CallInstance.balanceOf(deployerAccount)).toString(), "0", "correct balance in call erc20 wrapper instance for deployerAccount");
 		assert.equal((await feldmexERC20CallInstance.balanceOf(accounts[1])).toString(), amtBN.sub(amt2BN).toString(), "correct balance in call erc20 wrapper instance for first account");
-		assert.equal((await optionsInstance.viewClaimedTokens({from: deployerAccount})).toString(), amt2, "correct balance of claimed tokens in the options handler for first account");
+		assert.equal((await optionsInstance.claimedTokens(deployerAccount)).toString(), amt2, "correct balance of claimed tokens in the options handler for first account");
 	});
 
 	it('transfers put options', async () => {
@@ -97,7 +97,7 @@ contract('ERC20FeldmexOptions', async function(accounts){
 		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, false)).toString(), amt, "correct call balance of first account in options instance");
 		assert.equal((await feldmexERC20PutInstance.balanceOf(deployerAccount)).toString(), "0", "correct balance in call erc20 wrapper instance for deployerAccount");
 		assert.equal((await feldmexERC20PutInstance.balanceOf(accounts[1])).toString(), amt, "correct balance in call erc20 wrapper instance for first account");
-		assert.equal((await optionsInstance.viewClaimedStable({from: deployerAccount})).toString(), "0", "correct balance of claimed tokens in the options handler for deployerAccount");
+		assert.equal((await optionsInstance.claimedStable(deployerAccount)).toString(), "0", "correct balance of claimed tokens in the options handler for deployerAccount");
 		secondAmount = "15";
 		var amt2BN = (new BN(secondAmount)).mul(tokenSubUnitsBN);
 		var amt2 = amt2BN.toString();
@@ -106,7 +106,7 @@ contract('ERC20FeldmexOptions', async function(accounts){
 		assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, strike, false)).toString(), amtBN.sub(amt2BN).toString(), "correct call balance of first account in options instance");
 		assert.equal((await feldmexERC20PutInstance.balanceOf(deployerAccount)).toString(), "0", "correct balance in call erc20 wrapper instance for deployerAccount");
 		assert.equal((await feldmexERC20PutInstance.balanceOf(accounts[1])).toString(), amtBN.sub(amt2BN).toString(), "correct balance in call erc20 wrapper instance for first account");
-		assert.equal((await optionsInstance.viewClaimedStable({from: deployerAccount})).toString(), (new BN(secondAmount)).mul(new BN(strike)).toString(), "correct balance of claimed tokens in the options handler for first account");
+		assert.equal((await optionsInstance.claimedStable(deployerAccount)).toString(), (new BN(secondAmount)).mul(new BN(strike)).toString(), "correct balance of claimed tokens in the options handler for first account");
 	});
 
 	it('approves spending of call options', async () => {

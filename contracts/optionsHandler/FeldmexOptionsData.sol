@@ -43,18 +43,18 @@ contract FeldmexOptionsData {
         claimedTokens and claimedStable refers to the amount of the underlying and strike asset respectively that each user may withdraw
     */
     //denominated in satUnits
-    mapping(address => uint) claimedTokens;
+    mapping(address => uint) public claimedTokens;
     //denominated in scUnits
-    mapping(address => uint) claimedStable;
+    mapping(address => uint) public claimedStable;
 
     /*
         satCollateral maps each user to the amount of collateral in the underlying that they have locked at each maturuty for calls
         scCollateral maps each user to the amount of collateral in strike asset that they have locked at each maturity for puts
     */
     //address => maturity => amount (denominated in satUnits)
-    mapping(address => mapping(uint => uint)) satCollateral;
+    mapping(address => mapping(uint => uint)) public satCollateral;
     //address => maturity => amount (denominated in scUnits)
-    mapping(address => mapping(uint => uint)) scCollateral;
+    mapping(address => mapping(uint => uint)) public scCollateral;
 
 
     /*
@@ -70,9 +70,9 @@ contract FeldmexOptionsData {
         scDeduction is the amount of strike asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for puts
     */
     //address => maturity => amount of collateral not required //denominated in satUnits
-    mapping(address => mapping(uint => uint)) satDeduction;
+    mapping(address => mapping(uint => uint)) public satDeduction;
     //address => maturity => amount of collateral not required //denominated in scUnits
-    mapping(address => mapping(uint => uint)) scDeduction;
+    mapping(address => mapping(uint => uint)) public scDeduction;
 
 
     //store positions in call/putAmounts[helperAddress][helperMaturity] to allow us to calculate collateral requirements

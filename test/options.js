@@ -91,15 +91,15 @@ contract('options', async function(accounts){
 		};
 	});
 
-	async function addStrike(from, maturity, strike) {
+	async function addStrike(addr, maturity, strike) {
 		strike*=scUnits;
-		strikes = await optionsInstance.viewStrikes(maturity, {from});
+		strikes = await optionsInstance.viewStrikes(addr, maturity);
 		var index = 0;
 		for (;index < strikes.length; index++){ 
 			if (strikes[index] == strike) return;
 			if (strikes[index] > strike) break;
 		}
-		await optionsInstance.addStrike(maturity, strike, index, {from});
+		await optionsInstance.addStrike(maturity, strike, index, {from: addr});
 	}
 
 	async function depositFunds(sats, sc, params) {
@@ -122,7 +122,7 @@ contract('options', async function(accounts){
 		//add strikes to allow for minting of options
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
-		res = await optionsInstance.viewStrikes(maturity, {from: debtor});
+		res = await optionsInstance.viewStrikes(debtor, maturity);
 		assert.equal(res[0].toNumber(), strike*scUnits, "the correct strike is added");
 		amt = satUnitsBN.mul(new BN(amount)).toString();
 		await inflatorObj.mintCall(debtor, holder, maturity, strike, amount, amt, {from: defaultAccount});
@@ -141,10 +141,10 @@ contract('options', async function(accounts){
 		//account for fee
 		fee =  Math.floor(debtorExpected/feeDenominator);
 		totalFees = fee;
-		assert.equal((await optionsInstance.viewClaimedTokens({from: debtor})).toNumber(), debtorExpected - fee, "debtor repaid correct amount");
+		assert.equal((await optionsInstance.claimedTokens(debtor)).toNumber(), debtorExpected - fee, "debtor repaid correct amount");
 		fee = Math.floor(payout/feeDenominator);
 		totalFees += fee;
-		assert.equal((await optionsInstance.viewClaimedTokens({from: holder})).toNumber(), payout - fee, "holder compensated sufficiently")
+		assert.equal((await optionsInstance.claimedTokens(holder)).toNumber(), payout - fee, "holder compensated sufficiently")
 	});
 
 	//note that this test will likely fail if the test above fails
@@ -168,7 +168,7 @@ contract('options', async function(accounts){
 		await optionsInstance.claim(maturity, {from: debtor});
 		await optionsInstance.claim(maturity, {from: holder});
 		await optionsInstance.withdrawFunds({from: debtor});
-		claimedSc = (await optionsInstance.viewClaimedStable({from: holder})).toNumber();
+		claimedSc = (await optionsInstance.claimedStable(holder)).toNumber();
 		await optionsInstance.withdrawFunds({from: holder});
 		debtorExpected = amount*scUnits*(strike-difference);
 		//account for the fee
@@ -227,10 +227,10 @@ contract('options', async function(accounts){
 		await optionTransfer(debtor, amount, maturity, strike, amt, true, {from: defaultAccount});
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, true)).toString(), amt, "correct amount for the debtor");
 		assert.equal((await inflatorObj.balanceOf(defaultAccount, maturity, strike, true)).toString(), "-"+amt, "correct amount for the defaultAccount");
-		assert.equal((await optionsInstance.viewSatCollateral(maturity, {from: defaultAccount})).toString(), amt, "correct amount of collateral required for "+defaultAccount);
-		assert.equal((await optionsInstance.viewSatCollateral(maturity, {from: debtor})).toString(), "0", "correct amount of collateral required from "+debtor);
-		assert.equal((await optionsInstance.viewSatDeduction(maturity, {from: defaultAccount})).toString(), "0", "correct sat deduction for "+defaultAccount);
-		assert.equal((await optionsInstance.viewSatDeduction(maturity, {from: debtor})).toNumber(), "0", "correct sat deduction for "+debtor);
+		assert.equal((await optionsInstance.satCollateral(defaultAccount, maturity)).toString(), amt, "correct amount of collateral required for "+defaultAccount);
+		assert.equal((await optionsInstance.satCollateral(debtor, maturity)).toString(), "0", "correct amount of collateral required from "+debtor);
+		assert.equal((await optionsInstance.satDeduction(defaultAccount, maturity)).toString(), "0", "correct sat deduction for "+defaultAccount);
+		assert.equal((await optionsInstance.satDeduction(debtor, maturity)).toNumber(), "0", "correct sat deduction for "+debtor);
 		await optionTransfer(debtor, amount, maturity, strike, amount*strike*scUnits, false, {from: defaultAccount});
 		newStrike = strike+10;
 		amt = (new BN("10")).mul(scUnitsBN).toString();
@@ -240,10 +240,10 @@ contract('options', async function(accounts){
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, newStrike, false)).toString(), "-"+amt, "correct put balance at strike "+newStrike+" for "+debtor);
 		assert.equal((await inflatorObj.balanceOf(defaultAccount, maturity, strike, false)).toString(), "-"+amt, "correct put balance at strike "+strike+" for "+defaultAccount);
 		assert.equal((await inflatorObj.balanceOf(defaultAccount, maturity, newStrike, false)).toString(), amt, "correct put balance at strike "+newStrike+" for "+defaultAccount);
-		assert.equal((await optionsInstance.viewScCollateral(maturity, {from: defaultAccount})).toString(), "0", "correct amount of collateral for "+defaultAccount);
-		assert.equal((await optionsInstance.viewScCollateral(maturity, {from: debtor})).toString(), (new BN(newStrike-strike)).mul(new BN(amt)).toString(), "correct amount of collateral for "+debtor);
-		assert.equal((await optionsInstance.viewScDeduction(maturity, {from: defaultAccount})).toString(), (new BN(strike)).mul(new BN(amt)).toString(), "correct SC Deduction for "+defaultAccount);
-		assert.equal((await optionsInstance.viewScDeduction(maturity, {from: debtor})).toString(), (new BN(strike)).mul(new BN(amt)).toString(), "correct SC deduction for "+debtor);
+		assert.equal((await optionsInstance.scCollateral(defaultAccount, maturity)).toString(), "0", "correct amount of collateral for "+defaultAccount);
+		assert.equal((await optionsInstance.scCollateral(debtor, maturity)).toString(), (new BN(newStrike-strike)).mul(new BN(amt)).toString(), "correct amount of collateral for "+debtor);
+		assert.equal((await optionsInstance.scDeduction(defaultAccount, maturity)).toString(), (new BN(strike)).mul(new BN(amt)).toString(), "correct SC Deduction for "+defaultAccount);
+		assert.equal((await optionsInstance.scDeduction(debtor, maturity)).toString(), (new BN(strike)).mul(new BN(amt)).toString(), "correct SC deduction for "+debtor);
 		//debtor ---- short 50 long 60 ---- liabilities 50 minSc 0 minVal 50
 		//default --- long 50 short 60 ---- liabilities 60 minSc 10 minVal 50
 	});
@@ -369,11 +369,11 @@ contract('options', async function(accounts){
 		await optionsInstance.setParams(debtor, holder, maturity);
 		await optionsInstance.setLimits(expectedDebtorRequirement, expectedHolderRequirement);
 		await optionsInstance.assignPutPosition({from: defaultAccount});
-		assert.equal((await optionsInstance.viewClaimedStable({from: defaultAccount})).toString(), "0", "correct amount of funds left over");
+		assert.equal((await optionsInstance.claimedStable(defaultAccount)).toString(), "0", "correct amount of funds left over");
 		assert.equal((await optionsInstance.transferAmountDebtor()).toString(), expectedDebtorRequirement, "correct debtor fund requirement");
-		assert.equal((await optionsInstance.viewScCollateral(maturity, {from: debtor})).toString(), expectedDebtorRequirement, "correct debtor fund requirement");
+		assert.equal((await optionsInstance.scCollateral(debtor, maturity)).toString(), expectedDebtorRequirement, "correct debtor fund requirement");
 		assert.equal((await optionsInstance.transferAmountHolder()).toString(), expectedHolderRequirement, "correct holder fund requirement");
-		assert.equal((await optionsInstance.viewScCollateral(maturity, {from: holder})).toString(), expectedHolderRequirement, "correct holder fund requirement");
+		assert.equal((await optionsInstance.scCollateral(holder, maturity)).toString(), expectedHolderRequirement, "correct holder fund requirement");
 	});
 
 	it('mints 4+ leg call positions with correct collateral requirements', async () => {
@@ -410,11 +410,11 @@ contract('options', async function(accounts){
 		await optionsInstance.setParams(debtor, holder, maturity);
 		await optionsInstance.setLimits(expectedDebtorRequirement, expectedHolderRequirement);
 		await optionsInstance.assignCallPosition({from: defaultAccount});
-		assert.equal((await optionsInstance.viewClaimedTokens({from: defaultAccount})).toNumber(), 0, "correct amount of funds left over");
+		assert.equal((await optionsInstance.claimedTokens(defaultAccount)).toNumber(), 0, "correct amount of funds left over");
 		assert.equal((await optionsInstance.transferAmountDebtor()).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
-		assert.equal((await optionsInstance.viewSatCollateral(maturity, {from: debtor})).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
+		assert.equal((await optionsInstance.satCollateral(debtor, maturity)).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
 		assert.equal((await optionsInstance.transferAmountHolder()).toNumber(), expectedHolderRequirement, "correct holder fund requirement");
-		assert.equal((await optionsInstance.viewSatCollateral(maturity, {from: holder})).toNumber(), expectedHolderRequirement, "correct holder fund requirement");
+		assert.equal((await optionsInstance.satCollateral(holder, maturity)).toNumber(), expectedHolderRequirement, "correct holder fund requirement");
 	});
 
 	it('withdraws funds sucessfully after asigning complex orders', async () => {

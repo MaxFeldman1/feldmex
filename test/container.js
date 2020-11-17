@@ -83,16 +83,16 @@ contract('container', async function(accounts){
 		await oracleInstance.set(spot);
 	}
 
-	async function addStrike(from, maturity, strike, first) {
-		if (first) strikes = await optionsInstance.viewStrikes(maturity, {from});
-		else strikes = await secondOptionsInstance.viewStrikes(maturity, {from});
+	async function addStrike(addr, maturity, strike, first) {
+		if (first) strikes = await optionsInstance.viewStrikes(addr, maturity);
+		else strikes = await secondOptionsInstance.viewStrikes(addr, maturity);
 		var index = 0;
 		for (;index < strikes.length; index++){ 
 			if (strikes[index] == strike) return;
 			if (strikes[index] > strike) break;
 		}
-		if (first) await optionsInstance.addStrike(maturity, strike, index, {from});
-		else await secondOptionsInstance.addStrike(maturity, strike, index, {from});
+		if (first) await optionsInstance.addStrike(maturity, strike, index, {from: addr});
+		else await secondOptionsInstance.addStrike(maturity, strike, index, {from: addr});
 	}
 
 	async function mintCall(debtor, holder, maturity, strike, amount, limit, params, first) {
