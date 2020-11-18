@@ -44,28 +44,28 @@ contract mLegDelegate is mLegData {
         delete offers[node.hash];
         position memory pos = positions[offer.legsHash];
         if (offer.index == 0){
-            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetHolder + offer.price)) / satUnits;
+            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetHolder + offer.price)) / underlyingAssetSubUnits;
             if (int(req) < 0) req = 0;
-            claimedToken[offer.offerer] += req;
-            claimedStable[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetHolder) / scUnits;
+            underlyingAssetDeposits[offer.offerer] += req;
+            strikeAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetHolder) / strikeAssetSubUnits;
         }
         else if (offer.index == 1){
-            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetDebtor - offer.price)) / satUnits;
+            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetDebtor - offer.price)) / underlyingAssetSubUnits;
             if (int(req) < 0) req = 0;
-            claimedToken[offer.offerer] += req;
-            claimedStable[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetDebtor) / scUnits;
+            underlyingAssetDeposits[offer.offerer] += req;
+            strikeAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetDebtor) / strikeAssetSubUnits;
         }
         else if (offer.index == 2){
-            claimedToken[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetHolder) / satUnits;
-            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetHolder + offer.price)) / scUnits;
+            underlyingAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetHolder) / underlyingAssetSubUnits;
+            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetHolder + offer.price)) / strikeAssetSubUnits;
             if (int(req) < 0) req = 0;
-            claimedStable[offer.offerer] += req;
+            strikeAssetDeposits[offer.offerer] += req;
         }
         else {
-            claimedToken[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetDebtor) / satUnits;
-            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetDebtor - offer.price)) / scUnits;
+            underlyingAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetDebtor) / underlyingAssetSubUnits;
+            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetDebtor - offer.price)) / strikeAssetSubUnits;
             if (int(req) < 0) req = 0;
-            claimedStable[offer.offerer] += req;
+            strikeAssetDeposits[offer.offerer] += req;
         }
 
     }
@@ -208,7 +208,7 @@ contract mLegDelegate is mLegData {
         for (uint i = 0; i < pos.callAmounts.length; i++)
             optionsContract.addPosition(pos.callStrikes[i], int(_amount)*pos.callAmounts[i], true);
 
-        uint _subUnits = satUnits;  //gas savings
+        uint _subUnits = underlyingAssetSubUnits;  //gas savings
 
         int premium;
         {
@@ -269,7 +269,7 @@ contract mLegDelegate is mLegData {
         for (uint i = 0; i < pos.putAmounts.length; i++)
             optionsContract.addPosition(pos.putStrikes[i], int(_amount)*pos.putAmounts[i], false);
 
-        _subUnits = scUnits;    //gas savings
+        _subUnits = strikeAssetSubUnits;    //gas savings
         {
             uint totalReq;
             uint holderReq;
@@ -313,12 +313,12 @@ contract mLegDelegate is mLegData {
         if (!success) return false;
         /*
             We have minted the put position but we still have data from the call position stored in transferAmountDebtor and transferAmountHolder
-            handle distribution of funds in claimedToken mapping
+            handle distribution of funds in underlyingAssetDeposits mapping
         */
         address addr = _index%2 == 0 ? _holder : _debtor;
         satReserves = uint(int(satReserves)-optionsTransfer);
-        if (int(claimedToken[addr]) < -transferAmount) return false;
-        claimedToken[addr] = uint(int(claimedToken[addr]) + transferAmount);
+        if (int(underlyingAssetDeposits[addr]) < -transferAmount) return false;
+        underlyingAssetDeposits[addr] = uint(int(underlyingAssetDeposits[addr]) + transferAmount);
 
         optionsTransfer;
         if (_index%2==0){
@@ -329,8 +329,8 @@ contract mLegDelegate is mLegData {
             transferAmount = pos.maxStrikeAssetDebtor - optionsTransfer;
         }
         scReserves = uint(int(scReserves)-optionsTransfer);
-        if (int(claimedStable[addr]) < -transferAmount) return false;
-        claimedStable[addr] = uint(int(claimedStable[addr]) + transferAmount);
+        if (int(strikeAssetDeposits[addr]) < -transferAmount) return false;
+        strikeAssetDeposits[addr] = uint(int(strikeAssetDeposits[addr]) + transferAmount);
     }
 
 

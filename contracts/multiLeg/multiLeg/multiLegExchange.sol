@@ -41,7 +41,7 @@ contract multiLegExchange is mLegData {
         bytes32 hash = keccak256(abi.encodePacked(_callStrikes, _callAmounts, _putStrikes, _putAmounts));
         options optionsContract = options(optionsAddress);
         uint prevStrike;
-        int _subUnits = int(satUnits);  //gas savings
+        int _subUnits = int(underlyingAssetSubUnits);  //gas savings
         //load position
         optionsContract.clearPositions();
         for (uint i = 0; i < _callAmounts.length; i++){
@@ -53,7 +53,7 @@ contract multiLegExchange is mLegData {
         require(int(maxUnderlyingAssetHolder) > -1);
         require(int(maxUnderlyingAssetDebtor) > -1);
         prevStrike = 0;
-        _subUnits = int(scUnits);    //gas savings
+        _subUnits = int(strikeAssetSubUnits);    //gas savings
         optionsContract.clearPositions();
         for (uint i = 0; i < _putAmounts.length; i++){
             require(prevStrike < _putStrikes[i] && _putAmounts[i] != 0);
@@ -87,15 +87,15 @@ contract multiLegExchange is mLegData {
         delegateAddress = _delegateAddress;
         feeOracleAddress = _feeOracleAddress;
         IERC20 ua = IERC20(underlyingAssetAddress);
-        satUnits = 10 ** uint(ua.decimals());
+        underlyingAssetSubUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
         IERC20 sa = IERC20(strikeAssetAddress);
-        scUnits = 10 ** uint(sa.decimals());
+        strikeAssetSubUnits = 10 ** uint(sa.decimals());
         sa.approve(optionsAddress, 2**255);
     }
     
     /*
-        @Description: deposit funds in this contract, funds tracked by the claimedToken and claimedStable mappings
+        @Description: deposit funds in this contract, funds tracked by the underlyingAssetDeposits and strikeAssetDeposits mappings
 
         @param uint _to: the address to which to credit deposited funds
 
@@ -108,30 +108,30 @@ contract multiLegExchange is mLegData {
         balance = IERC20(strikeAssetAddress).balanceOf(address(this));
         uint sc = balance - scReserves;
         scReserves = balance;
-        claimedToken[_to] += sats;
-        claimedStable[_to] += sc;
+        underlyingAssetDeposits[_to] += sats;
+        strikeAssetDeposits[_to] += sc;
         success = true;
     }
 
     /*
-        @Description: send back all funds tracked in the claimedToken and claimedStable mappings of the caller to the callers address
+        @Description: send back all funds tracked in the underlyingAssetDeposits and strikeAssetDeposits mappings of the caller to the callers address
 
-        @param bool _token: if true withdraw the tokens recorded in claimedToken if false withdraw the legsHash asset stored in claimedStable
+        @param bool _token: if true withdraw the tokens recorded in underlyingAssetDeposits if false withdraw the legsHash asset stored in strikeAssetDeposits
 
         @return bool success: if an error occurs returns false if no error return true
     */
     function withdrawAllFunds(bool _token) public returns(bool success){
         if (_token){
-            uint val = claimedToken[msg.sender];
+            uint val = underlyingAssetDeposits[msg.sender];
             IERC20 ua = IERC20(underlyingAssetAddress);
-            claimedToken[msg.sender] = 0;
+            underlyingAssetDeposits[msg.sender] = 0;
             success = ua.transfer(msg.sender, val);
             satReserves -= val;
         }
         else {
-            uint val = claimedStable[msg.sender];
+            uint val = strikeAssetDeposits[msg.sender];
             IERC20 sa = IERC20(strikeAssetAddress);
-            claimedStable[msg.sender] = 0;
+            strikeAssetDeposits[msg.sender] = 0;
             success = sa.transfer(msg.sender, val);
             scReserves -= val;
         }
@@ -205,10 +205,10 @@ contract multiLegExchange is mLegData {
             + (_index < 2 ? _price : 0)
             );
         if (int(req) > 0) {
-            uint _satUnits = satUnits;  //gas savings
-            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
+            uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
+            req = req/_underlyingAssetSubUnits + (req%_underlyingAssetSubUnits == 0 ? 0 : 1);
+            require(underlyingAssetDeposits[msg.sender] >= req);
+            underlyingAssetDeposits[msg.sender] -= req;
         }
 
         //lock collateral for puts
@@ -217,10 +217,10 @@ contract multiLegExchange is mLegData {
             + (_index < 2 ? 0 : _price)
             );
         if (int(req) > 0) {
-            uint _scUnits = scUnits;    //gas savings
-            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
+            uint _strikeAssetSubUnits = strikeAssetSubUnits;    //gas savings
+            req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+            require(strikeAssetDeposits[msg.sender] >= req);
+            strikeAssetDeposits[msg.sender] -= req;
         }
     }
 
@@ -430,13 +430,13 @@ contract multiLegExchange is mLegData {
                     if (offer.index == 0){
                         uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + offer.price));
                         if (int(req) > 0)
-                            claimedToken[msg.sender] += req / satUnits;
-                        claimedStable[msg.sender] += _amount * uint(pos.maxStrikeAssetHolder) / scUnits;
+                            underlyingAssetDeposits[msg.sender] += req / underlyingAssetSubUnits;
+                        strikeAssetDeposits[msg.sender] += _amount * uint(pos.maxStrikeAssetHolder) / strikeAssetSubUnits;
                     } else {
-                        claimedToken[msg.sender] += _amount * uint(pos.maxUnderlyingAssetHolder) / satUnits;
+                        underlyingAssetDeposits[msg.sender] += _amount * uint(pos.maxUnderlyingAssetHolder) / underlyingAssetSubUnits;
                         uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + offer.price));
                         if (int(req) > 0)
-                            claimedStable[msg.sender] += req / scUnits;
+                            strikeAssetDeposits[msg.sender] += req / strikeAssetSubUnits;
                     }
                 }
                 else {
@@ -491,13 +491,13 @@ contract multiLegExchange is mLegData {
                     if (offer.index == 1){
                         uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
                         if (int(req) > 0)
-                            claimedToken[msg.sender] += req / satUnits;
-                        claimedStable[msg.sender] += _amount * uint(pos.maxStrikeAssetDebtor) / scUnits;
+                            underlyingAssetDeposits[msg.sender] += req / underlyingAssetSubUnits;
+                        strikeAssetDeposits[msg.sender] += _amount * uint(pos.maxStrikeAssetDebtor) / strikeAssetSubUnits;
                     } else {
-                        claimedToken[msg.sender] += _amount * uint(pos.maxUnderlyingAssetDebtor) / satUnits;
+                        underlyingAssetDeposits[msg.sender] += _amount * uint(pos.maxUnderlyingAssetDebtor) / underlyingAssetSubUnits;
                         uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - offer.price));
                         if (int(req) > 0)
-                        claimedStable[msg.sender] += req / scUnits;
+                        strikeAssetDeposits[msg.sender] += req / strikeAssetSubUnits;
                     }
                 }
                 else {

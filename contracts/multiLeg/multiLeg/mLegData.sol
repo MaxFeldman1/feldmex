@@ -1,11 +1,11 @@
 pragma solidity >=0.6.0;
 
 contract mLegData {
-	   //denominated in Underlying Token satUnits
-    mapping(address => uint) public claimedToken;
+	   //denominated in Underlying Token underlyingAssetSubUnits
+    mapping(address => uint) public underlyingAssetDeposits;
     
-    //denominated in the legsHash asset scUnits
-    mapping(address => uint) public claimedStable;
+    //denominated in the legsHash asset strikeAssetSubUnits
+    mapping(address => uint) public strikeAssetDeposits;
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{
@@ -78,8 +78,8 @@ contract mLegData {
         int[] putAmounts;
         uint[] putStrikes;
         /*
-            the underlying asset maximums are inflated by satUnits
-            the strike asset maximums are inflated by scUnits
+            the underlying asset maximums are inflated by underlyingAssetSubUnits
+            the strike asset maximums are inflated by strikeAssetSubUnits
         */
         int maxUnderlyingAssetDebtor;
         int maxUnderlyingAssetHolder;
@@ -100,9 +100,9 @@ contract mLegData {
     //incrementing identifier for each order that garunties unique hashes for all identifiers
     uint totalOrders;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
-    uint satUnits;
+    uint underlyingAssetSubUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
-    uint scUnits;
+    uint strikeAssetSubUnits;
     //previously recorded balances of this contract
     uint public satReserves;
     uint public scReserves;

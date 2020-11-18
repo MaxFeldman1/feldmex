@@ -7,8 +7,8 @@ import "../../feeOracle.sol";
     Due to contract size limitations we cannot add error strings in require statements in this contract
 */
 contract multiPutExchange {
-    //denominated in the legsHash asset scUnits
-    mapping(address => uint) public claimedStable;
+    //denominated in the legsHash asset strikeAssetSubUnits
+    mapping(address => uint) public strikeAssetDeposits;
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{
@@ -106,7 +106,7 @@ contract multiPutExchange {
         //make sure that this is a multi leg order
         require(_putAmounts.length > 1);
         require(_putAmounts.length==_putStrikes.length);
-        int _scUnits = int(scUnits);  //gas savings
+        int _strikeAssetSubUnits = int(strikeAssetSubUnits);  //gas savings
         bytes32 hash = keccak256(abi.encodePacked(_putStrikes, _putAmounts));
         options optionsContract = options(optionsAddress);
         uint prevStrike;
@@ -115,7 +115,7 @@ contract multiPutExchange {
         for (uint i = 0; i < _putAmounts.length; i++){
             require(prevStrike < _putStrikes[i] && _putAmounts[i] != 0);
             prevStrike = _putStrikes[i];
-            optionsContract.addPosition(_putStrikes[i], _scUnits*_putAmounts[i], false);
+            optionsContract.addPosition(_putStrikes[i], _strikeAssetSubUnits*_putAmounts[i], false);
         }
         (uint maxStrikeAssetDebtor, uint maxStrikeAssetHolder) = optionsContract.transferAmount(false);
         require(int(maxStrikeAssetHolder) > -1);
@@ -132,7 +132,7 @@ contract multiPutExchange {
     //incrementing identifier for each order that garunties unique hashes for all identifiers
     uint totalOrders;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
-    uint scUnits;
+    uint strikeAssetSubUnits;
     //previously recorded balances of this contract
     uint scReserves;
     //address of the contract that stores all fee information and collects all fees
@@ -146,12 +146,12 @@ contract multiPutExchange {
         strikeAssetAddress = _strikeAssetAddress;
         feeOracleAddress = _feeOracleAddress;
         IERC20 sa = IERC20(strikeAssetAddress);
-        scUnits = 10 ** uint(sa.decimals());
+        strikeAssetSubUnits = 10 ** uint(sa.decimals());
         sa.approve(optionsAddress, 2**255);
     }
     
     /*
-        @Description: deposit funds in this contract, funds tracked by the claimedStable mapping
+        @Description: deposit funds in this contract, funds tracked by the strikeAssetDeposits mapping
 
         @param uint _to: the address to which to credit deposited funds
 
@@ -161,19 +161,19 @@ contract multiPutExchange {
         uint balance = IERC20(strikeAssetAddress).balanceOf(address(this));
         uint sc = balance - scReserves;
         scReserves = balance;
-        claimedStable[_to] += sc;
+        strikeAssetDeposits[_to] += sc;
         success = true;
     }
 
     /*
-        @Description: send back all funds tracked in claimedStable mapping of the caller to the callers address
+        @Description: send back all funds tracked in strikeAssetDeposits mapping of the caller to the callers address
 
         @return bool success: if an error occurs returns false if no error return true
     */
     function withdrawAllFunds() public returns(bool success){
-        uint val = claimedStable[msg.sender];
+        uint val = strikeAssetDeposits[msg.sender];
         IERC20 sa = IERC20(strikeAssetAddress);
-        claimedStable[msg.sender] = 0;
+        strikeAssetDeposits[msg.sender] = 0;
         success = sa.transfer(msg.sender, val);
         scReserves -= val;
     }
@@ -252,19 +252,19 @@ contract multiPutExchange {
         if (_index == 0){
             uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + _price));
             if (int(req) > 0) {
-                uint _scUnits = scUnits;
-                req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
-                require(claimedStable[msg.sender] >= req);
-                claimedStable[msg.sender] -= req;
+                uint _strikeAssetSubUnits = strikeAssetSubUnits;
+                req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+                require(strikeAssetDeposits[msg.sender] >= req);
+                strikeAssetDeposits[msg.sender] -= req;
             }
         }
         else {
             uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - _price));
             if (int(req) > 0) {
-                uint _scUnits = scUnits;
-                req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
-                require(claimedStable[msg.sender] >= req);
-                claimedStable[msg.sender] -= req;
+                uint _strikeAssetSubUnits = strikeAssetSubUnits;
+                req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+                require(strikeAssetDeposits[msg.sender] >= req);
+                strikeAssetDeposits[msg.sender] -= req;
             }
         }
 
@@ -307,19 +307,19 @@ contract multiPutExchange {
         if (_index == 0){
             uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + _price));
             if (int(req) > 0) {
-                uint _scUnits = scUnits;
-                req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
-                require(claimedStable[msg.sender] >= req);
-                claimedStable[msg.sender] -= req;
+                uint _strikeAssetSubUnits = strikeAssetSubUnits;
+                req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+                require(strikeAssetDeposits[msg.sender] >= req);
+                strikeAssetDeposits[msg.sender] -= req;
             }
         }
         else {
             uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - _price));
             if (int(req) > 0) {
-                uint _scUnits = scUnits;
-                req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
-                require(claimedStable[msg.sender] >= req);
-                claimedStable[msg.sender] -= req;
+                uint _strikeAssetSubUnits = strikeAssetSubUnits;
+                req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+                require(strikeAssetDeposits[msg.sender] >= req);
+                strikeAssetDeposits[msg.sender] -= req;
             }
         }
 
@@ -421,12 +421,12 @@ contract multiPutExchange {
         if (offer.index == 0){
             uint req = uint(int(offer.amount) * (pos.maxStrikeAssetHolder + offer.price));
             if (int(req) > 0)
-                claimedStable[offer.offerer] += req/scUnits;
+                strikeAssetDeposits[offer.offerer] += req/strikeAssetSubUnits;
         }
         else {
             uint req = uint(int(offer.amount) * (pos.maxStrikeAssetDebtor - offer.price));
             if (int(req) > 0)
-                claimedStable[offer.offerer] += req/scUnits;
+                strikeAssetDeposits[offer.offerer] += req/strikeAssetSubUnits;
         }
 
     }
@@ -574,7 +574,7 @@ contract multiPutExchange {
                     position memory pos = positions[offer.legsHash];
                     uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + offer.price));
                     if (int(req) > 0)
-                        claimedStable[msg.sender] += req/scUnits;
+                        strikeAssetDeposits[msg.sender] += req/strikeAssetSubUnits;
                 }
                 else {
                     bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
@@ -625,7 +625,7 @@ contract multiPutExchange {
                     position memory pos = positions[offer.legsHash];
                     uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - offer.price));
                     if (int(req) > 0)
-                        claimedStable[msg.sender] += req/scUnits;
+                        strikeAssetDeposits[msg.sender] += req/strikeAssetSubUnits;
                 }
                 else {
                     bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
@@ -673,7 +673,7 @@ contract multiPutExchange {
             optionsContract.addPosition(pos.putStrikes[i], int(_amount)*pos.putAmounts[i], false);
         optionsContract.setTrustedAddressMultiLegExchange(1);
 
-        uint _scUnits = scUnits;    //gas savings
+        uint _strikeAssetSubUnits = strikeAssetSubUnits;    //gas savings
 
         int premium;
         {
@@ -683,11 +683,11 @@ contract multiPutExchange {
             {
                 //accounting for holder and debtor must be done seperately as that is how it is done in the options handler
                 uint temp = _amount * uint(pos.maxStrikeAssetHolder);
-                holderReq = temp/_scUnits + (temp%_scUnits == 0 ? 0 : 1);
+                holderReq = temp/_strikeAssetSubUnits + (temp%_strikeAssetSubUnits == 0 ? 0 : 1);
                 totalReq = holderReq;
 
                 temp = _amount * uint(pos.maxStrikeAssetDebtor);
-                totalReq += temp/_scUnits + (temp%_scUnits == 0 ? 0 : 1);
+                totalReq += temp/_strikeAssetSubUnits + (temp%_strikeAssetSubUnits == 0 ? 0 : 1);
             }
 
 
@@ -700,10 +700,10 @@ contract multiPutExchange {
             */
 
             if (_index == 0) {
-                pos.maxStrikeAssetHolder = int(_amount) * (pos.maxStrikeAssetHolder + _price) / int(_scUnits);
+                pos.maxStrikeAssetHolder = int(_amount) * (pos.maxStrikeAssetHolder + _price) / int(_strikeAssetSubUnits);
                 pos.maxStrikeAssetDebtor = int(totalReq) - pos.maxStrikeAssetHolder;
             } else {
-                pos.maxStrikeAssetDebtor = int(_amount) * (pos.maxStrikeAssetDebtor - _price) / int(_scUnits);
+                pos.maxStrikeAssetDebtor = int(_amount) * (pos.maxStrikeAssetDebtor - _price) / int(_strikeAssetSubUnits);
                 pos.maxStrikeAssetHolder = int(totalReq) - pos.maxStrikeAssetDebtor;
             }
             premium = pos.maxStrikeAssetHolder - int(holderReq);
@@ -719,11 +719,11 @@ contract multiPutExchange {
         if (_index==0){
             address addr = _holder; //prevent stack too deep
             transferAmount = optionsContract.transferAmountHolder();
-            claimedStable[addr] += uint(pos.maxStrikeAssetHolder - transferAmount);
+            strikeAssetDeposits[addr] += uint(pos.maxStrikeAssetHolder - transferAmount);
         } else {
             address addr = _debtor; //prevent stack too deep
             transferAmount = optionsContract.transferAmountDebtor();
-            claimedStable[addr] += uint(pos.maxStrikeAssetDebtor - transferAmount);
+            strikeAssetDeposits[addr] += uint(pos.maxStrikeAssetDebtor - transferAmount);
         }
         scReserves = uint(int(scReserves)-transferAmount);
     }

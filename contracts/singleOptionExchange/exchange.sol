@@ -6,14 +6,14 @@ import "../optionsHandler/options.sol";
     Due to contract size limitations we cannot add error strings in require statements in this contract
 */
 contract exchange{
-    //denominated in Underlying Token satUnits
-    mapping(address => uint) claimedToken;
+    //denominated in Underlying Token underlyingAssetSubUnits
+    mapping(address => uint) public underlyingAssetDeposits;
     
-    //denominated in the strike asset scUnits
-    mapping(address => uint) claimedStable;
+    //denominated in the strike asset strikeAssetSubUnits
+    mapping(address => uint) public strikeAssetDeposits;
 
     //------------functions to view balances----------------
-    function viewClaimed(address _owner, bool _token) public view returns(uint ret){ret = _token? claimedToken[_owner] : claimedStable[_owner];}
+    //function viewClaimed(address _owner, bool _token) public view returns(uint ret){ret = _token? underlyingAssetDeposits[_owner] : strikeAssetDeposits[_owner];}
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{
@@ -87,9 +87,9 @@ contract exchange{
     //incrementing identifier for each order that garunties unique hashes for all identifiers
     uint totalOrders;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
-    uint satUnits;
+    uint underlyingAssetSubUnits;
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
-    uint scUnits;
+    uint strikeAssetSubUnits;
     //previously recorded balances of this contract
     uint satReserves;
     uint scReserves;
@@ -103,15 +103,15 @@ contract exchange{
         strikeAssetAddress = _strikeAssetAddress;
         feeOracleAddress = _feeOracleAddress;
         IERC20 ua = IERC20(underlyingAssetAddress);
-        satUnits = 10 ** uint(ua.decimals());
+        underlyingAssetSubUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
         IERC20 sa = IERC20(strikeAssetAddress);
-        scUnits = 10 ** uint(sa.decimals());
+        strikeAssetSubUnits = 10 ** uint(sa.decimals());
         sa.approve(optionsAddress, 2**255);
     }
     
     /*
-        @Description: deposit funds in this contract, funds tracked by the claimedToken and claimedStable mappings
+        @Description: deposit funds in this contract, funds tracked by the underlyingAssetDeposits and strikeAssetDeposits mappings
 
         @param uint _to: the address to which to credit deposited funds
 
@@ -124,30 +124,30 @@ contract exchange{
         balance = IERC20(strikeAssetAddress).balanceOf(address(this));
         uint sc = balance - scReserves;
         scReserves = balance;
-        claimedToken[_to] += sats;
-        claimedStable[_to] += sc;
+        underlyingAssetDeposits[_to] += sats;
+        strikeAssetDeposits[_to] += sc;
         success = true;
     }
 
     /*
-        @Description: send back all funds tracked in the claimedToken and claimedStable mappings of the caller to the callers address
+        @Description: send back all funds tracked in the underlyingAssetDeposits and strikeAssetDeposits mappings of the caller to the callers address
 
-        @param bool _token: if true withdraw the tokens recorded in claimedToken if false withdraw the strike asset stored in claimedStable
+        @param bool _token: if true withdraw the tokens recorded in underlyingAssetDeposits if false withdraw the strike asset stored in strikeAssetDeposits
 
         @return bool success: if an error occurs returns false if no error return true
     */
     function withdrawAllFunds(bool _token) public returns(bool success){
         if (_token){
-            uint val = claimedToken[msg.sender];
+            uint val = underlyingAssetDeposits[msg.sender];
             IERC20 ua = IERC20(underlyingAssetAddress);
-            claimedToken[msg.sender] = 0;
+            underlyingAssetDeposits[msg.sender] = 0;
             success = ua.transfer(msg.sender, val);
             satReserves -= val;
         }
         else {
-            uint val = claimedStable[msg.sender];
+            uint val = strikeAssetDeposits[msg.sender];
             IERC20 sa = IERC20(strikeAssetAddress);
-            claimedStable[msg.sender] = 0;
+            strikeAssetDeposits[msg.sender] = 0;
             success = sa.transfer(msg.sender, val);
             scReserves -= val;
         }
@@ -193,7 +193,7 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order
     */
     function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public payable {
-        require(_maturity != 0 && _price != 0 && _price < (_call? satUnits: _strike) && _strike != 0);
+        require(_maturity != 0 && _price != 0 && _price < (_call? underlyingAssetSubUnits: _strike) && _strike != 0);
         require((options(optionsAddress)).containedStrikes(msg.sender, _maturity, _strike));
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         if (listHeads[_maturity][_strike][index] != 0) {
@@ -202,41 +202,41 @@ contract exchange{
         }
         //only continue execution here if listHead[_maturity][_strike][index] == 0
         if (index == 0){
-            uint _satUnits = satUnits;  //gas savings
+            uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
             uint req = _price* _amount;
-            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
+            req = req/_underlyingAssetSubUnits + (req%_underlyingAssetSubUnits == 0 ? 0 : 1);
+            require(underlyingAssetDeposits[msg.sender] >= req);
+            underlyingAssetDeposits[msg.sender] -= req;
         }
         else if (index == 1){
-            uint _satUnits = satUnits;  //gas savings
-            uint req = _amount * (satUnits - _price);
-            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
+            uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
+            uint req = _amount * (underlyingAssetSubUnits - _price);
+            req = req/_underlyingAssetSubUnits + (req%_underlyingAssetSubUnits == 0 ? 0 : 1);
+            require(underlyingAssetDeposits[msg.sender] >= req);
+            underlyingAssetDeposits[msg.sender] -= req;
         }
         else if (index == 2){
-            uint _scUnits = scUnits;  //gas savings
+            uint _strikeAssetSubUnits = strikeAssetSubUnits;  //gas savings
             uint req = _price* _amount;
-            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
+            req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+            require(strikeAssetDeposits[msg.sender] >= req);
+            strikeAssetDeposits[msg.sender] -= req;
         }
         else {
             /*
                 because:
-                    inflator == scUnits && _strike == inflator * nonInflatedStrike
+                    inflator == strikeAssetSubUnits && _strike == inflator * nonInflatedStrike
                 therefore:
-                    _amount * (scUnits * nonInflatedStrike - price) ==
-                    _amount * (scUnits * (_strike /inflator) - price) ==
+                    _amount * (strikeAssetSubUnits * nonInflatedStrike - price) ==
+                    _amount * (strikeAssetSubUnits * (_strike /inflator) - price) ==
                     _amount * (_strike - price)
                 
             */
-            uint _scUnits = scUnits;  //gas savings
+            uint _strikeAssetSubUnits = strikeAssetSubUnits;  //gas savings
             uint req = _amount * (_strike - _price);
-            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
+            req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+            require(strikeAssetDeposits[msg.sender] >= req);
+            strikeAssetDeposits[msg.sender] -= req;
         }
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, index);
         //get hashes
@@ -264,37 +264,37 @@ contract exchange{
     */
     function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public payable {
         //make sure the offer and node corresponding to the name is in the correct list
-        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? satUnits: _strike) && _strike != 0);
+        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? underlyingAssetSubUnits: _strike) && _strike != 0);
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         require(offers[linkedNodes[_name].hash].index == index);
         require((options(optionsAddress)).containedStrikes(msg.sender, _maturity, _strike));
         if (index == 0){
-            uint _satUnits = satUnits;  //gas savings
+            uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
             uint req = _price* _amount;
-            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
+            req = req/_underlyingAssetSubUnits + (req%_underlyingAssetSubUnits == 0 ? 0 : 1);
+            require(underlyingAssetDeposits[msg.sender] >= req);
+            underlyingAssetDeposits[msg.sender] -= req;
         }
         else if (index == 1){
-            uint _satUnits = satUnits;  //gas savings
-            uint req = _amount * (satUnits - _price);
-            req = req/_satUnits + (req%_satUnits == 0 ? 0 : 1);
-            require(claimedToken[msg.sender] >= req);
-            claimedToken[msg.sender] -= req;
+            uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
+            uint req = _amount * (underlyingAssetSubUnits - _price);
+            req = req/_underlyingAssetSubUnits + (req%_underlyingAssetSubUnits == 0 ? 0 : 1);
+            require(underlyingAssetDeposits[msg.sender] >= req);
+            underlyingAssetDeposits[msg.sender] -= req;
         }
         else if (index == 2){
-            uint _scUnits = scUnits;  //gas savings
+            uint _strikeAssetSubUnits = strikeAssetSubUnits;  //gas savings
             uint req = _price* _amount;
-            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
+            req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+            require(strikeAssetDeposits[msg.sender] >= req);
+            strikeAssetDeposits[msg.sender] -= req;
         }
         else {
-            uint _scUnits = scUnits;  //gas savings
+            uint _strikeAssetSubUnits = strikeAssetSubUnits;  //gas savings
             uint req = _amount * (_strike - _price);
-            req = req/_scUnits + (req%_scUnits == 0 ? 0 : 1);
-            require(claimedStable[msg.sender] >= req);
-            claimedStable[msg.sender] -= req;
+            req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+            require(strikeAssetDeposits[msg.sender] >= req);
+            strikeAssetDeposits[msg.sender] -= req;
         }
 
         Offer memory offer = Offer(msg.sender, _maturity, _strike, _price, _amount, index);
@@ -393,15 +393,15 @@ contract exchange{
         delete linkedNodes[_name];
         delete offers[node.hash];
         if (offer.index == 0)
-            claimedToken[msg.sender] += (offer.price * offer.amount)/satUnits;
+            underlyingAssetDeposits[msg.sender] += (offer.price * offer.amount)/underlyingAssetSubUnits;
         else if (offer.index == 1){
-            uint _satUnits = satUnits;  //gas savings
-            claimedToken[msg.sender] += (offer.amount * (_satUnits - offer.price))/_satUnits;
+            uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
+            underlyingAssetDeposits[msg.sender] += (offer.amount * (_underlyingAssetSubUnits - offer.price))/_underlyingAssetSubUnits;
         }
         else if (offer.index == 2)
-            claimedStable[msg.sender] += (offer.price * offer.amount)/scUnits;
+            strikeAssetDeposits[msg.sender] += (offer.price * offer.amount)/strikeAssetSubUnits;
         else
-            claimedStable[msg.sender] += (offer.amount * (offer.strike - offer.price))/scUnits;
+            strikeAssetDeposits[msg.sender] += (offer.amount * (offer.strike - offer.price))/strikeAssetSubUnits;
     }
     
 
@@ -425,8 +425,8 @@ contract exchange{
                 state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                 therefore we do not need to call options.mintCall/Put
             */
-            if (offer.index < 2) claimedToken[_seller] += offer.price * offer.amount / satUnits;
-            else claimedStable[_seller] += offer.price * offer.amount / scUnits;
+            if (offer.index < 2) underlyingAssetDeposits[_seller] += offer.price * offer.amount / underlyingAssetSubUnits;
+            else strikeAssetDeposits[_seller] += offer.price * offer.amount / strikeAssetSubUnits;
             success = true;
         }
         else if (offer.index < 2){
@@ -482,10 +482,10 @@ contract exchange{
                 therefore we do not need to call options.mintCall/Put
             */
             if (offer.index < 2) {
-                uint _satUnits = satUnits;  //gas savings
-                claimedToken[_buyer] += (offer.amount * (_satUnits - offer.price)) / _satUnits;
+                uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
+                underlyingAssetDeposits[_buyer] += (offer.amount * (_underlyingAssetSubUnits - offer.price)) / _underlyingAssetSubUnits;
             }
-            else claimedStable[_buyer] += (offer.amount * (offer.strike - offer.price))/scUnits;
+            else strikeAssetDeposits[_buyer] += (offer.amount * (offer.strike - offer.price))/strikeAssetSubUnits;
             success = true;
         }
         else if (offer.index < 2){
@@ -548,8 +548,8 @@ contract exchange{
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                         therefore we do not need to call options.mintCall/Put
                     */
-                    if (offer.index < 2) claimedToken[msg.sender] += offer.price * _amount / satUnits;
-                    else claimedStable[msg.sender] += offer.price * _amount / scUnits;
+                    if (offer.index < 2) underlyingAssetDeposits[msg.sender] += offer.price * _amount / underlyingAssetSubUnits;
+                    else strikeAssetDeposits[msg.sender] += offer.price * _amount / strikeAssetSubUnits;
                 }
                 else if (_call){
                     (bool success, ) = mintCall(msg.sender, offer.offerer, offer.maturity, offer.strike, _amount, offer.price, true);
@@ -602,10 +602,10 @@ contract exchange{
                         therefore we do not need to call options.mintCall/Put
                     */
                     if (_call) {
-                        uint _satUnits = satUnits;
-                        claimedToken[msg.sender] += (_amount * (_satUnits - offer.price))/_satUnits;
+                        uint _underlyingAssetSubUnits = underlyingAssetSubUnits;
+                        underlyingAssetDeposits[msg.sender] += (_amount * (_underlyingAssetSubUnits - offer.price))/_underlyingAssetSubUnits;
                     }
-                    else claimedStable[msg.sender] += (_amount * (offer.strike - offer.price))/scUnits;
+                    else strikeAssetDeposits[msg.sender] += (_amount * (offer.strike - offer.price))/strikeAssetSubUnits;
                 }
                 else if (_call){
                     (bool success, ) = mintCall(offer.offerer, msg.sender, offer.maturity, offer.strike, _amount, offer.price, false);
@@ -649,9 +649,9 @@ contract exchange{
         _price*=_amount;    //price is now equal to total option premium
         address _optionsAddress = optionsAddress; //gas savings
         options optionsContract = options(_optionsAddress);
-        uint _satUnits = satUnits;  //gas savings
+        uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
 
-        _price = _price/_satUnits + (_debtorPays || _price%_satUnits == 0 ? 0 : 1);
+        _price = _price/_underlyingAssetSubUnits + (_debtorPays || _price%_underlyingAssetSubUnits == 0 ? 0 : 1);
 
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), true);
@@ -671,7 +671,7 @@ contract exchange{
         }
         else {
             transferAmt = optionsContract.transferAmountDebtor();
-            claimedToken[_debtor] += _amount - _price - uint(transferAmt);
+            underlyingAssetDeposits[_debtor] += _amount - _price - uint(transferAmt);
             /*
                 We do not need to worry about holder here because that was all handled in the options handler contract
             */
@@ -706,29 +706,29 @@ contract exchange{
 
         address _d = _debtor;   //prevent stack too deep
 
-        uint _scUnits = scUnits;  //gas savings
+        uint _strikeAssetSubUnits = strikeAssetSubUnits;  //gas savings
         /*
-            Total Req == ceil (_amount *_strike / scUnits) == debtorReq + holderReq
+            Total Req == ceil (_amount *_strike / strikeAssetSubUnits) == debtorReq + holderReq
 
             When _debtorPays
-                holderReq = floor ( _amount * _price / scUnits)
-                debtorReq = ceil (_amount *_strike / scUnits) - holderReq
+                holderReq = floor ( _amount * _price / strikeAssetSubUnits)
+                debtorReq = ceil (_amount *_strike / strikeAssetSubUnits) - holderReq
 
             When !_debtorPays
-                debtorReq = floor ( _amount * (_strike - _price)) / scUnits )
-                holderReq = ceil (_amount *_strike / scUnits) - debtorReq
+                debtorReq = floor ( _amount * (_strike - _price)) / strikeAssetSubUnits )
+                holderReq = ceil (_amount *_strike / strikeAssetSubUnits) - debtorReq
         */
         uint totalReq = _amount*_strike;
-        totalReq = totalReq/_scUnits + (totalReq%_scUnits == 0 ? 0 : 1);
+        totalReq = totalReq/_strikeAssetSubUnits + (totalReq%_strikeAssetSubUnits == 0 ? 0 : 1);
 
         uint debtorReq;
         uint holderReq;
 
         if (_debtorPays) {
-            holderReq =  _amount * _price / _scUnits;
+            holderReq =  _amount * _price / _strikeAssetSubUnits;
             debtorReq = totalReq - holderReq;
         } else {
-            debtorReq =  (_amount * (_strike - _price)) / _scUnits;
+            debtorReq =  (_amount * (_strike - _price)) / _strikeAssetSubUnits;
             holderReq = totalReq - debtorReq;
         }
         optionsContract.setPaymentParams(_debtorPays, int(holderReq) );
@@ -745,7 +745,7 @@ contract exchange{
         }
         else {
             transferAmt = optionsContract.transferAmountDebtor();
-            claimedStable[_d] += debtorReq - uint(transferAmt);
+            strikeAssetDeposits[_d] += debtorReq - uint(transferAmt);
             /*
                 We do not need to worry about holder here because that was all handled in the options handler contract
             */

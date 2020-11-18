@@ -7,8 +7,8 @@ import "../../feeOracle.sol";
     Due to contract size limitations we cannot add error strings in require statements in this contract
 */
 contract multiCallExchange {
-    //denominated in Underlying Token satUnits
-    mapping(address => uint) public claimedToken;
+    //denominated in Underlying Token underlyingAssetSubUnits
+    mapping(address => uint) public underlyingAssetDeposits;
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{
@@ -76,9 +76,9 @@ contract multiCallExchange {
     struct position {
         int[] callAmounts;
         uint[] callStrikes;
-        //inflated by satUnits
+        //inflated by underlyingAssetSubUnits
         int maxUnderlyingAssetDebtor;
-        //inflated by satUnits
+        //inflated by underlyingAssetSubUnits
         int maxUnderlyingAssetHolder;
     }
     //hash of position information => position
@@ -108,7 +108,7 @@ contract multiCallExchange {
         //make sure that this is a multi leg order
         require(_callAmounts.length > 1);
         require(_callAmounts.length==_callStrikes.length);
-        int _satUnits = int(satUnits);  //gas savings
+        int _underlyingAssetSubUnits = int(underlyingAssetSubUnits);  //gas savings
         bytes32 hash = keccak256(abi.encodePacked(_callStrikes, _callAmounts));
         options optionsContract = options(optionsAddress);
         uint prevStrike;
@@ -117,7 +117,7 @@ contract multiCallExchange {
         for (uint i = 0; i < _callAmounts.length; i++){
             require(prevStrike < _callStrikes[i] && _callAmounts[i] != 0);
             prevStrike = _callStrikes[i];
-            optionsContract.addPosition(_callStrikes[i], _satUnits*_callAmounts[i], true);
+            optionsContract.addPosition(_callStrikes[i], _underlyingAssetSubUnits*_callAmounts[i], true);
         }
         (uint maxUnderlyingAssetDebtor, uint maxUnderlyingAssetHolder) = optionsContract.transferAmount(true);
         require(int(maxUnderlyingAssetDebtor) > -1);
@@ -134,7 +134,7 @@ contract multiCallExchange {
     //incrementing identifier for each order that garunties unique hashes for all identifiers
     uint totalOrders;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
-    uint satUnits;
+    uint underlyingAssetSubUnits;
     //previously recorded balances of this contract
     uint satReserves;
     //address of the contract that stores all fee information and collects all fees
@@ -148,12 +148,12 @@ contract multiCallExchange {
         optionsAddress = _optionsAddress;
         feeOracleAddress = _feeOracleAddress;
         IERC20 ua = IERC20(underlyingAssetAddress);
-        satUnits = 10 ** uint(ua.decimals());
+        underlyingAssetSubUnits = 10 ** uint(ua.decimals());
         ua.approve(optionsAddress, 2**255);
     }
     
     /*
-        @Description: deposit funds in this contract, funds tracked by the claimedToken and claimedStable mappings
+        @Description: deposit funds in this contract, funds tracked by the underlyingAssetDeposits and claimedStable mappings
 
         @param uint _to: the address to which to credit deposited funds
 
@@ -163,21 +163,21 @@ contract multiCallExchange {
         uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
         uint sats = balance - satReserves;
         satReserves = balance;
-        claimedToken[_to] += sats;
+        underlyingAssetDeposits[_to] += sats;
         success = true;
     }
 
     /*
-        @Description: send back all funds tracked in the claimedToken and claimedStable mappings of the caller to the callers address
+        @Description: send back all funds tracked in the underlyingAssetDeposits and claimedStable mappings of the caller to the callers address
 
-        @param bool _token: if true withdraw the tokens recorded in claimedToken if false withdraw the legsHash asset stored in claimedStable
+        @param bool _token: if true withdraw the tokens recorded in underlyingAssetDeposits if false withdraw the legsHash asset stored in claimedStable
 
         @return bool success: if an error occurs returns false if no error return true
     */
     function withdrawAllFunds() public returns(bool success){
-        uint val = claimedToken[msg.sender];
+        uint val = underlyingAssetDeposits[msg.sender];
         IERC20 ua = IERC20(underlyingAssetAddress);
-        claimedToken[msg.sender] = 0;
+        underlyingAssetDeposits[msg.sender] = 0;
         success = ua.transfer(msg.sender, val);
         satReserves -= val;
     }
@@ -256,19 +256,19 @@ contract multiCallExchange {
         if (_index == 0){
             uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetHolder) + _price));
             if (int(req) > 0) {
-                uint _satUnits = satUnits;
-                req = req/_satUnits + (req%satUnits == 0 ? 0 : 1);
-                require(claimedToken[msg.sender] >= req);
-                claimedToken[msg.sender] -= req;
+                uint _underlyingAssetSubUnits = underlyingAssetSubUnits;
+                req = req/_underlyingAssetSubUnits + (req%underlyingAssetSubUnits == 0 ? 0 : 1);
+                require(underlyingAssetDeposits[msg.sender] >= req);
+                underlyingAssetDeposits[msg.sender] -= req;
             }
         }
         else {
             uint req = uint(int(_amount) * (int(pos.maxUnderlyingAssetDebtor) - _price));
             if (int(req) > 0) {
-                uint _satUnits = satUnits;
-                req = req/_satUnits + (req%satUnits == 0 ? 0 : 1);
-                require(claimedToken[msg.sender] >= req);
-                claimedToken[msg.sender] -= req;
+                uint _underlyingAssetSubUnits = underlyingAssetSubUnits;
+                req = req/_underlyingAssetSubUnits + (req%underlyingAssetSubUnits == 0 ? 0 : 1);
+                require(underlyingAssetDeposits[msg.sender] >= req);
+                underlyingAssetDeposits[msg.sender] -= req;
             }
         }
 
@@ -311,19 +311,19 @@ contract multiCallExchange {
         if (_index == 0){
             uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + _price));
             if (int(req) > 0) {
-                uint _satUnits = satUnits;
-                req = req/_satUnits + (req%satUnits == 0 ? 0 : 1);
-                require(claimedToken[msg.sender] >= req);
-                claimedToken[msg.sender] -= req;
+                uint _underlyingAssetSubUnits = underlyingAssetSubUnits;
+                req = req/_underlyingAssetSubUnits + (req%underlyingAssetSubUnits == 0 ? 0 : 1);
+                require(underlyingAssetDeposits[msg.sender] >= req);
+                underlyingAssetDeposits[msg.sender] -= req;
             }
         }
         else {
             uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - _price));
             if (int(req) > 0) {
-                uint _satUnits = satUnits;
-                req = req/_satUnits + (req%satUnits == 0 ? 0 : 1);
-                require(claimedToken[msg.sender] >= req);
-                claimedToken[msg.sender] -= req;
+                uint _underlyingAssetSubUnits = underlyingAssetSubUnits;
+                req = req/_underlyingAssetSubUnits + (req%underlyingAssetSubUnits == 0 ? 0 : 1);
+                require(underlyingAssetDeposits[msg.sender] >= req);
+                underlyingAssetDeposits[msg.sender] -= req;
             }
         }
 
@@ -426,12 +426,12 @@ contract multiCallExchange {
         if (offer.index == 0){
             uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetHolder + offer.price));
             if (int(req) > 0)
-                claimedToken[offer.offerer] += req/satUnits;
+                underlyingAssetDeposits[offer.offerer] += req/underlyingAssetSubUnits;
         }
         else {
             uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
             if (int(req) > 0)
-                claimedToken[offer.offerer] += req/satUnits;
+                underlyingAssetDeposits[offer.offerer] += req/underlyingAssetSubUnits;
         }
 
     }
@@ -579,7 +579,7 @@ contract multiCallExchange {
                     position memory pos = positions[offer.legsHash];
                     uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + offer.price));
                     if (int(req) > 0)
-                        claimedToken[msg.sender] += req/satUnits;
+                        underlyingAssetDeposits[msg.sender] += req/underlyingAssetSubUnits;
                 }
                 else {
                     bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
@@ -629,7 +629,7 @@ contract multiCallExchange {
                     position memory pos = positions[offer.legsHash];
                     uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
                     if (int(req) > 0)
-                        claimedToken[msg.sender] += req/satUnits;
+                        underlyingAssetDeposits[msg.sender] += req/underlyingAssetSubUnits;
                 }
                 else {
                     bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
@@ -677,7 +677,7 @@ contract multiCallExchange {
             optionsContract.addPosition(pos.callStrikes[i], int(_amount)*pos.callAmounts[i], true);
         optionsContract.setTrustedAddressMultiLegExchange(0);
 
-        uint _satUnits = satUnits;  //gas savings
+        uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
 
         int premium;
         {
@@ -687,11 +687,11 @@ contract multiCallExchange {
             {
                 //accounting for holder and debtor must be done seperately as that is how it is done in the options handler
                 uint temp = _amount * uint(pos.maxUnderlyingAssetHolder);
-                holderReq = temp/_satUnits + (temp%_satUnits == 0 ? 0 : 1);
+                holderReq = temp/_underlyingAssetSubUnits + (temp%_underlyingAssetSubUnits == 0 ? 0 : 1);
                 totalReq = holderReq;
 
                 temp = _amount * uint(pos.maxUnderlyingAssetDebtor);
-                totalReq += temp/_satUnits + (temp%_satUnits == 0 ? 0 : 1);            
+                totalReq += temp/_underlyingAssetSubUnits + (temp%_underlyingAssetSubUnits == 0 ? 0 : 1);            
             }
 
 
@@ -704,10 +704,10 @@ contract multiCallExchange {
             */
 
             if (_index == 0) {
-                pos.maxUnderlyingAssetHolder = int(_amount) * (pos.maxUnderlyingAssetHolder + _price) / int(_satUnits);
+                pos.maxUnderlyingAssetHolder = int(_amount) * (pos.maxUnderlyingAssetHolder + _price) / int(_underlyingAssetSubUnits);
                 pos.maxUnderlyingAssetDebtor = int(totalReq) - pos.maxUnderlyingAssetHolder;
             } else {
-                pos.maxUnderlyingAssetDebtor = int(_amount) * (pos.maxUnderlyingAssetDebtor - _price) / int(_satUnits);
+                pos.maxUnderlyingAssetDebtor = int(_amount) * (pos.maxUnderlyingAssetDebtor - _price) / int(_underlyingAssetSubUnits);
                 pos.maxUnderlyingAssetHolder = int(totalReq) - pos.maxUnderlyingAssetDebtor;
             }
             premium = pos.maxUnderlyingAssetHolder - int(holderReq);
@@ -723,11 +723,11 @@ contract multiCallExchange {
         if (_index==0){
             address addr = _holder; //prevent stack too deep
             transferAmount = optionsContract.transferAmountHolder();
-            claimedToken[addr] += uint( pos.maxUnderlyingAssetHolder - transferAmount);
+            underlyingAssetDeposits[addr] += uint( pos.maxUnderlyingAssetHolder - transferAmount);
         } else {
             address addr = _debtor; //prevent stack too deep
             transferAmount = optionsContract.transferAmountDebtor();
-            claimedToken[addr] += uint( pos.maxUnderlyingAssetDebtor - transferAmount);
+            underlyingAssetDeposits[addr] += uint( pos.maxUnderlyingAssetDebtor - transferAmount);
         }
         satReserves = uint(int(satReserves)-transferAmount);
     }
