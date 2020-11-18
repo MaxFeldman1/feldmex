@@ -205,7 +205,7 @@ contract multiPutExchange {
         position memory pos = positions[_legsHash];
         options optionsContract = options(optionsAddress);
         for (uint i = 0; i < pos.putStrikes.length; i++){
-            if (!optionsContract.containedStrikes(msg.sender, _maturity, pos.putStrikes[i])) return false;
+            if (!optionsContract.contains(msg.sender, _maturity, pos.putStrikes[i])) return false;
         }
         contains = true;
     }

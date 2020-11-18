@@ -1,7 +1,7 @@
 pragma solidity >=0.6.0;
 import "../interfaces/IERC20.sol";
+import "../interfaces/IOptionsHandler.sol";
 import "./ERC20FeldmexOption.sol";
-import "../optionsHandler/options.sol";
 
 contract detachedOption is IERC20 {
 
@@ -32,7 +32,7 @@ contract detachedOption is IERC20 {
 		address _optionsHandlerAddress, address _underlyingAssetAddress, address _strikeAssetAddress,
 		uint _maturity, uint _strike, uint8 _decimals, bool _call
 	) public {
-		options(_optionsHandlerAddress).addStrike(_maturity, _strike, 0);
+		IOptionsHandler(_optionsHandlerAddress).addStrike(_maturity, _strike, 0);
 		baseERC20FeldmexOptionAddress = msg.sender;
 		underlyingAssetAddress = _underlyingAssetAddress;
 		strikeAssetAddress = _strikeAssetAddress;
@@ -101,9 +101,9 @@ contract detachedOption is IERC20 {
 		require(success, "failed to claim funds in options handler");
 
 		if (call)
-			(totalPayout, ) = options(optionsHandlerAddress).withdrawFunds();
+			(totalPayout, ) = IOptionsHandler(optionsHandlerAddress).withdrawFunds();
 		else
-			( ,totalPayout) = options(optionsHandlerAddress).withdrawFunds();
+			( ,totalPayout) = IOptionsHandler(optionsHandlerAddress).withdrawFunds();
 
 		inPayoutPhase = true;
 	}

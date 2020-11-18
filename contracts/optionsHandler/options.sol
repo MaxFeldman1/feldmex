@@ -3,12 +3,13 @@ import "../interfaces/ITimeSeriesOracle.sol";
 import "../oracle.sol";
 import "../interfaces/IERC20.sol";
 import "../interfaces/Ownable.sol";
+import "../interfaces/IOptionsHandler.sol";
 import "../ERC20FeldmexOptions/FeldmexERC20Helper.sol";
 import "../multiLeg/mOrganizer.sol";
 import "./FeldmexOptionsData.sol";
 import "../feeOracle.sol";
 
-contract options is FeldmexOptionsData, Ownable {
+contract options is FeldmexOptionsData, Ownable, IOptionsHandler {
 
     /*
         @Description: setup
@@ -19,17 +20,16 @@ contract options is FeldmexOptionsData, Ownable {
         address _feeOracleAddress) public {
         
         oracleAddress = _oracleAddress;
-        underlyingAssetAddress = _underlyingAssetAddress;
-        strikeAssetAddress = _strikeAssetAddress;
-        exchangeAddress = msg.sender;
+        internalUnderlyingAssetAddress = _underlyingAssetAddress;
+        internalStrikeAssetAddress = _strikeAssetAddress;
         feldmexERC20HelperAddress = _feldmexERC20HelperAddress;
         assignOptionsDelegateAddress = _assignOptionsDelegateAddress;
         mOrganizerAddress = _mOrganizerAddress;
         feeOracleAddress = _feeOracleAddress;
         feeOracle(_feeOracleAddress).setSpecificFeeImmunity(address(this), msg.sender, true);
-        IERC20 ua = IERC20(underlyingAssetAddress);
+        IERC20 ua = IERC20(_underlyingAssetAddress);
         underlyingAssetSubUnits = 10 ** uint(ua.decimals());
-        IERC20 sa = IERC20(strikeAssetAddress);
+        IERC20 sa = IERC20(_strikeAssetAddress);
         strikeAssetSubUnits = 10 ** uint(sa.decimals());
     }
     
@@ -38,8 +38,8 @@ contract options is FeldmexOptionsData, Ownable {
 
         @param address _exchangeAddress: this is the address that will be assigned to this contracts exchangeAddress variable
     */
-    function setExchangeAddress(address _exchangeAddress) onlyOwner public {
-        require(exchangeAddress == owner);
+    function setExchangeAddress(address _exchangeAddress) onlyOwner public override {
+        require(exchangeAddress == address(0));
         exchangeAddress = _exchangeAddress;
     }
 
@@ -50,7 +50,6 @@ contract options is FeldmexOptionsData, Ownable {
         @param address _newOwner: the address that will take ownership of this contract
     */
     function transferOwnership(address _newOwner) onlyOwner public override {
-        if (owner == exchangeAddress) exchangeAddress = _newOwner;
         super.transferOwnership(_newOwner);
         address _feeOracleAddress = feeOracleAddress;
         feeOracle fo = feeOracle(_feeOracleAddress);
@@ -67,10 +66,10 @@ contract options is FeldmexOptionsData, Ownable {
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function claim(uint _maturity) public returns(bool success){
+    function claim(uint _maturity) public override returns(bool success){
         require(_maturity < block.timestamp);
         ITimeSeriesOracle orc = ITimeSeriesOracle(oracleAddress);
-        uint spot = orc.fetchSpotAtTime(_maturity, underlyingAssetAddress);
+        uint spot = orc.fetchSpotAtTime(_maturity, internalUnderlyingAssetAddress);
         uint callValue = 0;
         uint putValue = 0;
         //calls & puts
@@ -94,36 +93,36 @@ contract options is FeldmexOptionsData, Ownable {
         feeOracle fo = feeOracle(feeOracleAddress);
         uint _feeDenominator = fo.fetchFee(address(this));
         bool _feeImmunity = fo.isFeeImmune(address(this), msg.sender);
-        if (callValue > underlyingAssetDeduction[msg.sender][_maturity]){
-            callValue -= underlyingAssetDeduction[msg.sender][_maturity];
+        if (callValue > internalUnderlyingAssetDeduction[msg.sender][_maturity]){
+            callValue -= internalUnderlyingAssetDeduction[msg.sender][_maturity];
             uint fee = _feeImmunity ? 0 : callValue/_feeDenominator;
-            underlyingAssetDeposits[owner] += fee;
-            underlyingAssetDeposits[msg.sender] += callValue - fee;
+            internalUnderlyingAssetDeposits[owner] += fee;
+            internalUnderlyingAssetDeposits[msg.sender] += callValue - fee;
         }
-        if (putValue > strikeAssetDeduction[msg.sender][_maturity]){
-            putValue -= strikeAssetDeduction[msg.sender][_maturity];
+        if (putValue > internalStrikeAssetDeduction[msg.sender][_maturity]){
+            putValue -= internalStrikeAssetDeduction[msg.sender][_maturity];
             uint fee = _feeImmunity ? 0 : putValue/_feeDenominator;
-            strikeAssetDeposits[owner] += fee;
-            strikeAssetDeposits[msg.sender] += putValue - fee;
+            internalStrikeAssetDeposits[owner] += fee;
+            internalStrikeAssetDeposits[msg.sender] += putValue - fee;
         }
         success = true;
     }
 
     /*
         @Descripton: allows for users to withdraw funds that are not locked up as collateral
-            these funds are tracked in the underlyingAssetDeposits mapping and the strikeAssetDeposits mapping for the underlying and strike asset respectively
+            these funds are tracked in the internalUnderlyingAssetDeposits mapping and the internalStrikeAssetDeposits mapping for the underlying and strike asset respectively
 
         @return uint underlyingAsset: the amount of the underlying asset that has been withdrawn
         @return uint strikeAsset: the amount of the strike asset that has been withdrawn
     */
-    function withdrawFunds() public returns(uint underlyingAsset, uint strikeAsset){
-        IERC20 ua = IERC20(underlyingAssetAddress);
-        underlyingAsset = underlyingAssetDeposits[msg.sender];
-        underlyingAssetDeposits[msg.sender] = 0;
+    function withdrawFunds() public override returns(uint underlyingAsset, uint strikeAsset){
+        IERC20 ua = IERC20(internalUnderlyingAssetAddress);
+        underlyingAsset = internalUnderlyingAssetDeposits[msg.sender];
+        internalUnderlyingAssetDeposits[msg.sender] = 0;
         ua.transfer(msg.sender, underlyingAsset);
-        IERC20 sa = IERC20(strikeAssetAddress);
-        strikeAsset = strikeAssetDeposits[msg.sender];
-        strikeAssetDeposits[msg.sender] = 0;
+        IERC20 sa = IERC20(internalStrikeAssetAddress);
+        strikeAsset = internalStrikeAssetDeposits[msg.sender];
+        internalStrikeAssetDeposits[msg.sender] = 0;
         sa.transfer(msg.sender, strikeAsset);
         underlyingAssetReserves -= underlyingAsset;
         strikeAssetReserves -= strikeAsset;
@@ -131,17 +130,17 @@ contract options is FeldmexOptionsData, Ownable {
 
     /*
         @Description: allows for users to deposit funds that are not tided up as collateral
-            these funds are tracked in the underlyingAssetDeposits mapping and the strikeAssetDeposits mapping for the underlying and strike asset respectively
+            these funds are tracked in the internalUnderlyingAssetDeposits mapping and the internalStrikeAssetDeposits mapping for the underlying and strike asset respectively
     */
-    function depositFunds(address _to) public returns (bool success){
-    	uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
+    function depositFunds(address _to) public override returns (bool success){
+    	uint balance = IERC20(internalUnderlyingAssetAddress).balanceOf(address(this));
     	uint underlyingAsset = balance - underlyingAssetReserves;
     	underlyingAssetReserves = balance;
-    	balance = IERC20(strikeAssetAddress).balanceOf(address(this));
+    	balance = IERC20(internalStrikeAssetAddress).balanceOf(address(this));
     	uint strikeAsset = balance - strikeAssetReserves;
     	strikeAssetReserves = balance;
-    	underlyingAssetDeposits[_to] += underlyingAsset;
-    	strikeAssetDeposits[_to] += strikeAsset;
+    	internalUnderlyingAssetDeposits[_to] += underlyingAsset;
+    	internalStrikeAssetDeposits[_to] += strikeAsset;
         success = true;
     }
 
@@ -154,11 +153,8 @@ contract options is FeldmexOptionsData, Ownable {
 
         @return bool _contains: returns true if strike[_addr][_maturity] contains _strike otherwise returns false
     */
-    function contains(address _addr, uint _maturity, uint _strike)public view returns(bool _contains){
-        for (uint i = 0; i < strikes[_addr][_maturity].length; i++){
-            if (strikes[_addr][_maturity][i] == _strike) return true;
-        }
-        _contains = false;
+    function contains(address _addr, uint _maturity, uint _strike) public override view returns (bool _contains){
+        _contains = containedStrikes[_addr][_maturity][_strike];
     }
 
 
@@ -228,7 +224,7 @@ contract options is FeldmexOptionsData, Ownable {
         @param uint _strike: this is the strike that will be added.
         @param uint _index: the index at which to insert the strike
     */
-    function addStrike(uint _maturity, uint _strike, uint _index) public {
+    function addStrike(uint _maturity, uint _strike, uint _index) public override {
         require(_maturity > 0 && _strike > 0);
         uint size = strikes[msg.sender][_maturity].length;
         /*
@@ -248,7 +244,7 @@ contract options is FeldmexOptionsData, Ownable {
     /*
         @Description: view function for both callAmounts and putAmounts
     */
-    function balanceOf(address _owner, uint _maturity, uint _strike, bool _call) public view returns(int256 balance){
+    function balanceOf(address _owner, uint _maturity, uint _strike, bool _call) public override view returns(int256 balance){
         balance = _call ? callAmounts[_owner][_maturity][_strike] : putAmounts[_owner][_maturity][_strike];
     }
 
@@ -260,7 +256,7 @@ contract options is FeldmexOptionsData, Ownable {
         @param int _amount: the amount of the position in question
         @param bool _call: true if the position is for calls false if it is for puts
     */
-    function addPosition(uint _strike, int _amount, bool _call) public {
+    function addPosition(uint _strike, int _amount, bool _call) public override {
         require(_strike > 0);
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity; //gas savings
@@ -276,7 +272,7 @@ contract options is FeldmexOptionsData, Ownable {
     /*
         @Description: deletes strikes[helperAddress][helperMaturity]
     */
-    function clearPositions() public {
+    function clearPositions() public override {
         delete strikes[helperAddress][helperMaturity];
     }
 
@@ -285,7 +281,7 @@ contract options is FeldmexOptionsData, Ownable {
 
         @param bool _call: true if the position is for calls false if it is for puts
     */
-    function inversePosition(bool _call) public {
+    function inversePosition(bool _call) public override {
         (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("inversePosition(bool)", _call));
         assert(success);
     }
@@ -295,11 +291,11 @@ contract options is FeldmexOptionsData, Ownable {
 
         @param bool _call: true if the position is for calls false if it is for puts
     */
-    function transferAmount(bool _call) public returns (uint _debtorTransfer, uint _holderTransfer) {
+    function transferAmount(bool _call) public override returns (uint _debtorTransfer, uint _holderTransfer) {
         (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("transferAmount(bool)", _call));
         assert(success);
-        _debtorTransfer = uint(transferAmountDebtor);
-        _holderTransfer = uint(transferAmountHolder);
+        _debtorTransfer = uint(internalTransferAmountDebtor);
+        _holderTransfer = uint(internalTransferAmountHolder);
     }
 
 
@@ -307,7 +303,7 @@ contract options is FeldmexOptionsData, Ownable {
         @Description: assign the call position stored at helperAddress at helperMaturity to a specitied address
             and assign the inverse to another specified address
     */
-    function assignCallPosition() public {
+    function assignCallPosition() public override {
         (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("assignCallPosition()"));
         assert(success);
     }
@@ -317,37 +313,10 @@ contract options is FeldmexOptionsData, Ownable {
         @Description: assign the put position stored at helperAddress at helperMaturity to a specitied address
             and assign the inverse to another specified address
     */
-    function assignPutPosition() public {
+    function assignPutPosition() public override {
         (bool success, ) = assignOptionsDelegateAddress.delegatecall(abi.encodeWithSignature("assignPutPosition()"));
         assert(success);
     }
-
-    /*
-        @Description: when the spending limits cannot be stored without decimals sweep 1 subUnit of Token from market taker to market maker 
-
-        @param address _from: address of market taker
-        @param address _to: address of market maker
-    */
-    function coverCallOverflow(address _from, address _to) public {
-        require(msg.sender == trustedAddress);
-        require(underlyingAssetDeposits[_from] > 0);
-        underlyingAssetDeposits[_from]--;
-        underlyingAssetDeposits[_to]++;
-    }
-
-    /*
-        @Description: when the spending limits cannot be stored without decimals sweep 1 subUnit of Stable from market taker to market maker 
-
-        @param address _from: address of market taker
-        @param address _to: address of market maker
-    */
-    function coverPutOverflow(address _from, address _to) public {
-        require(msg.sender == trustedAddress);
-        require(strikeAssetDeposits[_from] > 0);
-        strikeAssetDeposits[_from]--;
-        strikeAssetDeposits[_to]++;
-    }
-
 
     /*
         @Description: set the values of debtor, holder, and maturity before calling assignCallPosition or assignPutPosition
@@ -356,7 +325,7 @@ contract options is FeldmexOptionsData, Ownable {
         @param address _holder: the address that will gain the payoff profile of the position stored at helperAddress at helperMaturity
         @param uint _maturity: the timestamp at which the puts may be exercised 
     */
-    function setParams(address _debtor, address _holder, uint _maturity) public {
+    function setParams(address _debtor, address _holder, uint _maturity) public override {
         debtor = _debtor;
         holder = _holder;
         maturity = _maturity;
@@ -370,34 +339,52 @@ contract options is FeldmexOptionsData, Ownable {
             if true holder funds stored in this contract will be used to fuffil holder collateral requirements
         @param int _premium: the amount of premium payed by the debtor to the holder
     */
-    function setPaymentParams(bool _useDebtorInternalFunds, int _premium) public {
+    function setPaymentParams(bool _useDebtorInternalFunds, int _premium) public override {
         useDebtorInternalFunds = _useDebtorInternalFunds;
         premium = _premium;
     }
 
     //trusted address may be set to any FeldmexERC20Helper contract address
-    function setTrustedAddressFeldmexERC20(uint _maturity, uint _strike, bool _call) public {
+    function setTrustedAddressFeldmexERC20(uint _maturity, uint _strike, bool _call) public override {
         trustedAddress = _call ? 
             FeldmexERC20Helper(feldmexERC20HelperAddress).callAddresses(address(this), _maturity, _strike) :
             FeldmexERC20Helper(feldmexERC20HelperAddress).putAddresses(address(this), _maturity, _strike);
     }
     //set the trusted address to the exchange address
-    function setTrustedAddressMainExchange() public {trustedAddress = exchangeAddress;}
+    function setTrustedAddressMainExchange() public override {trustedAddress = exchangeAddress;}
     //set the trusted address to a multi leg exchange
-    function setTrustedAddressMultiLegExchange(uint8 _index) public {trustedAddress = mOrganizer(mOrganizerAddress).exchangeAddresses(address(this), _index);}
+    function setTrustedAddressMultiLegExchange(uint8 _index) public override {trustedAddress = mOrganizer(mOrganizerAddress).exchangeAddresses(address(this), _index);}
 
     /*
         @Description: set the maximum values for the transfer amounts
 
-        @param int _maxDebtorTransfer: the maximum amount for transferAmountDebtor if this limit is breached assignPosition transactions will revert
-        @param int _maxHolderTransfer: the maximum amount for transferAmountHolder if this limit is breached assignPosition transactions will revert
+        @param int _maxDebtorTransfer: the maximum amount for internalTransferAmountDebtor if this limit is breached assignPosition transactions will revert
+        @param int _maxHolderTransfer: the maximum amount for internalTransferAmountHolder if this limit is breached assignPosition transactions will revert
     */
-    function setLimits(int _maxDebtorTransfer, int _maxHolderTransfer) public {
+    function setLimits(int _maxDebtorTransfer, int _maxHolderTransfer) public override {
         maxDebtorTransfer = _maxDebtorTransfer;
         maxHolderTransfer = _maxHolderTransfer;
     }
 
+    /*
+        @Description: choose whether or not to use funds from underlyingAsset/internalStrikeAssetDeposits to fund collateral requirements or do a direct transfer
 
-    //----------returns entire strikes array------------------
-    function viewStrikes(address _addr, uint _maturity) public view returns(uint[] memory){return strikes[_addr][_maturity];}
+        @param bool _set: true => use internal deposits, false => call transferFrom to meet collateral requirements for msg.sender
+    */
+    function setUseDeposits(bool _set) public {internalUseDeposits[msg.sender] = _set;}
+
+
+    //----------------------------view functions--------------------------------------------
+    function underlyingAssetAddress() public override view returns(address) {return internalUnderlyingAssetAddress;}
+    function strikeAssetAddress() public override view returns(address) {return internalStrikeAssetAddress;}
+    function underlyingAssetDeposits(address _owner) public override view returns (uint) {return internalUnderlyingAssetDeposits[_owner];}
+    function strikeAssetDeposits(address _owner) public override view returns (uint) {return internalStrikeAssetDeposits[_owner];}
+    function underlyingAssetCollateral(address _addr, uint _maturity) public override view returns (uint) {return internalUnderlyingAssetCollateral[_addr][_maturity];}
+    function strikeAssetCollateral(address _addr, uint _maturity) public override view returns (uint) {return internalStrikeAssetCollateral[_addr][_maturity];}
+    function underlyingAssetDeduction(address _addr, uint _maturity) public override view returns (uint) {return internalUnderlyingAssetDeduction[_addr][_maturity];}
+    function strikeAssetDeduction(address _addr, uint _maturity) public override view returns (uint) {return internalStrikeAssetDeduction[_addr][_maturity];}
+    function useDeposits(address _addr) public override view returns (bool) {return internalUseDeposits[_addr];}
+    function transferAmountDebtor() public override view returns (int) {return internalTransferAmountDebtor;}
+    function transferAmountHolder() public override view returns (int) {return internalTransferAmountHolder;}
+    function viewStrikes(address _addr, uint _maturity) public override view returns(uint[] memory){return strikes[_addr][_maturity];}
 }

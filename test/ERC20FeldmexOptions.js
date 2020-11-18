@@ -166,7 +166,7 @@ contract('ERC20FeldmexOptions', async function(accounts){
 
 		var caught = "not caught";
 		amount = Math.max((await optionsInstance.balanceOf(accounts[1], maturity, strike, true)).toNumber(), 0) + 1;
-		assert.equal(await optionsInstance.containedStrikes(accounts[1], maturity, strike), false, "strike is not contained by first account");
+		assert.equal(await optionsInstance.contains(accounts[1], maturity, strike), false, "strike is not contained by first account");
 		//add sufficient funds
 		await depositFunds(amount*tokenSubUnits, 0, accounts[1]);
 		try{
@@ -194,7 +194,7 @@ contract('ERC20FeldmexOptions', async function(accounts){
 
 		var caught = "not caught";
 		amount = Math.max((await optionsInstance.balanceOf(accounts[1], maturity, strike, false)).toNumber(), 0) + 1;
-		assert.equal(await optionsInstance.containedStrikes(accounts[1], maturity, strike), false, "strike is not contained by first account");
+		assert.equal(await optionsInstance.contains(accounts[1], maturity, strike), false, "strike is not contained by first account");
 		//add sufficient funds
 		await depositFunds(amount*tokenSubUnits, 0, accounts[1]);
 		try{

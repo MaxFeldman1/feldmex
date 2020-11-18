@@ -1,5 +1,4 @@
 pragma solidity >=0.6.0;
-import "../optionsHandler/options.sol";
 import "../interfaces/IERC20.sol";
 import "../interfaces/ITimeSeriesOracle.sol";
 import "../interfaces/Ownable.sol";

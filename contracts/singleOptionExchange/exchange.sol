@@ -1,6 +1,7 @@
 pragma solidity >=0.6.0;
 import "../interfaces/IERC20.sol";
-import "../optionsHandler/options.sol";
+import "../interfaces/IOptionsHandler.sol";
+import "../feeOracle.sol";
 
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract
@@ -194,7 +195,7 @@ contract exchange{
     */
     function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public payable {
         require(_maturity != 0 && _price != 0 && _price < (_call? underlyingAssetSubUnits: _strike) && _strike != 0);
-        require((options(optionsAddress)).containedStrikes(msg.sender, _maturity, _strike));
+        require((IOptionsHandler(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         if (listHeads[_maturity][_strike][index] != 0) {
             insertOrder(_maturity, _strike, _price, _amount, _buy, _call, listHeads[_maturity][_strike][index]);
@@ -267,7 +268,7 @@ contract exchange{
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? underlyingAssetSubUnits: _strike) && _strike != 0);
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
         require(offers[linkedNodes[_name].hash].index == index);
-        require((options(optionsAddress)).containedStrikes(msg.sender, _maturity, _strike));
+        require((IOptionsHandler(optionsAddress)).contains(msg.sender, _maturity, _strike));
         if (index == 0){
             uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
             uint req = _price* _amount;
@@ -535,7 +536,7 @@ contract exchange{
     */
     function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public returns(uint unfilled){
         require(_strike != 0);
-        require((options(optionsAddress)).containedStrikes(msg.sender, _maturity, _strike));
+        require((IOptionsHandler(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_call? 0: 2);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
@@ -588,7 +589,7 @@ contract exchange{
     */
     function marketBuy(uint _maturity, uint _strike, uint _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public returns (uint unfilled){
         require(_strike != 0);
-        require((options(optionsAddress)).containedStrikes(msg.sender, _maturity, _strike));
+        require((IOptionsHandler(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_call ? 1 : 3);
         linkedNode memory node = linkedNodes[listHeads[_maturity][_strike][index]];
         Offer memory offer = offers[node.hash];
@@ -648,7 +649,7 @@ contract exchange{
     function mintCall(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _price, bool _debtorPays) internal returns (bool success, int transferAmt){
         _price*=_amount;    //price is now equal to total option premium
         address _optionsAddress = optionsAddress; //gas savings
-        options optionsContract = options(_optionsAddress);
+        IOptionsHandler optionsContract = IOptionsHandler(_optionsAddress);
         uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
 
         _price = _price/_underlyingAssetSubUnits + (_debtorPays || _price%_underlyingAssetSubUnits == 0 ? 0 : 1);
@@ -697,7 +698,7 @@ contract exchange{
     */
     function mintPut(address _debtor, address _holder, uint _maturity, uint _strike, uint _amount, uint _price, bool _debtorPays) internal returns (bool success, int transferAmt){
         address _optionsAddress = optionsAddress; //gas savings
-        options optionsContract = options(_optionsAddress);
+        IOptionsHandler optionsContract = IOptionsHandler(_optionsAddress);
 
         optionsContract.clearPositions();
         optionsContract.addPosition(_strike, int(_amount), false);

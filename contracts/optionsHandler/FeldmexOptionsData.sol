@@ -8,9 +8,9 @@ contract FeldmexOptionsData {
 	//address of the contract of the price oracle for the underlying asset in terms of the strike asset such as a price oracle for WBTC/DAI
     address oracleAddress;
     //address of the contract of the underlying digital asset such as WBTC or WETH
-    address public underlyingAssetAddress;
+    address internalUnderlyingAssetAddress;
     //address of a digital asset that represents a unit of account such as DAI
-    address public strikeAssetAddress;
+    address internalStrikeAssetAddress;
     //address of the exchange is allowed to see collateral requirements for all users
     address exchangeAddress;
     //address of the FeldmexERC20Helper contract that is responsible for providing ERC20 interfaces for options
@@ -40,21 +40,21 @@ contract FeldmexOptionsData {
     mapping(address => mapping(uint => mapping(uint => int))) putAmounts;
 
     /*
-        underlyingAssetDeposits and strikeAssetDeposits refers to the amount of the underlying and strike asset respectively that each user may withdraw
+        internalUnderlyingAssetDeposits and internalStrikeAssetDeposits refers to the amount of the underlying and strike asset respectively that each user may withdraw
     */
     //denominated in underlyingAssetSubUnits
-    mapping(address => uint) public underlyingAssetDeposits;
+    mapping(address => uint) internalUnderlyingAssetDeposits;
     //denominated in strikeAssetSubUnits
-    mapping(address => uint) public strikeAssetDeposits;
+    mapping(address => uint) internalStrikeAssetDeposits;
 
     /*
-        underlyingAssetCollateral maps each user to the amount of collateral in the underlying that they have locked at each maturuty for calls
-        strikeAssetCollateral maps each user to the amount of collateral in strike asset that they have locked at each maturity for puts
+        internalUnderlyingAssetCollateral maps each user to the amount of collateral in the underlying that they have locked at each maturuty for calls
+        internalStrikeAssetCollateral maps each user to the amount of collateral in strike asset that they have locked at each maturity for puts
     */
     //address => maturity => amount (denominated in underlyingAssetSubUnits)
-    mapping(address => mapping(uint => uint)) public underlyingAssetCollateral;
+    mapping(address => mapping(uint => uint)) internalUnderlyingAssetCollateral;
     //address => maturity => amount (denominated in strikeAssetSubUnits)
-    mapping(address => mapping(uint => uint)) public strikeAssetCollateral;
+    mapping(address => mapping(uint => uint)) internalStrikeAssetCollateral;
 
 
     /*
@@ -63,16 +63,16 @@ contract FeldmexOptionsData {
     //address => maturity => array of strikes
     mapping(address => mapping(uint => uint[])) strikes;
     //address => maturity => strike => contained
-    mapping(address => mapping(uint => mapping(uint => bool))) public containedStrikes;
+    mapping(address => mapping(uint => mapping(uint => bool))) containedStrikes;
 
     /*
         satDeduction is the amount of underlying asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for calls
         scDeduction is the amount of strike asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for puts
     */
     //address => maturity => amount of collateral not required //denominated in satUnits
-    mapping(address => mapping(uint => uint)) public underlyingAssetDeduction;
+    mapping(address => mapping(uint => uint)) internalUnderlyingAssetDeduction;
     //address => maturity => amount of collateral not required //denominated in scUnits
-    mapping(address => mapping(uint => uint)) public strikeAssetDeduction;
+    mapping(address => mapping(uint => uint)) internalStrikeAssetDeduction;
 
 
     //store positions in call/putAmounts[helperAddress][helperMaturity] to allow us to calculate collateral requirements
@@ -84,14 +84,13 @@ contract FeldmexOptionsData {
         when true funds are taken from claimedToken and claimedSc reserves to meet collateral requirements
         when false funds are transfered from the address to this contract to meet collateral requirements
     */
-    mapping(address => bool) public useDeposits;
-    function setUseDeposits(bool _set) public {useDeposits[msg.sender] = _set;}
+    mapping(address => bool) internalUseDeposits;
 
     /*
         store most recent transfer amounts
     */
-    int public transferAmountDebtor;
-    int public transferAmountHolder;
+    int internalTransferAmountDebtor;
+    int internalTransferAmountHolder;
 
 
     address debtor;
@@ -103,5 +102,4 @@ contract FeldmexOptionsData {
     address trustedAddress;
     bool useDebtorInternalFunds;
     int premium;
-    
 }

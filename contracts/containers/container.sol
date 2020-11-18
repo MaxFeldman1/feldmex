@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 import "../oracle.sol";
-import "../optionsHandler/options.sol";
+import "../interfaces/IOptionsHandler.sol";
 import "../singleOptionExchange/exchange.sol";
 import "../helpers/oHelper.sol";
 import "../helpers/eHelper.sol";
@@ -51,12 +51,12 @@ contract container is doubleAssetYieldEnabledToken {
 		if (_progress == 0) {
 			(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(Asset1Contract), address(Asset2Contract)));
 			require(success, "could not sucessfully deploy options contract");
-			optionsContract = options(oHelper(oHelperAddress).optionsAddress(address(this), 0));
+			optionsContract = IOptionsHandler(oHelper(oHelperAddress).optionsAddress(address(this), 0));
 		}
 		else {
 			(success, ) = oHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(oracleContract), address(Asset2Contract), address(Asset1Contract)));
 			require(success, "could not sucessfully deploy options contract");
-			optionsContract2 = options(oHelper(oHelperAddress).optionsAddress(address(this), 1));
+			optionsContract2 = IOptionsHandler(oHelper(oHelperAddress).optionsAddress(address(this), 1));
 		}
 		progress++;
 	}

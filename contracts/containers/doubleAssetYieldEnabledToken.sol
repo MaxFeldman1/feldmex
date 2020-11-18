@@ -1,5 +1,5 @@
 pragma solidity >=0.6.0;
-import "../optionsHandler/options.sol";
+import "../interfaces/IOptionsHandler.sol";
 import "../interfaces/IERC20.sol";
 import "../interfaces/ITimeSeriesOracle.sol";
 import "../interfaces/Ownable.sol";
@@ -12,10 +12,8 @@ contract doubleAssetYieldEnabledToken is IERC20, Ownable, yieldEnabled {
 	//smart contract of the asset in the denominator of oracle price
 	IERC20 public Asset2Contract;
 
-	//smart contract that handles settlement of calls and puts
-	options public optionsContract;
-	//options contract for inverse trading pair
-	options public optionsContract2;
+	IOptionsHandler public optionsContract;
+	IOptionsHandler public optionsContract2;
 
 	/*
 		represents the stage of setup

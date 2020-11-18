@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 
-import "../optionsHandler/options.sol";
+import "../interfaces/IOptionsHandler.sol";
 import "../helpers/mLeg/mCallHelper.sol";
 import "../helpers/mLeg/mPutHelper.sol";
 import "../helpers/mLeg/mLegHelper.sol";
@@ -21,7 +21,7 @@ contract mOrganizer {
 
 	function deployCallExchange(address _optionsAddress) public returns (bool success) {
 		require(exchangeAddresses[_optionsAddress][0] == address(0));
-		address _underlyingAssetAddress = options(_optionsAddress).underlyingAssetAddress();
+		address _underlyingAssetAddress = IOptionsHandler(_optionsAddress).underlyingAssetAddress();
 		address _mCallHelperAddress = mCallHelperAddress;	//gas savings
 		(success, ) = _mCallHelperAddress.call(abi.encodeWithSignature("deploy(address,address)", _underlyingAssetAddress, _optionsAddress));
 		require(success);
@@ -30,7 +30,7 @@ contract mOrganizer {
 
 	function deployPutExchange(address _optionsAddress) public returns (bool success) {
 		require(exchangeAddresses[_optionsAddress][1] == address(0));
-		address _strikeAssetAddress = options(_optionsAddress).strikeAssetAddress();
+		address _strikeAssetAddress = IOptionsHandler(_optionsAddress).strikeAssetAddress();
 		address _mPutHelperAddress = mPutHelperAddress;	//gas savings
 		(success, ) = _mPutHelperAddress.call(abi.encodeWithSignature("deploy(address,address)", _strikeAssetAddress, _optionsAddress));
 		require(success);
@@ -39,8 +39,8 @@ contract mOrganizer {
 
 	function deployMultiLegExchange(address _optionsAddress) public returns (bool success) {
 		require(exchangeAddresses[_optionsAddress][2] == address(0));
-		address _underlyingAssetAddress = options(_optionsAddress).underlyingAssetAddress();
-		address _strikeAssetAddress = options(_optionsAddress).strikeAssetAddress();
+		address _underlyingAssetAddress = IOptionsHandler(_optionsAddress).underlyingAssetAddress();
+		address _strikeAssetAddress = IOptionsHandler(_optionsAddress).strikeAssetAddress();
 		address _mLegHelperAddress = mLegHelperAddress;	//gas savings
 		(success, ) = _mLegHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", _underlyingAssetAddress, _strikeAssetAddress, _optionsAddress));
 		require(success);

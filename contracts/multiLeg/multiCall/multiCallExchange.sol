@@ -209,7 +209,7 @@ contract multiCallExchange {
         position memory pos = positions[_legsHash];
         options optionsContract = options(optionsAddress);
         for (uint i = 0; i < pos.callStrikes.length; i++){
-            if (!optionsContract.containedStrikes(msg.sender, _maturity, pos.callStrikes[i])) return false;
+            if (!optionsContract.contains(msg.sender, _maturity, pos.callStrikes[i])) return false;
         }
         contains = true;
     }

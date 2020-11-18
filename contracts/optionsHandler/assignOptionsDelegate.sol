@@ -138,59 +138,59 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         combinePosition(_holder, _maturity, true);
         (uint minCollateral, uint liabilities) = collateralCalls(_holder, _maturity);
 
-        if (minCollateral > underlyingAssetCollateral[_holder][_maturity])
-            transferAmtHolder += int(minCollateral - underlyingAssetCollateral[_holder][_maturity]);
+        if (minCollateral > internalUnderlyingAssetCollateral[_holder][_maturity])
+            transferAmtHolder += int(minCollateral - internalUnderlyingAssetCollateral[_holder][_maturity]);
         else 
-            underlyingAssetDeposits[_holder] += underlyingAssetCollateral[_holder][_maturity] - minCollateral;
+            internalUnderlyingAssetDeposits[_holder] += internalUnderlyingAssetCollateral[_holder][_maturity] - minCollateral;
         assert(transferAmtHolder <= int(maxHolderTransfer));
         if (msg.sender == trustedAddress && !useDebtorInternalFunds) {
             if (transferAmtHolder > 0){
-                assert(underlyingAssetDeposits[_holder] >= uint(transferAmtHolder));
-                underlyingAssetDeposits[_holder] -= uint(transferAmtHolder);
+                assert(internalUnderlyingAssetDeposits[_holder] >= uint(transferAmtHolder));
+                internalUnderlyingAssetDeposits[_holder] -= uint(transferAmtHolder);
             } else {
-                underlyingAssetDeposits[_holder] += uint(-transferAmtHolder);
+                internalUnderlyingAssetDeposits[_holder] += uint(-transferAmtHolder);
             }
         }
-        underlyingAssetCollateral[_holder][_maturity] = minCollateral;
-        underlyingAssetDeduction[_holder][_maturity] = liabilities - minCollateral;
+        internalUnderlyingAssetCollateral[_holder][_maturity] = minCollateral;
+        internalUnderlyingAssetDeduction[_holder][_maturity] = liabilities - minCollateral;
         
         inversePosition(true);
 
         combinePosition(_debtor, _maturity, true);
         (minCollateral, liabilities) = collateralCalls(_debtor, _maturity);
 
-        if (minCollateral > underlyingAssetCollateral[_debtor][_maturity])
-            transferAmtDebtor += int(minCollateral - underlyingAssetCollateral[_debtor][_maturity]);
+        if (minCollateral > internalUnderlyingAssetCollateral[_debtor][_maturity])
+            transferAmtDebtor += int(minCollateral - internalUnderlyingAssetCollateral[_debtor][_maturity]);
         else
-            underlyingAssetDeposits[_debtor] += underlyingAssetCollateral[_debtor][_maturity] - minCollateral;
+            internalUnderlyingAssetDeposits[_debtor] += internalUnderlyingAssetCollateral[_debtor][_maturity] - minCollateral;
         assert(transferAmtDebtor <= int(maxDebtorTransfer));
         if (msg.sender == trustedAddress && useDebtorInternalFunds) {
             if (transferAmtDebtor > 0){
-                assert(underlyingAssetDeposits[_debtor] >= uint(transferAmtDebtor));
-                underlyingAssetDeposits[_debtor] -= uint(transferAmtDebtor);
+                assert(internalUnderlyingAssetDeposits[_debtor] >= uint(transferAmtDebtor));
+                internalUnderlyingAssetDeposits[_debtor] -= uint(transferAmtDebtor);
             } else {
-                underlyingAssetDeposits[_debtor] += uint(-transferAmtDebtor);
+                internalUnderlyingAssetDeposits[_debtor] += uint(-transferAmtDebtor);
             }
         }
-        underlyingAssetCollateral[_debtor][_maturity] = minCollateral;
-        underlyingAssetDeduction[_debtor][_maturity] = liabilities - minCollateral;
+        internalUnderlyingAssetCollateral[_debtor][_maturity] = minCollateral;
+        internalUnderlyingAssetDeduction[_debtor][_maturity] = liabilities - minCollateral;
         int senderTransfer = (msg.sender == trustedAddress ? (useDebtorInternalFunds? transferAmtHolder: transferAmtDebtor) : transferAmtHolder+transferAmtDebtor);
         //fetch collateral
-        if (useDeposits[msg.sender]){
-            assert(senderTransfer < 0 || int(underlyingAssetDeposits[msg.sender]) >= senderTransfer);
-            underlyingAssetDeposits[msg.sender] = uint(int(underlyingAssetDeposits[msg.sender]) - senderTransfer);
+        if (internalUseDeposits[msg.sender]){
+            assert(senderTransfer < 0 || int(internalUnderlyingAssetDeposits[msg.sender]) >= senderTransfer);
+            internalUnderlyingAssetDeposits[msg.sender] = uint(int(internalUnderlyingAssetDeposits[msg.sender]) - senderTransfer);
         } else {
             if (senderTransfer > 0){
-                IERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
+                IERC20(internalUnderlyingAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
                 underlyingAssetReserves += uint(senderTransfer);
             }
             else if (senderTransfer < 0){
-                IERC20(underlyingAssetAddress).transfer(msg.sender, uint(-senderTransfer));            
+                IERC20(internalUnderlyingAssetAddress).transfer(msg.sender, uint(-senderTransfer));            
                 underlyingAssetReserves -= uint(-senderTransfer);
             }
         }
-        transferAmountDebtor = transferAmtDebtor;
-        transferAmountHolder = transferAmtHolder;
+        internalTransferAmountDebtor = transferAmtDebtor;
+        internalTransferAmountHolder = transferAmtHolder;
     }
 
 
@@ -212,21 +212,21 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         combinePosition(_holder, _maturity, false);
         (uint minCollateral, uint liabilities) = collateralPuts(_holder, _maturity);
         
-        if (minCollateral > strikeAssetCollateral[_holder][_maturity])
-            transferAmtHolder += int(minCollateral - strikeAssetCollateral[_holder][_maturity]);
+        if (minCollateral > internalStrikeAssetCollateral[_holder][_maturity])
+            transferAmtHolder += int(minCollateral - internalStrikeAssetCollateral[_holder][_maturity]);
         else
-            strikeAssetDeposits[_holder] += strikeAssetCollateral[_holder][_maturity] - minCollateral;
+            internalStrikeAssetDeposits[_holder] += internalStrikeAssetCollateral[_holder][_maturity] - minCollateral;
         assert(transferAmtHolder <= int(maxHolderTransfer));
         if (msg.sender == trustedAddress && !useDebtorInternalFunds) {
             if (transferAmtHolder > 0){
-                assert(strikeAssetDeposits[_holder] >= uint(transferAmtHolder));
-                strikeAssetDeposits[_holder] -= uint(transferAmtHolder);
+                assert(internalStrikeAssetDeposits[_holder] >= uint(transferAmtHolder));
+                internalStrikeAssetDeposits[_holder] -= uint(transferAmtHolder);
             } else {
-                strikeAssetDeposits[_holder] += uint(-transferAmtHolder);
+                internalStrikeAssetDeposits[_holder] += uint(-transferAmtHolder);
             }
         }
-        strikeAssetCollateral[_holder][_maturity] = minCollateral;
-        strikeAssetDeduction[_holder][_maturity] = liabilities - minCollateral;
+        internalStrikeAssetCollateral[_holder][_maturity] = minCollateral;
+        internalStrikeAssetDeduction[_holder][_maturity] = liabilities - minCollateral;
 
         //inverse positions for debtor
         inversePosition(false);
@@ -234,38 +234,38 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         combinePosition(_debtor, _maturity, false);
         (minCollateral, liabilities) = collateralPuts(_debtor, _maturity);
 
-        if (minCollateral > strikeAssetCollateral[_debtor][_maturity])
-            transferAmtDebtor += int(minCollateral - strikeAssetCollateral[_debtor][_maturity]);
+        if (minCollateral > internalStrikeAssetCollateral[_debtor][_maturity])
+            transferAmtDebtor += int(minCollateral - internalStrikeAssetCollateral[_debtor][_maturity]);
         else
-            strikeAssetDeposits[_debtor] += strikeAssetCollateral[_debtor][_maturity] - minCollateral;
+            internalStrikeAssetDeposits[_debtor] += internalStrikeAssetCollateral[_debtor][_maturity] - minCollateral;
         assert(transferAmtDebtor <= int(maxDebtorTransfer));
         if (msg.sender == trustedAddress && useDebtorInternalFunds) {
             if (transferAmtDebtor > 0){
-                assert(strikeAssetDeposits[_debtor] >= uint(transferAmtDebtor));
-                strikeAssetDeposits[_debtor] -= uint(transferAmtDebtor);
+                assert(internalStrikeAssetDeposits[_debtor] >= uint(transferAmtDebtor));
+                internalStrikeAssetDeposits[_debtor] -= uint(transferAmtDebtor);
             } else {
-                strikeAssetDeposits[_debtor] += uint(-transferAmtDebtor);
+                internalStrikeAssetDeposits[_debtor] += uint(-transferAmtDebtor);
             }
         }
-        strikeAssetCollateral[_debtor][_maturity] = minCollateral;
-        strikeAssetDeduction[_debtor][_maturity] = liabilities - minCollateral;
+        internalStrikeAssetCollateral[_debtor][_maturity] = minCollateral;
+        internalStrikeAssetDeduction[_debtor][_maturity] = liabilities - minCollateral;
         int senderTransfer = (msg.sender == trustedAddress ? (useDebtorInternalFunds? transferAmtHolder: transferAmtDebtor) : transferAmtHolder+transferAmtDebtor);
         //fetch collateral
-        if (useDeposits[msg.sender]) {
-            assert(senderTransfer < 0 || int(strikeAssetDeposits[msg.sender]) >= senderTransfer);
-            strikeAssetDeposits[msg.sender] = uint(int(strikeAssetDeposits[msg.sender]) - senderTransfer);
+        if (internalUseDeposits[msg.sender]) {
+            assert(senderTransfer < 0 || int(internalStrikeAssetDeposits[msg.sender]) >= senderTransfer);
+            internalStrikeAssetDeposits[msg.sender] = uint(int(internalStrikeAssetDeposits[msg.sender]) - senderTransfer);
         } else {
             if (senderTransfer > 0){
-                IERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
+                IERC20(internalStrikeAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
                 strikeAssetReserves += uint(senderTransfer);
             }
             else if (senderTransfer < 0){
-                IERC20(strikeAssetAddress).transfer(msg.sender, uint(-senderTransfer));
+                IERC20(internalStrikeAssetAddress).transfer(msg.sender, uint(-senderTransfer));
                 strikeAssetReserves -= uint(-senderTransfer);
             }
         }
-        transferAmountDebtor = transferAmtDebtor;
-        transferAmountHolder = transferAmtHolder;
+        internalTransferAmountDebtor = transferAmtDebtor;
+        internalTransferAmountHolder = transferAmtHolder;
     }
 
     /*
@@ -277,10 +277,10 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity;  //gas savings
         (uint result, ) = _call ? collateralCalls(_helperAddress, _helperMaturity) : collateralPuts(_helperAddress, _helperMaturity);
-        transferAmountHolder = int(result);
+        internalTransferAmountHolder = int(result);
         inversePosition(_call);
         (result, ) = _call ? collateralCalls(_helperAddress, _helperMaturity) : collateralPuts(_helperAddress, _helperMaturity);
-        transferAmountDebtor = int(result);
+        internalTransferAmountDebtor = int(result);
     }
 
 }

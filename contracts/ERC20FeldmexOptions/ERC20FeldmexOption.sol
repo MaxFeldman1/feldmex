@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 import "../interfaces/IERC20.sol";
-import "../optionsHandler/options.sol";
+import "../interfaces/IOptionsHandler.sol";
 import "./detachedOption.sol";
 
 contract ERC20FeldmexOption is IERC20 {
@@ -38,7 +38,7 @@ contract ERC20FeldmexOption is IERC20 {
 		strike = _strike;
 		call = _call;
 		optionsHandlerAddress = _optionsHandlerAddress;
-		options optionsContract = options(_optionsHandlerAddress);
+		IOptionsHandler optionsContract = IOptionsHandler(_optionsHandlerAddress);
 		address _underlyingAssetAddress = optionsContract.underlyingAssetAddress();
 		address _strikeAssetAddress = optionsContract.strikeAssetAddress();
 		uint8 _decimals = IERC20(_call ? _underlyingAssetAddress : _strikeAssetAddress).decimals();
@@ -62,7 +62,7 @@ contract ERC20FeldmexOption is IERC20 {
 			otherwise 0 is retuned
 	*/
 	function balanceOf(address _owner) public view override returns (uint balance){
-		int ret = options(optionsHandlerAddress).balanceOf(_owner, maturity, strike, call);
+		int ret = IOptionsHandler(optionsHandlerAddress).balanceOf(_owner, maturity, strike, call);
 		balance = ret > 0 ? uint(ret) : 0;
 	}
 
@@ -70,9 +70,9 @@ contract ERC20FeldmexOption is IERC20 {
 		@Description: mint _value quntity of options with msg.sender as the debtor and _to as the receiver
 	*/
 	function transfer(address _to, uint _value) public override returns (bool success){
-		options optionsContract = options(optionsHandlerAddress);
+		IOptionsHandler optionsContract = IOptionsHandler(optionsHandlerAddress);
 		uint _maturity = maturity;	//gas savings
-		require(balanceOf(msg.sender) >= _value || optionsContract.containedStrikes(msg.sender,_maturity,strike));
+		require(balanceOf(msg.sender) >= _value || optionsContract.contains(msg.sender,_maturity,strike));
 		loadPosition(_value);
 		optionsContract.setParams(msg.sender, _to, _maturity);
 		emit Transfer(msg.sender, _to, _value);
@@ -84,9 +84,9 @@ contract ERC20FeldmexOption is IERC20 {
 	*/
 	function transferFrom(address _from, address _to, uint _value) public override returns (bool success){
 		require(allowance[_from][msg.sender] >= _value);
-		options optionsContract = options(optionsHandlerAddress);
+		IOptionsHandler optionsContract = IOptionsHandler(optionsHandlerAddress);
 		uint _maturity = maturity;	//gas savings
-		require(balanceOf(_from) >= _value || optionsContract.containedStrikes(_from,_maturity,strike));
+		require(balanceOf(_from) >= _value || optionsContract.contains(_from,_maturity,strike));
 		allowance[_from][msg.sender] -= _value;
 		loadPosition(_value);
 		optionsContract.setParams(_from, _to, maturity);
@@ -109,7 +109,7 @@ contract ERC20FeldmexOption is IERC20 {
 	function loadPosition(uint _value) internal {
 		bool _call = call; //gas savings
 		uint _strike = strike;	//gas savings
-		options optionsContract = options(optionsHandlerAddress);
+		IOptionsHandler optionsContract = IOptionsHandler(optionsHandlerAddress);
 		optionsContract.clearPositions();
 		optionsContract.addPosition(_strike, int(_value), _call);
 		uint limit;
