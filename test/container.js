@@ -1,6 +1,6 @@
 const oracle = artifacts.require("oracle");
 const token = artifacts.require("Token");
-const options = artifacts.require("options");
+const options = artifacts.require("OptionsHandler");
 const exchange = artifacts.require("exchange");
 const container = artifacts.require("container");
 const oHelper = artifacts.require("oHelper");

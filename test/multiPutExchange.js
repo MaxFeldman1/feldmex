@@ -1,6 +1,6 @@
 const oracle = artifacts.require("oracle");
 const token = artifacts.require("Token");
-const options = artifacts.require("options");
+const options = artifacts.require("OptionsHandler");
 const multiPutExchange = artifacts.require("multiPutExchange");
 const mPutHelper = artifacts.require("mPutHelper");
 const mOrganizer = artifacts.require("mOrganizer");

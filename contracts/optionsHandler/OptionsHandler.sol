@@ -9,7 +9,7 @@ import "../multiLeg/mOrganizer.sol";
 import "./FeldmexOptionsData.sol";
 import "../feeOracle.sol";
 
-contract options is FeldmexOptionsData, Ownable, IOptionsHandler {
+contract OptionsHandler is FeldmexOptionsData, Ownable, IOptionsHandler {
 
     /*
         @Description: setup

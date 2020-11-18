@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 import "./mLegData.sol";
-import "../../optionsHandler/options.sol";
+import "../../interfaces/IOptionsHandler.sol";
 import "../../feeOracle.sol";
 
 contract mLegDelegate is mLegData {
@@ -199,7 +199,7 @@ contract mLegDelegate is mLegData {
         */
 
         address _optionsAddress = optionsAddress; //gas savings
-        options optionsContract = options(_optionsAddress);
+        IOptionsHandler optionsContract = IOptionsHandler(_optionsAddress);
         optionsContract.setParams(_debtor, _holder, _maturity);
         optionsContract.setTrustedAddressMultiLegExchange(2);
         position memory pos = positions[_legsHash];

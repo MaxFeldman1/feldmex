@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 import "../../interfaces/IERC20.sol";
-import "../../optionsHandler/options.sol";
+import "../../interfaces/IOptionsHandler.sol";
 import "./mLegData.sol";
 
 /*
@@ -39,7 +39,7 @@ contract multiLegExchange is mLegData {
         require(_callAmounts.length > 0 && _putAmounts.length > 0);
         require(_callAmounts.length==_callStrikes.length&&_putAmounts.length==_putStrikes.length);
         bytes32 hash = keccak256(abi.encodePacked(_callStrikes, _callAmounts, _putStrikes, _putAmounts));
-        options optionsContract = options(optionsAddress);
+        IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
         uint prevStrike;
         int _subUnits = int(underlyingAssetSubUnits);  //gas savings
         //load position
@@ -164,7 +164,7 @@ contract multiLegExchange is mLegData {
     */
     function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
         position memory pos = positions[_legsHash];
-        options optionsContract = options(optionsAddress);
+        IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
         for (uint i = 0; i < pos.callStrikes.length; i++){
             if (!optionsContract.contains(msg.sender, _maturity, pos.callStrikes[i])) return false;
         }

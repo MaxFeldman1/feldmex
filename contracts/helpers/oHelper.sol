@@ -1,5 +1,6 @@
 pragma solidity >=0.6.0;
-import "../optionsHandler/options.sol";
+import "../optionsHandler/OptionsHandler.sol";
+import "../interfaces/Ownable.sol";
 
 //allows us to deploy the options smart contract without going over gas limit
 contract oHelper {
@@ -18,9 +19,10 @@ contract oHelper {
 
 	function deploy(address _oracleAddress, address _underlyingAssetAddress, address _strikeAssetAddress) public {
 		uint8 index = optionsAddress[msg.sender][0] == address(0) ? 0 : 1;
-		optionsAddress[msg.sender][index] = address(new options(_oracleAddress, _underlyingAssetAddress, _strikeAssetAddress,
+		address temp = address(new OptionsHandler(_oracleAddress, _underlyingAssetAddress, _strikeAssetAddress,
 			feldmexERC20HelperAddress, mOrganizerAddress, assignOptionsDelegateAddress, feeOracleAddress));
-		options(optionsAddress[msg.sender][index]).transferOwnership(msg.sender);
+		optionsAddress[msg.sender][index] = temp;
+		Ownable(temp).transferOwnership(msg.sender);
 	}
 
 }

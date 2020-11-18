@@ -1,6 +1,6 @@
 const oracle = artifacts.require("oracle");
 const token = artifacts.require("Token");
-const options = artifacts.require("options");
+const options = artifacts.require("OptionsHandler");
 const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const feeOracle = artifacts.require("feeOracle");

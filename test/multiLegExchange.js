@@ -1,6 +1,6 @@
 const oracle = artifacts.require("oracle");
 const token = artifacts.require("Token");
-const options = artifacts.require("options");
+const options = artifacts.require("OptionsHandler");
 const multiLegExchange = artifacts.require("multiLegExchange");
 const mOrganizer = artifacts.require("mOrganizer");
 const mCallHelper = artifacts.require("mCallHelper");

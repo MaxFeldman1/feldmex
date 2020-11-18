@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 import "../../interfaces/IERC20.sol";
-import "../../optionsHandler/options.sol";
+import "../../interfaces/IOptionsHandler.sol";
 import "../../feeOracle.sol";
 
 /*
@@ -110,7 +110,7 @@ contract multiCallExchange {
         require(_callAmounts.length==_callStrikes.length);
         int _underlyingAssetSubUnits = int(underlyingAssetSubUnits);  //gas savings
         bytes32 hash = keccak256(abi.encodePacked(_callStrikes, _callAmounts));
-        options optionsContract = options(optionsAddress);
+        IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
         uint prevStrike;
         //load position
         optionsContract.clearPositions();
@@ -207,7 +207,7 @@ contract multiCallExchange {
     */
     function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
         position memory pos = positions[_legsHash];
-        options optionsContract = options(optionsAddress);
+        IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
         for (uint i = 0; i < pos.callStrikes.length; i++){
             if (!optionsContract.contains(msg.sender, _maturity, pos.callStrikes[i])) return false;
         }
@@ -668,7 +668,7 @@ contract multiCallExchange {
         */
 
         address _optionsAddress = optionsAddress; //gas savings
-        options optionsContract = options(_optionsAddress);
+        IOptionsHandler optionsContract = IOptionsHandler(_optionsAddress);
         position memory pos = positions[_legsHash];
         optionsContract.setParams(_debtor, _holder, _maturity);
         //load call position into register
