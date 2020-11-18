@@ -1,73 +1,28 @@
 pragma solidity >=0.6.0;
 import "../interfaces/IERC20.sol";
 import "../interfaces/IOptionsHandler.sol";
+import "../interfaces/ISingleLegExchange.sol";
 import "../feeOracle.sol";
 
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract
 */
-contract exchange{
+contract SingleLegExchange is ISingleLegExchange {
     //denominated in Underlying Token underlyingAssetSubUnits
-    mapping(address => uint) public underlyingAssetDeposits;
+    mapping(address => uint) public override underlyingAssetDeposits;
     
     //denominated in the strike asset strikeAssetSubUnits
-    mapping(address => uint) public strikeAssetDeposits;
-
-    //------------functions to view balances----------------
-    //function viewClaimed(address _owner, bool _token) public view returns(uint ret){ret = _token? underlyingAssetDeposits[_owner] : strikeAssetDeposits[_owner];}
-
-    //stores price and hash of (maturity, stike, price)
-    struct linkedNode{
-        //offers[hash] => offer
-        bytes32 hash;
-        //linkedNodes[this.name] => this
-        bytes32 name;
-        bytes32 next;
-        bytes32 previous;
-    }
-
-    struct Offer{
-        address offerer;
-        uint maturity;
-        uint strike;
-        uint price;
-        uint amount;
-        /*
-            long call => index: 0
-            short call => index: 1
-            long put => index: 2
-            short put => index: 3
-        */
-        uint8 index;
-    }
-    
-    event offerPosted(
-        bytes32 name,
-        uint maturity,
-        uint strike,
-        uint price,
-        uint amount,
-        uint8 index
-    );
-
-    event offerCalceled(
-        bytes32 name
-    );
-
-    event offerAccepted(
-        bytes32 name,
-        uint amount
-    );
+    mapping(address => uint) public override strikeAssetDeposits;
 
     /*
         listHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
         the linked lists are ordered by price with the most enticing offers at the top near the head
     */
     //maturity => strike => headNode.name [longCall, shortCall, longPut, shortPut]
-    mapping(uint => mapping(uint => bytes32[4])) public listHeads;
+    mapping(uint => mapping(uint => bytes32[4])) public override listHeads;
     
     //holds all nodes node.name is the identifier for the location in this mapping
-    mapping (bytes32 => linkedNode) public linkedNodes;
+    mapping (bytes32 => linkedNode) public override linkedNodes;
 
     /*
         Note all linkedNodes correspond to a buyOffer
@@ -75,7 +30,7 @@ contract exchange{
     */
     
     //holds all offers
-    mapping(bytes32 => Offer) public offers;
+    mapping(bytes32 => Offer) public override offers;
     
     //address of the contract of the underlying digital asset such as WBTC or WETH
     address underlyingAssetAddress;
@@ -98,7 +53,7 @@ contract exchange{
     /*  
         @Description: set up
     */
-    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) public{
+    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) public {
         underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
@@ -118,7 +73,7 @@ contract exchange{
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function depositFunds(address _to) public returns(bool success){
+    function depositFunds(address _to) public override returns(bool success){
         uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
         uint sats = balance - satReserves;
         satReserves = balance;
@@ -137,7 +92,7 @@ contract exchange{
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function withdrawAllFunds(bool _token) public returns(bool success){
+    function withdrawAllFunds(bool _token) public override returns(bool success){
         if (_token){
             uint val = underlyingAssetDeposits[msg.sender];
             IERC20 ua = IERC20(underlyingAssetAddress);
@@ -193,7 +148,7 @@ contract exchange{
         @param bool _buy: if true this is a buy order if false this is a sell order
         @param bool _call: if true this is a call order if false this is a put order
     */
-    function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public payable {
+    function postOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call) public override payable {
         require(_maturity != 0 && _price != 0 && _price < (_call? underlyingAssetSubUnits: _strike) && _strike != 0);
         require((IOptionsHandler(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
@@ -263,7 +218,7 @@ contract exchange{
         @param bool _call: if true this is a call order if false this is a put order 
         @param bytes32 _name: the name identifier of the order from which to search for the location to insert this order
     */
-    function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public payable {
+    function insertOrder(uint _maturity, uint _strike, uint _price, uint _amount, bool _buy, bool _call, bytes32 _name) public override payable {
         //make sure the offer and node corresponding to the name is in the correct list
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].strike == _strike && _maturity != 0 && _price != 0 && _price < (_call? underlyingAssetSubUnits: _strike) && _strike != 0);
         uint8 index = (_buy? 0 : 1) + (_call? 0 : 2);
@@ -367,7 +322,7 @@ contract exchange{
 
         @param bytes32: the identifier of the node which stores the order to cancel, offerToCancel == offers[linkedNodes[_name].hash]
     */
-    function cancelOrder(bytes32 _name) public {
+    function cancelOrder(bytes32 _name) public override {
         linkedNode memory node = linkedNodes[_name];
         require(msg.sender == offers[node.hash].offerer);
         Offer memory offer = offers[node.hash];
@@ -534,7 +489,7 @@ contract exchange{
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public returns(uint unfilled){
+    function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public override returns(uint unfilled){
         require(_strike != 0);
         require((IOptionsHandler(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_call? 0: 2);
@@ -587,7 +542,7 @@ contract exchange{
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketBuy(uint _maturity, uint _strike, uint _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public returns (uint unfilled){
+    function marketBuy(uint _maturity, uint _strike, uint _limitPrice, uint _amount, uint8 _maxIterations, bool _call) public override returns (uint unfilled){
         require(_strike != 0);
         require((IOptionsHandler(optionsAddress)).contains(msg.sender, _maturity, _strike));
         uint8 index = (_call ? 1 : 3);

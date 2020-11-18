@@ -1,7 +1,7 @@
 pragma solidity >=0.6.0;
 import "../oracle.sol";
 import "../interfaces/IOptionsHandler.sol";
-import "../singleOptionExchange/exchange.sol";
+import "../interfaces/ISingleLegExchange.sol";
 import "../helpers/oHelper.sol";
 import "../helpers/eHelper.sol";
 import "../helpers/orcHelper.sol";
@@ -12,9 +12,9 @@ contract container is doubleAssetYieldEnabledToken {
 	//smart contract that records prices, records (reservesOfAsset1)/(reservesOfAsset2)
 	ITimeSeriesOracle public oracleContract;
 	//smart contract on which options may be traded
-	exchange public exchangeContract;
+	ISingleLegExchange public exchangeContract;
 	//exchange contract for inverse trading pair
-	exchange public exchangeContract2;
+	ISingleLegExchange public exchangeContract2;
     //address of the FeldmexERC20Helper contract that is responsible for providing ERC20 interfaces for options
     address feldmexERC20HelperAddress;
 
@@ -73,12 +73,12 @@ contract container is doubleAssetYieldEnabledToken {
 		if (_progress == 1) {
 			(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(Asset1Contract), address(Asset2Contract), address(optionsContract)));
 			require(success, "could not sucessfully deploy exchange contract");
-			exchangeContract = exchange(eHelper(eHelperAddress).exchangeAddress(address(this), 0));
+			exchangeContract = ISingleLegExchange(eHelper(eHelperAddress).exchangeAddress(address(this), 0));
 			optionsContract.setExchangeAddress(address(exchangeContract));
 		} else {
 			(success, ) = eHelperAddress.call(abi.encodeWithSignature("deploy(address,address,address)", address(Asset2Contract), address(Asset1Contract), address(optionsContract2)));
 			require(success, "could not sucessfully deploy exchange contract");
-			exchangeContract2 = exchange(eHelper(eHelperAddress).exchangeAddress(address(this), 1));
+			exchangeContract2 = ISingleLegExchange(eHelper(eHelperAddress).exchangeAddress(address(this), 1));
 			optionsContract2.setExchangeAddress(address(exchangeContract2));	
 		}
 		progress++;
