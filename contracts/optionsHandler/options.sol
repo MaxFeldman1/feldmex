@@ -13,8 +13,8 @@ contract options is FeldmexOptionsData, Ownable {
     /*
         @Description: setup
     */
-    constructor (address _oracleAddress, address _underlyingAssetAddress, 
-        address _strikeAssetAddress, address _feldmexERC20HelperAddress, 
+    constructor (address _oracleAddress, address _underlyingAssetAddress,
+        address _strikeAssetAddress, address _feldmexERC20HelperAddress,
         address _mOrganizerAddress, address _assignOptionsDelegateAddress,
         address _feeOracleAddress) public {
         
@@ -28,9 +28,9 @@ contract options is FeldmexOptionsData, Ownable {
         feeOracleAddress = _feeOracleAddress;
         feeOracle(_feeOracleAddress).setSpecificFeeImmunity(address(this), msg.sender, true);
         IERC20 ua = IERC20(underlyingAssetAddress);
-        satUnits = 10 ** uint(ua.decimals());
+        underlyingAssetSubUnits = 10 ** uint(ua.decimals());
         IERC20 sa = IERC20(strikeAssetAddress);
-        scUnits = 10 ** uint(sa.decimals());
+        strikeAssetSubUnits = 10 ** uint(sa.decimals());
     }
     
     /*
@@ -80,68 +80,68 @@ contract options is FeldmexOptionsData, Ownable {
             int putAmount = putAmounts[msg.sender][_maturity][strike];
             delete callAmounts[msg.sender][_maturity][strike];
             delete putAmounts[msg.sender][_maturity][strike];
-            callValue += satValueOf(callAmount, strike, spot);
-            putValue += scValueOf(putAmount, strike, spot);
+            callValue += valueOfCall(callAmount, strike, spot);
+            putValue += valueOfPut(putAmount, strike, spot);
             delete containedStrikes[msg.sender][_maturity][strike];
         }
-        //satValueOf is inflated by _price parameter and scValueOf thus only divide out spot from callValue not putValue
+        //valueOfCall is inflated by _price parameter and valueOfCall thus only divide out spot from callValue not putValue
         //prevent div by 0, also there are no calls at a strike of 0 so this does not affect payout
         //If spot == 0 so will callValue so there there is no harm done by this safety check
         if (spot != 0) callValue /= spot;
         //deflate put value
-        putValue /= scUnits;
+        putValue /= strikeAssetSubUnits;
         delete strikes[msg.sender][_maturity];
         feeOracle fo = feeOracle(feeOracleAddress);
         uint _feeDenominator = fo.fetchFee(address(this));
         bool _feeImmunity = fo.isFeeImmune(address(this), msg.sender);
-        if (callValue > satDeduction[msg.sender][_maturity]){
-            callValue -= satDeduction[msg.sender][_maturity];
+        if (callValue > underlyingAssetDeduction[msg.sender][_maturity]){
+            callValue -= underlyingAssetDeduction[msg.sender][_maturity];
             uint fee = _feeImmunity ? 0 : callValue/_feeDenominator;
-            claimedTokens[owner] += fee;
-            claimedTokens[msg.sender] += callValue - fee;
+            underlyingAssetDeposits[owner] += fee;
+            underlyingAssetDeposits[msg.sender] += callValue - fee;
         }
-        if (putValue > scDeduction[msg.sender][_maturity]){
-            putValue -= scDeduction[msg.sender][_maturity];
+        if (putValue > strikeAssetDeduction[msg.sender][_maturity]){
+            putValue -= strikeAssetDeduction[msg.sender][_maturity];
             uint fee = _feeImmunity ? 0 : putValue/_feeDenominator;
-            claimedStable[owner] += fee;
-            claimedStable[msg.sender] += putValue - fee;
+            strikeAssetDeposits[owner] += fee;
+            strikeAssetDeposits[msg.sender] += putValue - fee;
         }
         success = true;
     }
 
     /*
         @Descripton: allows for users to withdraw funds that are not locked up as collateral
-            these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
+            these funds are tracked in the underlyingAssetDeposits mapping and the strikeAssetDeposits mapping for the underlying and strike asset respectively
 
         @return uint underlyingAsset: the amount of the underlying asset that has been withdrawn
         @return uint strikeAsset: the amount of the strike asset that has been withdrawn
     */
     function withdrawFunds() public returns(uint underlyingAsset, uint strikeAsset){
         IERC20 ua = IERC20(underlyingAssetAddress);
-        underlyingAsset = claimedTokens[msg.sender];
-        claimedTokens[msg.sender] = 0;
+        underlyingAsset = underlyingAssetDeposits[msg.sender];
+        underlyingAssetDeposits[msg.sender] = 0;
         ua.transfer(msg.sender, underlyingAsset);
         IERC20 sa = IERC20(strikeAssetAddress);
-        strikeAsset = claimedStable[msg.sender];
-        claimedStable[msg.sender] = 0;
+        strikeAsset = strikeAssetDeposits[msg.sender];
+        strikeAssetDeposits[msg.sender] = 0;
         sa.transfer(msg.sender, strikeAsset);
-        satReserves -= underlyingAsset;
-        scReserves -= strikeAsset;
+        underlyingAssetReserves -= underlyingAsset;
+        strikeAssetReserves -= strikeAsset;
     }
 
     /*
         @Description: allows for users to deposit funds that are not tided up as collateral
-            these funds are tracked in the claimedTokens mapping and the claimedStable mapping for the underlying and strike asset respectively
+            these funds are tracked in the underlyingAssetDeposits mapping and the strikeAssetDeposits mapping for the underlying and strike asset respectively
     */
     function depositFunds(address _to) public returns (bool success){
     	uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
-    	uint sats = balance - satReserves;
-    	satReserves = balance;
+    	uint underlyingAsset = balance - underlyingAssetReserves;
+    	underlyingAssetReserves = balance;
     	balance = IERC20(strikeAssetAddress).balanceOf(address(this));
-    	uint sc = balance - scReserves;
-    	scReserves = balance;
-    	claimedTokens[_to] += sats;
-    	claimedStable[_to] += sc;
+    	uint strikeAsset = balance - strikeAssetReserves;
+    	strikeAssetReserves = balance;
+    	underlyingAssetDeposits[_to] += underlyingAsset;
+    	strikeAssetDeposits[_to] += strikeAsset;
         success = true;
     }
 
@@ -173,7 +173,7 @@ contract options is FeldmexOptionsData, Ownable {
         @return uint value: the value of the position in terms of the underlying multiplied by the price
             inflate value by multiplying by price and divide out after doing calculations with the returned value to maintain accuracy
     */
-    function satValueOf(int _amount, uint _strike, uint _price)internal pure returns(uint value){
+    function valueOfCall(int _amount, uint _strike, uint _price)internal pure returns(uint value){
         uint payout = 0;
         if (_amount != 0){
             if (_price > _strike){
@@ -200,9 +200,9 @@ contract options is FeldmexOptionsData, Ownable {
         @param uint _strike: the strike prive of the put contract in terms of the underlying versus stablecoie
         @param uint _prive: the spot price at which to find the value of the position in terms of the underlying versus stablecoie
 
-        @return uint value: the value of the position in terms of the strike asset inflated by scUnits
+        @return uint value: the value of the position in terms of the strike asset inflated by strikeAssetSubUnits
     */
-    function scValueOf(int _amount, uint _strike, uint _price)internal pure returns(uint value){
+    function valueOfPut(int _amount, uint _strike, uint _price)internal pure returns(uint value){
         uint payout = 0;
         if (_amount != 0){
             if (_price < _strike){
@@ -330,9 +330,9 @@ contract options is FeldmexOptionsData, Ownable {
     */
     function coverCallOverflow(address _from, address _to) public {
         require(msg.sender == trustedAddress);
-        require(claimedTokens[_from] > 0);
-        claimedTokens[_from]--;
-        claimedTokens[_to]++;
+        require(underlyingAssetDeposits[_from] > 0);
+        underlyingAssetDeposits[_from]--;
+        underlyingAssetDeposits[_to]++;
     }
 
     /*
@@ -343,9 +343,9 @@ contract options is FeldmexOptionsData, Ownable {
     */
     function coverPutOverflow(address _from, address _to) public {
         require(msg.sender == trustedAddress);
-        require(claimedStable[_from] > 0);
-        claimedStable[_from]--;
-        claimedStable[_to]++;
+        require(strikeAssetDeposits[_from] > 0);
+        strikeAssetDeposits[_from]--;
+        strikeAssetDeposits[_to]++;
     }
 
 

@@ -22,12 +22,12 @@ contract FeldmexOptionsData {
     //address of the contract that holds the info about fees
     address feeOracleAddress;
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
-    uint satUnits;
-    //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
-    uint scUnits;
+    uint underlyingAssetSubUnits;
+    //number of the smallest unit in one full unit of the strike asset such as pennies in a dollar
+    uint strikeAssetSubUnits;
     //previously recorded balances
-    uint satReserves;
-    uint scReserves;
+    uint underlyingAssetReserves;
+    uint strikeAssetReserves;
 
 
     /*
@@ -40,21 +40,21 @@ contract FeldmexOptionsData {
     mapping(address => mapping(uint => mapping(uint => int))) putAmounts;
 
     /*
-        claimedTokens and claimedStable refers to the amount of the underlying and strike asset respectively that each user may withdraw
+        underlyingAssetDeposits and strikeAssetDeposits refers to the amount of the underlying and strike asset respectively that each user may withdraw
     */
-    //denominated in satUnits
-    mapping(address => uint) public claimedTokens;
-    //denominated in scUnits
-    mapping(address => uint) public claimedStable;
+    //denominated in underlyingAssetSubUnits
+    mapping(address => uint) public underlyingAssetDeposits;
+    //denominated in strikeAssetSubUnits
+    mapping(address => uint) public strikeAssetDeposits;
 
     /*
-        satCollateral maps each user to the amount of collateral in the underlying that they have locked at each maturuty for calls
-        scCollateral maps each user to the amount of collateral in strike asset that they have locked at each maturity for puts
+        underlyingAssetCollateral maps each user to the amount of collateral in the underlying that they have locked at each maturuty for calls
+        strikeAssetCollateral maps each user to the amount of collateral in strike asset that they have locked at each maturity for puts
     */
-    //address => maturity => amount (denominated in satUnits)
-    mapping(address => mapping(uint => uint)) public satCollateral;
-    //address => maturity => amount (denominated in scUnits)
-    mapping(address => mapping(uint => uint)) public scCollateral;
+    //address => maturity => amount (denominated in underlyingAssetSubUnits)
+    mapping(address => mapping(uint => uint)) public underlyingAssetCollateral;
+    //address => maturity => amount (denominated in strikeAssetSubUnits)
+    mapping(address => mapping(uint => uint)) public strikeAssetCollateral;
 
 
     /*
@@ -70,9 +70,9 @@ contract FeldmexOptionsData {
         scDeduction is the amount of strike asset collateral that has been excused from being locked due to long positions that offset the short positions at each maturity for puts
     */
     //address => maturity => amount of collateral not required //denominated in satUnits
-    mapping(address => mapping(uint => uint)) public satDeduction;
+    mapping(address => mapping(uint => uint)) public underlyingAssetDeduction;
     //address => maturity => amount of collateral not required //denominated in scUnits
-    mapping(address => mapping(uint => uint)) public scDeduction;
+    mapping(address => mapping(uint => uint)) public strikeAssetDeduction;
 
 
     //store positions in call/putAmounts[helperAddress][helperMaturity] to allow us to calculate collateral requirements

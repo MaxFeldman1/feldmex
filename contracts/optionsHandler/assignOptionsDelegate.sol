@@ -46,9 +46,9 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         @param uint _maturity: maturity in question
 
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in the underlying
-        @return uint: sum of all short call positions multiplied by satUnits
+        @return uint: sum of all short call positions multiplied by underlyingAssetSubUnits
     */
-    function minSats(address _addr, uint _maturity) internal view returns (uint minCollateral, uint liabilities) {
+    function collateralCalls(address _addr, uint _maturity) internal view returns (uint minCollateral, uint liabilities) {
         int delta = 0;
         int value = 0;
         int cumulativeStrike;
@@ -56,7 +56,7 @@ contract assignOptionsDelegate is FeldmexOptionsData {
             int strike = int(strikes[_addr][_maturity][i]);
             int amt = callAmounts[_addr][_maturity][uint(strike)];
             /*
-                value = satUnits * sigma((delta*strike-cumulativeStrike)/strike)
+                value = underlyingAssetSubUnits * sigma((delta*strike-cumulativeStrike)/strike)
             */
             int numerator = (delta*strike-cumulativeStrike);
             value = numerator/strike;
@@ -80,9 +80,9 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         @param uint _maturity: maturity in question
 
         @return uint: the minimum amount of collateral that must be locked up by the address at the maturity denominated in strike asset
-        @return uint: negative value denominated in scUnits of all short put postions at a spot price of 0
+        @return uint: negative value denominated in strikeAssetSubUnits of all short put postions at a spot price of 0
     */
-    function minSc(address _addr, uint _maturity) internal view returns(uint minCollateral, uint liabilities){
+    function collateralPuts(address _addr, uint _maturity) internal view returns(uint minCollateral, uint liabilities){
         int delta = 0;
         int value = 0;
         uint prevStrike;
@@ -99,8 +99,8 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         //value at 0
         value += delta * int(prevStrike);
         if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
-        minCollateral = minCollateral/scUnits + (minCollateral%scUnits == 0 ? 0 : 1);
-        liabilities = liabilities/scUnits + (liabilities%scUnits == 0 ? 0 : 1);
+        minCollateral = minCollateral/strikeAssetSubUnits + (minCollateral%strikeAssetSubUnits == 0 ? 0 : 1);
+        liabilities = liabilities/strikeAssetSubUnits + (liabilities%strikeAssetSubUnits == 0 ? 0 : 1);
     }
 
 
@@ -136,57 +136,57 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         }
         uint _maturity = maturity; //gas savings
         combinePosition(_holder, _maturity, true);
-        (uint minCollateral, uint liabilities) = minSats(_holder, _maturity);
+        (uint minCollateral, uint liabilities) = collateralCalls(_holder, _maturity);
 
-        if (minCollateral > satCollateral[_holder][_maturity])
-            transferAmtHolder += int(minCollateral - satCollateral[_holder][_maturity]);
+        if (minCollateral > underlyingAssetCollateral[_holder][_maturity])
+            transferAmtHolder += int(minCollateral - underlyingAssetCollateral[_holder][_maturity]);
         else 
-            claimedTokens[_holder] += satCollateral[_holder][_maturity] - minCollateral;
+            underlyingAssetDeposits[_holder] += underlyingAssetCollateral[_holder][_maturity] - minCollateral;
         assert(transferAmtHolder <= int(maxHolderTransfer));
         if (msg.sender == trustedAddress && !useDebtorInternalFunds) {
             if (transferAmtHolder > 0){
-                assert(claimedTokens[_holder] >= uint(transferAmtHolder));
-                claimedTokens[_holder] -= uint(transferAmtHolder);
+                assert(underlyingAssetDeposits[_holder] >= uint(transferAmtHolder));
+                underlyingAssetDeposits[_holder] -= uint(transferAmtHolder);
             } else {
-                claimedTokens[_holder] += uint(-transferAmtHolder);
+                underlyingAssetDeposits[_holder] += uint(-transferAmtHolder);
             }
         }
-        satCollateral[_holder][_maturity] = minCollateral;
-        satDeduction[_holder][_maturity] = liabilities - minCollateral;
+        underlyingAssetCollateral[_holder][_maturity] = minCollateral;
+        underlyingAssetDeduction[_holder][_maturity] = liabilities - minCollateral;
         
         inversePosition(true);
 
         combinePosition(_debtor, _maturity, true);
-        (minCollateral, liabilities) = minSats(_debtor, _maturity);
+        (minCollateral, liabilities) = collateralCalls(_debtor, _maturity);
 
-        if (minCollateral > satCollateral[_debtor][_maturity])
-            transferAmtDebtor += int(minCollateral - satCollateral[_debtor][_maturity]);
+        if (minCollateral > underlyingAssetCollateral[_debtor][_maturity])
+            transferAmtDebtor += int(minCollateral - underlyingAssetCollateral[_debtor][_maturity]);
         else
-            claimedTokens[_debtor] += satCollateral[_debtor][_maturity] - minCollateral;
+            underlyingAssetDeposits[_debtor] += underlyingAssetCollateral[_debtor][_maturity] - minCollateral;
         assert(transferAmtDebtor <= int(maxDebtorTransfer));
         if (msg.sender == trustedAddress && useDebtorInternalFunds) {
             if (transferAmtDebtor > 0){
-                assert(claimedTokens[_debtor] >= uint(transferAmtDebtor));
-                claimedTokens[_debtor] -= uint(transferAmtDebtor);
+                assert(underlyingAssetDeposits[_debtor] >= uint(transferAmtDebtor));
+                underlyingAssetDeposits[_debtor] -= uint(transferAmtDebtor);
             } else {
-                claimedTokens[_debtor] += uint(-transferAmtDebtor);
+                underlyingAssetDeposits[_debtor] += uint(-transferAmtDebtor);
             }
         }
-        satCollateral[_debtor][_maturity] = minCollateral;
-        satDeduction[_debtor][_maturity] = liabilities - minCollateral;
+        underlyingAssetCollateral[_debtor][_maturity] = minCollateral;
+        underlyingAssetDeduction[_debtor][_maturity] = liabilities - minCollateral;
         int senderTransfer = (msg.sender == trustedAddress ? (useDebtorInternalFunds? transferAmtHolder: transferAmtDebtor) : transferAmtHolder+transferAmtDebtor);
         //fetch collateral
         if (useDeposits[msg.sender]){
-            assert(senderTransfer < 0 || int(claimedTokens[msg.sender]) >= senderTransfer);
-            claimedTokens[msg.sender] = uint(int(claimedTokens[msg.sender]) - senderTransfer);
+            assert(senderTransfer < 0 || int(underlyingAssetDeposits[msg.sender]) >= senderTransfer);
+            underlyingAssetDeposits[msg.sender] = uint(int(underlyingAssetDeposits[msg.sender]) - senderTransfer);
         } else {
             if (senderTransfer > 0){
                 IERC20(underlyingAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
-                satReserves += uint(senderTransfer);
+                underlyingAssetReserves += uint(senderTransfer);
             }
             else if (senderTransfer < 0){
                 IERC20(underlyingAssetAddress).transfer(msg.sender, uint(-senderTransfer));            
-                satReserves -= uint(-senderTransfer);
+                underlyingAssetReserves -= uint(-senderTransfer);
             }
         }
         transferAmountDebtor = transferAmtDebtor;
@@ -210,58 +210,58 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         }
         uint _maturity = maturity; //gas savings
         combinePosition(_holder, _maturity, false);
-        (uint minCollateral, uint liabilities) = minSc(_holder, _maturity);
+        (uint minCollateral, uint liabilities) = collateralPuts(_holder, _maturity);
         
-        if (minCollateral > scCollateral[_holder][_maturity])
-            transferAmtHolder += int(minCollateral - scCollateral[_holder][_maturity]);
+        if (minCollateral > strikeAssetCollateral[_holder][_maturity])
+            transferAmtHolder += int(minCollateral - strikeAssetCollateral[_holder][_maturity]);
         else
-            claimedStable[_holder] += scCollateral[_holder][_maturity] - minCollateral;
+            strikeAssetDeposits[_holder] += strikeAssetCollateral[_holder][_maturity] - minCollateral;
         assert(transferAmtHolder <= int(maxHolderTransfer));
         if (msg.sender == trustedAddress && !useDebtorInternalFunds) {
             if (transferAmtHolder > 0){
-                assert(claimedStable[_holder] >= uint(transferAmtHolder));
-                claimedStable[_holder] -= uint(transferAmtHolder);
+                assert(strikeAssetDeposits[_holder] >= uint(transferAmtHolder));
+                strikeAssetDeposits[_holder] -= uint(transferAmtHolder);
             } else {
-                claimedStable[_holder] += uint(-transferAmtHolder);
+                strikeAssetDeposits[_holder] += uint(-transferAmtHolder);
             }
         }
-        scCollateral[_holder][_maturity] = minCollateral;
-        scDeduction[_holder][_maturity] = liabilities - minCollateral;
+        strikeAssetCollateral[_holder][_maturity] = minCollateral;
+        strikeAssetDeduction[_holder][_maturity] = liabilities - minCollateral;
 
         //inverse positions for debtor
         inversePosition(false);
 
         combinePosition(_debtor, _maturity, false);
-        (minCollateral, liabilities) = minSc(_debtor, _maturity);
+        (minCollateral, liabilities) = collateralPuts(_debtor, _maturity);
 
-        if (minCollateral > scCollateral[_debtor][_maturity])
-            transferAmtDebtor += int(minCollateral - scCollateral[_debtor][_maturity]);
+        if (minCollateral > strikeAssetCollateral[_debtor][_maturity])
+            transferAmtDebtor += int(minCollateral - strikeAssetCollateral[_debtor][_maturity]);
         else
-            claimedStable[_debtor] += scCollateral[_debtor][_maturity] - minCollateral;
+            strikeAssetDeposits[_debtor] += strikeAssetCollateral[_debtor][_maturity] - minCollateral;
         assert(transferAmtDebtor <= int(maxDebtorTransfer));
         if (msg.sender == trustedAddress && useDebtorInternalFunds) {
             if (transferAmtDebtor > 0){
-                assert(claimedStable[_debtor] >= uint(transferAmtDebtor));
-                claimedStable[_debtor] -= uint(transferAmtDebtor);
+                assert(strikeAssetDeposits[_debtor] >= uint(transferAmtDebtor));
+                strikeAssetDeposits[_debtor] -= uint(transferAmtDebtor);
             } else {
-                claimedStable[_debtor] += uint(-transferAmtDebtor);
+                strikeAssetDeposits[_debtor] += uint(-transferAmtDebtor);
             }
         }
-        scCollateral[_debtor][_maturity] = minCollateral;
-        scDeduction[_debtor][_maturity] = liabilities - minCollateral;
+        strikeAssetCollateral[_debtor][_maturity] = minCollateral;
+        strikeAssetDeduction[_debtor][_maturity] = liabilities - minCollateral;
         int senderTransfer = (msg.sender == trustedAddress ? (useDebtorInternalFunds? transferAmtHolder: transferAmtDebtor) : transferAmtHolder+transferAmtDebtor);
         //fetch collateral
         if (useDeposits[msg.sender]) {
-            assert(senderTransfer < 0 || int(claimedStable[msg.sender]) >= senderTransfer);
-            claimedStable[msg.sender] = uint(int(claimedStable[msg.sender]) - senderTransfer);
+            assert(senderTransfer < 0 || int(strikeAssetDeposits[msg.sender]) >= senderTransfer);
+            strikeAssetDeposits[msg.sender] = uint(int(strikeAssetDeposits[msg.sender]) - senderTransfer);
         } else {
             if (senderTransfer > 0){
                 IERC20(strikeAssetAddress).transferFrom(msg.sender, address(this), uint(senderTransfer));
-                scReserves += uint(senderTransfer);
+                strikeAssetReserves += uint(senderTransfer);
             }
             else if (senderTransfer < 0){
                 IERC20(strikeAssetAddress).transfer(msg.sender, uint(-senderTransfer));
-                scReserves -= uint(-senderTransfer);
+                strikeAssetReserves -= uint(-senderTransfer);
             }
         }
         transferAmountDebtor = transferAmtDebtor;
@@ -276,10 +276,10 @@ contract assignOptionsDelegate is FeldmexOptionsData {
     function transferAmount(bool _call) public {
         address _helperAddress = helperAddress; //gas savings
         uint _helperMaturity = helperMaturity;  //gas savings
-        (uint result, ) = _call ? minSats(_helperAddress, _helperMaturity) : minSc(_helperAddress, _helperMaturity);
+        (uint result, ) = _call ? collateralCalls(_helperAddress, _helperMaturity) : collateralPuts(_helperAddress, _helperMaturity);
         transferAmountHolder = int(result);
         inversePosition(_call);
-        (result, ) = _call ? minSats(_helperAddress, _helperMaturity) : minSc(_helperAddress, _helperMaturity);
+        (result, ) = _call ? collateralCalls(_helperAddress, _helperMaturity) : collateralPuts(_helperAddress, _helperMaturity);
         transferAmountDebtor = int(result);
     }
 

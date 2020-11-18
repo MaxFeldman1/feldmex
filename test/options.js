@@ -11,8 +11,8 @@ const helper = require("../helper/helper.js");
 var strike = 100;
 var finalSpot = 198;
 var amount = 10;
-var satUnits;
-var scUnits;
+var underlyingAssetSubUnits;
+var strikeAssetSubUnits;
 var oracleInstance;
 var tokenInstance;
 var optionsInstance;
@@ -49,11 +49,11 @@ contract('options', async function(accounts){
 		await setFee(1000, {from: accounts[0]});
 		defaultAccount = accounts[0];
 		reciverAccount = accounts[1];
-		satUnitsBN = (new web3.utils.BN("10")).pow(await tokenInstance.decimals());
-		scUnitsBN = (new web3.utils.BN("10")).pow(await strikeAssetInstance.decimals());
-		inflator = scUnitsBN;
-		satUnits = satUnitsBN.toNumber();
-		scUnits = scUnitsBN.toNumber();
+		underlyingAssetSubUnitsBN = (new web3.utils.BN("10")).pow(await tokenInstance.decimals());
+		strikeAssetSubUnitsBN = (new web3.utils.BN("10")).pow(await strikeAssetInstance.decimals());
+		inflator = strikeAssetSubUnitsBN;
+		underlyingAssetSubUnits = underlyingAssetSubUnitsBN.toNumber();
+		strikeAssetSubUnits = strikeAssetSubUnitsBN.toNumber();
 		inflatorObj = {};
 		//setWithInflator sets spot and adjusts for the inflator
 		setWithInflator = async (_spot) => {
@@ -67,8 +67,8 @@ contract('options', async function(accounts){
 			await addStrike(holder, maturity, strike);
 			await optionsInstance.setUseDeposits(false);
 			await optionsInstance.clearPositions();
-			var str = satUnitsBN.mul(new BN(strike)).toString();
-			amount = satUnitsBN.mul(new BN(amount)).toString();
+			var str = underlyingAssetSubUnitsBN.mul(new BN(strike)).toString();
+			amount = underlyingAssetSubUnitsBN.mul(new BN(amount)).toString();
 			await optionsInstance.addPosition(str, amount, true);
 			await optionsInstance.setParams(debtor, holder, maturity);
 			await optionsInstance.setLimits(limit, 0);
@@ -79,20 +79,20 @@ contract('options', async function(accounts){
 			await addStrike(holder, maturity, strike);
 			await optionsInstance.setUseDeposits(false);
 			await optionsInstance.clearPositions();
-			var str = scUnitsBN.mul(new BN(strike)).toString();
-			amount = satUnitsBN.mul(new BN(amount)).toString();
+			var str = strikeAssetSubUnitsBN.mul(new BN(strike)).toString();
+			amount = underlyingAssetSubUnitsBN.mul(new BN(amount)).toString();
 			await optionsInstance.addPosition(str, amount, false);
 			await optionsInstance.setParams(debtor, holder, maturity);
 			await optionsInstance.setLimits(limit, 0);
 			return optionsInstance.assignPutPosition(params);
 		};
 		inflatorObj.balanceOf = (address, maturity, strike, callPut) => {
-			return optionsInstance.balanceOf(address, maturity, (new BN(strike)).mul((new BN(scUnits))).toString(), callPut);
+			return optionsInstance.balanceOf(address, maturity, (new BN(strike)).mul((new BN(strikeAssetSubUnits))).toString(), callPut);
 		};
 	});
 
 	async function addStrike(addr, maturity, strike) {
-		strike*=scUnits;
+		strike*=strikeAssetSubUnits;
 		strikes = await optionsInstance.viewStrikes(addr, maturity);
 		var index = 0;
 		for (;index < strikes.length; index++){ 
@@ -102,16 +102,16 @@ contract('options', async function(accounts){
 		await optionsInstance.addStrike(maturity, strike, index, {from: addr});
 	}
 
-	async function depositFunds(sats, sc, params) {
-		await tokenInstance.transfer(optionsInstance.address, sats, params);
-		await strikeAssetInstance.transfer(optionsInstance.address, sc, params);
+	async function depositFunds(underlyingAsset, strikeAsset, params) {
+		await tokenInstance.transfer(optionsInstance.address, underlyingAsset, params);
+		await strikeAssetInstance.transfer(optionsInstance.address, strikeAsset, params);
 		return optionsInstance.depositFunds(params.from);
 	}
 
 	it ('mints, exercizes call options', async () => {
-		var amt = satUnitsBN.mul(new BN('1000')).toString();
+		var amt = underlyingAssetSubUnitsBN.mul(new BN('1000')).toString();
 		await tokenInstance.approve(optionsInstance.address, amt, {from: defaultAccount});
-		amt = scUnitsBN.mul(new BN('1000')).toString();
+		amt = strikeAssetSubUnitsBN.mul(new BN('1000')).toString();
 		await strikeAssetInstance.approve(optionsInstance.address, amt, {from: defaultAccount});
 		await setWithInflator(finalSpot);
 		debtor = accounts[1];
@@ -123,8 +123,8 @@ contract('options', async function(accounts){
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		res = await optionsInstance.viewStrikes(debtor, maturity);
-		assert.equal(res[0].toNumber(), strike*scUnits, "the correct strike is added");
-		amt = satUnitsBN.mul(new BN(amount)).toString();
+		assert.equal(res[0].toNumber(), strike*strikeAssetSubUnits, "the correct strike is added");
+		amt = underlyingAssetSubUnitsBN.mul(new BN(amount)).toString();
 		await inflatorObj.mintCall(debtor, holder, maturity, strike, amount, amt, {from: defaultAccount});
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, true)).toNumber(), "-"+amt, "debtor holds negative amount of contracts");
 		assert.equal((await inflatorObj.balanceOf(holder, maturity, strike, true)).toNumber(), amt, "holder holds positive amount of contracts");
@@ -136,15 +136,15 @@ contract('options', async function(accounts){
 	});
 
 	it('distributes funds correctly', async () => {
-		payout = Math.floor(amount*satUnits*(finalSpot-strike)/finalSpot);
-		debtorExpected = satUnits*amount - (payout+1);
+		payout = Math.floor(amount*underlyingAssetSubUnits*(finalSpot-strike)/finalSpot);
+		debtorExpected = underlyingAssetSubUnits*amount - (payout+1);
 		//account for fee
 		fee =  Math.floor(debtorExpected/feeDenominator);
 		totalFees = fee;
-		assert.equal((await optionsInstance.claimedTokens(debtor)).toNumber(), debtorExpected - fee, "debtor repaid correct amount");
+		assert.equal((await optionsInstance.underlyingAssetDeposits(debtor)).toNumber(), debtorExpected - fee, "debtor repaid correct amount");
 		fee = Math.floor(payout/feeDenominator);
 		totalFees += fee;
-		assert.equal((await optionsInstance.claimedTokens(holder)).toNumber(), payout - fee, "holder compensated sufficiently")
+		assert.equal((await optionsInstance.underlyingAssetDeposits(holder)).toNumber(), payout - fee, "holder compensated sufficiently")
 	});
 
 	//note that this test will likely fail if the test above fails
@@ -163,18 +163,17 @@ contract('options', async function(accounts){
 		//add strikes to allow for minting of options
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
-		await inflatorObj.mintPut(debtor, holder, maturity, strike, amount, strike*amount*scUnits, {from: defaultAccount});
+		await inflatorObj.mintPut(debtor, holder, maturity, strike, amount, strike*amount*strikeAssetSubUnits, {from: defaultAccount});
 		await helper.advanceTime(2);
 		await optionsInstance.claim(maturity, {from: debtor});
 		await optionsInstance.claim(maturity, {from: holder});
 		await optionsInstance.withdrawFunds({from: debtor});
-		claimedSc = (await optionsInstance.claimedStable(holder)).toNumber();
 		await optionsInstance.withdrawFunds({from: holder});
-		debtorExpected = amount*scUnits*(strike-difference);
+		debtorExpected = amount*strikeAssetSubUnits*(strike-difference);
 		//account for the fee
 		debtorExpected -= Math.floor(debtorExpected/feeDenominator);
 		assert.equal((await strikeAssetInstance.balanceOf(debtor)).toNumber(), debtorExpected, "correct amount sent to debtor of the put contract");
-		holderExpected = difference*amount*scUnits;
+		holderExpected = difference*amount*strikeAssetSubUnits;
 		holderExpected -= Math.floor(holderExpected/feeDenominator);
 		assert.equal((await strikeAssetInstance.balanceOf(holder)).toNumber(), holderExpected, "correct amount sent to the holder of the put contract");
 	});
@@ -205,8 +204,8 @@ contract('options', async function(accounts){
 			await addStrike(params.from, maturity, strike);
 			await optionsInstance.setUseDeposits(true, params);
 			await optionsInstance.clearPositions();
-			strike = satUnitsBN.mul(new BN(strike)).toString();
-			amount = satUnitsBN.mul(new BN(amount)).toString();
+			strike = underlyingAssetSubUnitsBN.mul(new BN(strike)).toString();
+			amount = underlyingAssetSubUnitsBN.mul(new BN(amount)).toString();
 			await optionsInstance.addPosition(strike, amount, call);
 			await optionsInstance.setParams(params.from, to, maturity);
 			await optionsInstance.setLimits(maxTransfer, 0);
@@ -214,36 +213,36 @@ contract('options', async function(accounts){
 			else await optionsInstance.assignPutPosition(params);
 		}
 
-		await tokenInstance.transfer(debtor, 1000*satUnits, {from: defaultAccount});
-		await strikeAssetInstance.transfer(debtor, 1000*strike*scUnits, {from: defaultAccount});
-		await tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: defaultAccount});
-		await strikeAssetInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: defaultAccount});
-		await tokenInstance.approve(optionsInstance.address, 1000*satUnits, {from: debtor});
-		await strikeAssetInstance.approve(optionsInstance.address, 1000*strike*scUnits, {from: debtor});
-		await depositFunds(900*satUnits, 1000*strike*scUnits, {from: defaultAccount});
-		await depositFunds(1000*satUnits, 1000*strike*scUnits, {from: debtor});
-		var amt = (new BN("10")).mul(satUnitsBN).toString();
+		await tokenInstance.transfer(debtor, 1000*underlyingAssetSubUnits, {from: defaultAccount});
+		await strikeAssetInstance.transfer(debtor, 1000*strike*strikeAssetSubUnits, {from: defaultAccount});
+		await tokenInstance.approve(optionsInstance.address, 1000*underlyingAssetSubUnits, {from: defaultAccount});
+		await strikeAssetInstance.approve(optionsInstance.address, 1000*strike*strikeAssetSubUnits, {from: defaultAccount});
+		await tokenInstance.approve(optionsInstance.address, 1000*underlyingAssetSubUnits, {from: debtor});
+		await strikeAssetInstance.approve(optionsInstance.address, 1000*strike*strikeAssetSubUnits, {from: debtor});
+		await depositFunds(900*underlyingAssetSubUnits, 1000*strike*strikeAssetSubUnits, {from: defaultAccount});
+		await depositFunds(1000*underlyingAssetSubUnits, 1000*strike*strikeAssetSubUnits, {from: debtor});
+		var amt = (new BN("10")).mul(underlyingAssetSubUnitsBN).toString();
 		//debtor must accept transfers on a strike before recieving them
 		await optionTransfer(debtor, amount, maturity, strike, amt, true, {from: defaultAccount});
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, true)).toString(), amt, "correct amount for the debtor");
 		assert.equal((await inflatorObj.balanceOf(defaultAccount, maturity, strike, true)).toString(), "-"+amt, "correct amount for the defaultAccount");
-		assert.equal((await optionsInstance.satCollateral(defaultAccount, maturity)).toString(), amt, "correct amount of collateral required for "+defaultAccount);
-		assert.equal((await optionsInstance.satCollateral(debtor, maturity)).toString(), "0", "correct amount of collateral required from "+debtor);
-		assert.equal((await optionsInstance.satDeduction(defaultAccount, maturity)).toString(), "0", "correct sat deduction for "+defaultAccount);
-		assert.equal((await optionsInstance.satDeduction(debtor, maturity)).toNumber(), "0", "correct sat deduction for "+debtor);
-		await optionTransfer(debtor, amount, maturity, strike, amount*strike*scUnits, false, {from: defaultAccount});
+		assert.equal((await optionsInstance.underlyingAssetCollateral(defaultAccount, maturity)).toString(), amt, "correct amount of collateral required for "+defaultAccount);
+		assert.equal((await optionsInstance.underlyingAssetCollateral(debtor, maturity)).toString(), "0", "correct amount of collateral required from "+debtor);
+		assert.equal((await optionsInstance.underlyingAssetDeduction(defaultAccount, maturity)).toString(), "0", "correct underlying asset deduction for "+defaultAccount);
+		assert.equal((await optionsInstance.underlyingAssetDeduction(debtor, maturity)).toNumber(), "0", "correct underlying asset deduction for "+debtor);
+		await optionTransfer(debtor, amount, maturity, strike, amount*strike*strikeAssetSubUnits, false, {from: defaultAccount});
 		newStrike = strike+10;
-		amt = (new BN("10")).mul(scUnitsBN).toString();
+		amt = (new BN("10")).mul(strikeAssetSubUnitsBN).toString();
 		//defaultAccount must accept transfers on a strike before recieving them
 		await optionTransfer(defaultAccount, amount, maturity, newStrike, (new BN(newStrike)).mul(new BN(amt)).toString(), false, {from: debtor});
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, strike, false)).toString(), amt, "correct put balance at strike "+strike+" for "+debtor);
 		assert.equal((await inflatorObj.balanceOf(debtor, maturity, newStrike, false)).toString(), "-"+amt, "correct put balance at strike "+newStrike+" for "+debtor);
 		assert.equal((await inflatorObj.balanceOf(defaultAccount, maturity, strike, false)).toString(), "-"+amt, "correct put balance at strike "+strike+" for "+defaultAccount);
 		assert.equal((await inflatorObj.balanceOf(defaultAccount, maturity, newStrike, false)).toString(), amt, "correct put balance at strike "+newStrike+" for "+defaultAccount);
-		assert.equal((await optionsInstance.scCollateral(defaultAccount, maturity)).toString(), "0", "correct amount of collateral for "+defaultAccount);
-		assert.equal((await optionsInstance.scCollateral(debtor, maturity)).toString(), (new BN(newStrike-strike)).mul(new BN(amt)).toString(), "correct amount of collateral for "+debtor);
-		assert.equal((await optionsInstance.scDeduction(defaultAccount, maturity)).toString(), (new BN(strike)).mul(new BN(amt)).toString(), "correct SC Deduction for "+defaultAccount);
-		assert.equal((await optionsInstance.scDeduction(debtor, maturity)).toString(), (new BN(strike)).mul(new BN(amt)).toString(), "correct SC deduction for "+debtor);
+		assert.equal((await optionsInstance.strikeAssetCollateral(defaultAccount, maturity)).toString(), "0", "correct amount of collateral for "+defaultAccount);
+		assert.equal((await optionsInstance.strikeAssetCollateral(debtor, maturity)).toString(), (new BN(newStrike-strike)).mul(new BN(amt)).toString(), "correct amount of collateral for "+debtor);
+		assert.equal((await optionsInstance.strikeAssetDeduction(defaultAccount, maturity)).toString(), (new BN(strike)).mul(new BN(amt)).toString(), "correct strike asset Deduction for "+defaultAccount);
+		assert.equal((await optionsInstance.strikeAssetDeduction(debtor, maturity)).toString(), (new BN(strike)).mul(new BN(amt)).toString(), "correct strike asset deduction for "+debtor);
 		//debtor ---- short 50 long 60 ---- liabilities 50 minSc 0 minVal 50
 		//default --- long 50 short 60 ---- liabilities 60 minSc 10 minVal 50
 	});
@@ -279,14 +278,14 @@ contract('options', async function(accounts){
 		maturity++;
 		allMaturities.push(maturity);
 		//test for calls with neither adding the maturity strike combo
-		return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount}).then(() => {
+		return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, underlyingAssetSubUnits*amount, {from: defaultAccount}).then(() => {
 			return "OK";
 		}).catch(() => {
 			return "OOF";
 		}).then((res) => {
 			assert.equal(res, "OOF", 'could not mint call without adding the maturity strike combo for either account');
 			//test for puts with neither adding the maturity strike combo
-			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, scUnits*amount*strike, {from: defaultAccount});
+			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, strikeAssetSubUnits*amount*strike, {from: defaultAccount});
 		}).then(() => {
 			return "OK";
 		}).catch(() => {
@@ -296,7 +295,7 @@ contract('options', async function(accounts){
 			return addStrike(debtor, maturity, strike);
 		}).then(() => {
 			//test for calls with only debtor adding the maturity strike combo
-			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});
+			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, underlyingAssetSubUnits*amount, {from: defaultAccount});
 		}).then(() => {
 			return "OK";
 		}).catch(() => {
@@ -304,7 +303,7 @@ contract('options', async function(accounts){
 		}).then((res) => {
 			assert.equal(res, "OOF", 'could not mint call without adding maturity strike combo for holder account');
 			//test for puts with only debtor adding the maturity strike combo
-			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, scUnits*amount*strike, {from: defaultAccount});			
+			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, strikeAssetSubUnits*amount*strike, {from: defaultAccount});			
 		}).then(() => {
 			return "OK";
 		}).catch(() => {
@@ -316,7 +315,7 @@ contract('options', async function(accounts){
 			//test for calls with only holder adding the maturity strike combo
 			return addStrike(holder, maturity, strike);
 		}).then(() => {
-			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, satUnits*amount, {from: defaultAccount});			
+			return inflatorObj.mintCall(debtor, holder, maturity, strike, amount, underlyingAssetSubUnits*amount, {from: defaultAccount});			
 		}).then(() => {
 			return "OK";
 		}).catch(() => {
@@ -324,7 +323,7 @@ contract('options', async function(accounts){
 		}).then((res) => {
 			assert.equal(res, "OOF", 'could not mint call without adding maturity strike combo for debtor account');
 			//test for puts with only debtor adding the maturity strike combo
-			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, scUnits*amount*strike, {from: defaultAccount});			
+			return inflatorObj.mintPut(debtor, holder, maturity, strike, amount, strikeAssetSubUnits*amount*strike, {from: defaultAccount});			
 		}).then(() => {
 			return "OK";
 		}).catch(() => {
@@ -340,22 +339,22 @@ contract('options', async function(accounts){
 		maturity++;
 		allMaturities.push(maturity);
 
-		var amt = scUnitsBN.mul(new BN(amount)).toString();
+		var amt = strikeAssetSubUnitsBN.mul(new BN(amount)).toString();
 		await optionsInstance.clearPositions();
 		//iorn condor made of puts
-		await optionsInstance.addPosition(strike*scUnits, amt, false);
+		await optionsInstance.addPosition(strike*strikeAssetSubUnits, amt, false);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*scUnits, "-"+amt, false);
+		await optionsInstance.addPosition(strike*strikeAssetSubUnits, "-"+amt, false);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*scUnits, "-"+amt, false);
+		await optionsInstance.addPosition(strike*strikeAssetSubUnits, "-"+amt, false);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*scUnits, amt, false);
+		await optionsInstance.addPosition(strike*strikeAssetSubUnits, amt, false);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 
@@ -369,11 +368,11 @@ contract('options', async function(accounts){
 		await optionsInstance.setParams(debtor, holder, maturity);
 		await optionsInstance.setLimits(expectedDebtorRequirement, expectedHolderRequirement);
 		await optionsInstance.assignPutPosition({from: defaultAccount});
-		assert.equal((await optionsInstance.claimedStable(defaultAccount)).toString(), "0", "correct amount of funds left over");
+		assert.equal((await optionsInstance.strikeAssetDeposits(defaultAccount)).toString(), "0", "correct amount of funds left over");
 		assert.equal((await optionsInstance.transferAmountDebtor()).toString(), expectedDebtorRequirement, "correct debtor fund requirement");
-		assert.equal((await optionsInstance.scCollateral(debtor, maturity)).toString(), expectedDebtorRequirement, "correct debtor fund requirement");
+		assert.equal((await optionsInstance.strikeAssetCollateral(debtor, maturity)).toString(), expectedDebtorRequirement, "correct debtor fund requirement");
 		assert.equal((await optionsInstance.transferAmountHolder()).toString(), expectedHolderRequirement, "correct holder fund requirement");
-		assert.equal((await optionsInstance.scCollateral(holder, maturity)).toString(), expectedHolderRequirement, "correct holder fund requirement");
+		assert.equal((await optionsInstance.strikeAssetCollateral(holder, maturity)).toString(), expectedHolderRequirement, "correct holder fund requirement");
 	});
 
 	it('mints 4+ leg call positions with correct collateral requirements', async () => {
@@ -381,22 +380,22 @@ contract('options', async function(accounts){
 		maturity++;
 		allMaturities.push(maturity);
 
-		var amt = satUnitsBN.mul(new BN(amount)).toString();
+		var amt = underlyingAssetSubUnitsBN.mul(new BN(amount)).toString();
 		await optionsInstance.clearPositions();
 		//iorn condor made of calls
-		await optionsInstance.addPosition(strike*scUnits, amt, true);
+		await optionsInstance.addPosition(strike*strikeAssetSubUnits, amt, true);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*scUnits, "-"+amt, true);
+		await optionsInstance.addPosition(strike*strikeAssetSubUnits, "-"+amt, true);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*scUnits, "-"+amt, true);
+		await optionsInstance.addPosition(strike*strikeAssetSubUnits, "-"+amt, true);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 		strike+=10;
-		await optionsInstance.addPosition(strike*scUnits, amt, true);
+		await optionsInstance.addPosition(strike*strikeAssetSubUnits, amt, true);
 		await addStrike(debtor, maturity, strike);
 		await addStrike(holder, maturity, strike);
 
@@ -410,11 +409,11 @@ contract('options', async function(accounts){
 		await optionsInstance.setParams(debtor, holder, maturity);
 		await optionsInstance.setLimits(expectedDebtorRequirement, expectedHolderRequirement);
 		await optionsInstance.assignCallPosition({from: defaultAccount});
-		assert.equal((await optionsInstance.claimedTokens(defaultAccount)).toNumber(), 0, "correct amount of funds left over");
+		assert.equal((await optionsInstance.underlyingAssetDeposits(defaultAccount)).toNumber(), 0, "correct amount of funds left over");
 		assert.equal((await optionsInstance.transferAmountDebtor()).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
-		assert.equal((await optionsInstance.satCollateral(debtor, maturity)).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
+		assert.equal((await optionsInstance.underlyingAssetCollateral(debtor, maturity)).toNumber(), expectedDebtorRequirement, "correct debtor fund requirement");
 		assert.equal((await optionsInstance.transferAmountHolder()).toNumber(), expectedHolderRequirement, "correct holder fund requirement");
-		assert.equal((await optionsInstance.satCollateral(holder, maturity)).toNumber(), expectedHolderRequirement, "correct holder fund requirement");
+		assert.equal((await optionsInstance.underlyingAssetCollateral(holder, maturity)).toNumber(), expectedHolderRequirement, "correct holder fund requirement");
 	});
 
 	it('withdraws funds sucessfully after asigning complex orders', async () => {

@@ -149,7 +149,7 @@ contract('multi put exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN(-(amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await optionsInstance.claimedStable(accounts[1])).toNumber(), 5*(maxStrikeAssetDebtor-price) + amount*(maxStrikeAssetDebtor-secondPrice) , "correct strike asset balance after market sell");
+		assert.equal((await optionsInstance.strikeAssetDeposits(accounts[1])).toNumber(), 5*(maxStrikeAssetDebtor-price) + amount*(maxStrikeAssetDebtor-secondPrice) , "correct strike asset balance after market sell");
 
 		await multiPutExchangeInstance.marketSell(maturity, legsHash, secondPrice, asset2SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, {from: accounts[1]});
 
@@ -214,7 +214,7 @@ contract('multi put exchange', function(accounts){
 				asset2SubUnitsBN.mul(new BN((amount-5)*putAmounts[i])).toString(), "correct put balance first account");
 		}
 
-		assert.equal((await optionsInstance.claimedStable(accounts[1])).toNumber(), Math.max(5*(maxStrikeAssetHolder+price), 0)+Math.max((5-amount)*(maxStrikeAssetHolder+price), 0)
+		assert.equal((await optionsInstance.strikeAssetDeposits(accounts[1])).toNumber(), Math.max(5*(maxStrikeAssetHolder+price), 0)+Math.max((5-amount)*(maxStrikeAssetHolder+price), 0)
 			+amount*(maxStrikeAssetHolder+secondPrice), "correct strike asset balance after market buy");
 
 		await multiPutExchangeInstance.marketBuy(maturity, legsHash, secondPrice, asset2SubUnitsBN.mul(new BN(5+amount)).toString(), maxIterations, {from: accounts[1]});
@@ -251,7 +251,7 @@ contract('multi put exchange', function(accounts){
 		for (let i = 0; i < amount; i++)
 			await multiPutExchangeInstance.postOrder(maturity, legsHash, price, 1, 0, {from: deployerAccount});
 
-		var prevBalanceAct1 = await optionsInstance.claimedStable(accounts[1]);
+		var prevBalanceAct1 = await optionsInstance.strikeAssetDeposits(accounts[1]);
 
 		await multiPutExchangeInstance.marketSell(maturity, legsHash, price, asset2SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, {from: accounts[1]});
 
@@ -262,7 +262,7 @@ contract('multi put exchange', function(accounts){
 			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
 				-maxIterations*putAmounts[i] + "", "correct put balance first account");
 		}
-		var balanceAct1 = await optionsInstance.claimedStable(accounts[1]);
+		var balanceAct1 = await optionsInstance.strikeAssetDeposits(accounts[1]);
 		var totalReq = Math.ceil(maxStrikeAssetDebtor/asset2SubUnits) + Math.ceil(maxStrikeAssetHolder/asset2SubUnits);
 		var reqHolder = Math.floor( (maxStrikeAssetHolder + price) / asset2SubUnits);
 		var reqDebtor = totalReq - reqHolder;
@@ -287,7 +287,7 @@ contract('multi put exchange', function(accounts){
 		for (let i = 0; i < amount; i++)
 			await multiPutExchangeInstance.postOrder(maturity, legsHash, price, 1, 1, {from: deployerAccount});
 
-		var prevBalanceAct1 = await optionsInstance.claimedStable(accounts[1]);
+		var prevBalanceAct1 = await optionsInstance.strikeAssetDeposits(accounts[1]);
 
 		await multiPutExchangeInstance.marketBuy(maturity, legsHash, price, asset2SubUnitsBN.mul(new BN(maxIterations+2)).toString(), maxIterations, {from: accounts[1]});
 
@@ -298,7 +298,7 @@ contract('multi put exchange', function(accounts){
 			assert.equal((await optionsInstance.balanceOf(accounts[1], maturity, putStrikes[i], false)).toString(),
 				maxIterations*putAmounts[i] + "", "correct put balance first account");
 		}
-		var balanceAct1 = await optionsInstance.claimedStable(accounts[1]);
+		var balanceAct1 = await optionsInstance.strikeAssetDeposits(accounts[1]);
 		var totalReq = Math.ceil(maxStrikeAssetDebtor/asset2SubUnits) + Math.ceil(maxStrikeAssetHolder/asset2SubUnits);
 		var reqDebtor = Math.floor( (maxStrikeAssetDebtor - price) / asset2SubUnits);
 		var reqHolder = totalReq - reqDebtor;
