@@ -1,69 +1,25 @@
 pragma solidity >=0.6.0;
 import "../../interfaces/IERC20.sol";
 import "../../interfaces/IOptionsHandler.sol";
+import "../../interfaces/IMultiCallExchange.sol";
 import "../../feeOracle.sol";
 
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract
 */
-contract MultiCallExchange {
+contract MultiCallExchange is IMultiCallExchange {
     //denominated in Underlying Token underlyingAssetSubUnits
-    mapping(address => uint) public underlyingAssetDeposits;
-
-    //stores price and hash of (maturity, stike, price)
-    struct linkedNode{
-        //offers[hash] => offer
-        bytes32 hash;
-        //linkedNodes[this.name] => this
-        bytes32 name;
-        bytes32 next;
-        bytes32 previous;
-    }
-
-    struct Offer{
-        address offerer;
-        uint maturity;
-        bytes32 legsHash;
-        int price;
-        uint amount;
-        /*
-            long call => index: 0
-            short call => index: 1
-        */
-        uint8 index;
-    }
-    
-    event offerPosted(
-        bytes32 name,
-        uint maturity,
-        bytes32 legsHash,
-        int price,
-        uint amount,
-        uint8 index
-    );
-
-    event offerCalceled(
-        bytes32 name
-    );
-
-    event offerAccepted(
-        bytes32 name,
-        uint amount
-    );
-
-    event legsHashCreated(
-        bytes32 legsHash
-    );
+    mapping(address => uint) public override underlyingAssetDeposits;
 
     /*
         listHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
         the linked lists are ordered by price with the most enticing offers at the top near the head
     */
-    //maturity => legsHash => headNode.name [buy w/ UnderlyingAsset, sell w/ UnderlyingAsset, buy w/ StrikeAsset, sell w/ StrikeAsset]
-    mapping(uint => mapping(bytes32 => bytes32[2])) public listHeads;
+    //maturity => legsHash => headNode.name [buy, sell]
+    mapping(uint => mapping(bytes32 => bytes32[2])) public override listHeads;
     
     //holds all nodes node.name is the identifier for the location in this mapping
-    mapping (bytes32 => linkedNode) public linkedNodes;
+    mapping (bytes32 => linkedNode) public override linkedNodes;
 
     /*
         Note all linkedNodes correspond to a buyOffer
@@ -71,18 +27,10 @@ contract MultiCallExchange {
     */
     
     //holds all offers
-    mapping(bytes32 => Offer) public offers;
+    mapping(bytes32 => Offer) public override offers;
 
-    struct position {
-        int[] callAmounts;
-        uint[] callStrikes;
-        //inflated by underlyingAssetSubUnits
-        int maxUnderlyingAssetDebtor;
-        //inflated by underlyingAssetSubUnits
-        int maxUnderlyingAssetHolder;
-    }
     //hash of position information => position
-    mapping(bytes32 => position) public positions;
+    mapping(bytes32 => position) public override positions;
 
     /*
         @Description: returns arrays callAmounts and callStrikes of a given position
@@ -92,7 +40,7 @@ contract MultiCallExchange {
         @return int[] memory callAmounts: position.callAmounts
         @return uint[] memory callStrikes: position.callStrikes
     */
-    function positionInfo(bytes32 _legsHash) public view returns(int[] memory callAmounts, uint[] memory callStrikes){
+    function positionInfo(bytes32 _legsHash) public override view returns(int[] memory callAmounts, uint[] memory callStrikes){
         position memory pos = positions[_legsHash];
         callAmounts = pos.callAmounts;
         callStrikes = pos.callStrikes;
@@ -104,7 +52,7 @@ contract MultiCallExchange {
         @param uint[] memory _callStrikes: the strikes of the call positions
         @param int[] memory _callAmounts: the amount of the call positons at the various strikes in _callStrikes
     */
-    function addLegHash(uint[] memory _callStrikes, int[] memory _callAmounts) public {
+    function addLegHash(uint[] memory _callStrikes, int[] memory _callAmounts) public override {
         //make sure that this is a multi leg order
         require(_callAmounts.length > 1);
         require(_callAmounts.length==_callStrikes.length);
@@ -159,7 +107,7 @@ contract MultiCallExchange {
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function depositFunds(address _to) public returns(bool success){
+    function depositFunds(address _to) public override returns(bool success){
         uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
         uint sats = balance - satReserves;
         satReserves = balance;
@@ -174,7 +122,7 @@ contract MultiCallExchange {
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function withdrawAllFunds() public returns(bool success){
+    function withdrawAllFunds() public override returns(bool success){
         uint val = underlyingAssetDeposits[msg.sender];
         IERC20 ua = IERC20(underlyingAssetAddress);
         underlyingAssetDeposits[msg.sender] = 0;
@@ -237,7 +185,7 @@ contract MultiCallExchange {
         @param uint _amount: the amount of calls or puts that this offer is for
         @param uint8 _index: the linked list in which this order is to be placed
     */
-    function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public payable {
+    function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public override payable {
         require(_maturity != 0 && _legsHash != 0 && _amount != 0);
 
         position memory pos = positions[_legsHash];
@@ -295,7 +243,7 @@ contract MultiCallExchange {
         @param uint8 _index: the linked list in which this order is to be placed
         @param bytes32 _name: the name identifier of the order from which to search for the location to insert this order
     */
-    function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) public payable {
+    function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) public override payable {
         //make sure the offer and node corresponding to the name is in the correct list
         require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].legsHash == _legsHash && _maturity != 0 &&  _legsHash != 0);
         require(offers[linkedNodes[_name].hash].index == _index);
@@ -442,7 +390,7 @@ contract MultiCallExchange {
 
         @param bytes32 _name: the hash to find the offer's linked node in linkedNodes[]
     */
-    function cancelOrder(bytes32 _name) public {
+    function cancelOrder(bytes32 _name) public override {
         require(msg.sender == offers[linkedNodes[_name].hash].offerer);
         cancelOrderInternal(_name);
     }
@@ -561,7 +509,7 @@ contract MultiCallExchange {
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations) public returns(uint unfilled){
+    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations) public override returns(uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
 
@@ -611,7 +559,7 @@ contract MultiCallExchange {
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations) public returns (uint unfilled){
+    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations) public override returns (uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
 
