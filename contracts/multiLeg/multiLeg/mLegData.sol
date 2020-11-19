@@ -2,16 +2,16 @@ pragma solidity >=0.6.0;
 
 contract mLegData {
 	   //denominated in Underlying Token underlyingAssetSubUnits
-    mapping(address => uint) public underlyingAssetDeposits;
+    mapping(address => uint) internalUnderlyingAssetDeposits;
     
     //denominated in the legsHash asset strikeAssetSubUnits
-    mapping(address => uint) public strikeAssetDeposits;
+    mapping(address => uint) internalStrikeAssetDeposits;
 
     //stores price and hash of (maturity, stike, price)
     struct linkedNode{
-        //offers[hash] => offer
+        //internalOffers[hash] => offer
         bytes32 hash;
-        //linkedNodes[this.name] => this
+        //internalLinkedNodes[this.name] => this
         bytes32 name;
         bytes32 next;
         bytes32 previous;
@@ -55,22 +55,22 @@ contract mLegData {
     );
 
     /*
-        listHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
-        the linked lists are ordered by price with the most enticing offers at the top near the head
+        internalListHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
+        the linked lists are ordered by price with the most enticing internalOffers at the top near the head
     */
     //maturity => legsHash => headNode.name [buy w/ UnderlyingAsset, sell w/ UnderlyingAsset, buy w/ StrikeAsset, sell w/ StrikeAsset]
-    mapping(uint => mapping(bytes32 => bytes32[4])) public listHeads;
+    mapping(uint => mapping(bytes32 => bytes32[4])) internalListHeads;
     
     //holds all nodes node.name is the identifier for the location in this mapping
-    mapping (bytes32 => linkedNode) public linkedNodes;
+    mapping (bytes32 => linkedNode) internalLinkedNodes;
 
     /*
-        Note all linkedNodes correspond to a buyOffer
-        The offers[linkedNodes[name].hash] links to a buyOffer
+        Note all internalLinkedNodes correspond to a buyOffer
+        The internalOffers[internalLinkedNodes[name].hash] links to a buyOffer
     */
     
-    //holds all offers
-    mapping(bytes32 => Offer) public offers;
+    //holds all Offer s
+    mapping(bytes32 => Offer) internalOffers;
 
     struct position {
         int[] callAmounts;
@@ -88,7 +88,7 @@ contract mLegData {
     }
 
     //hash of position information => position
-    mapping(bytes32 => position) public positions;
+    mapping(bytes32 => position) internalPositions;
 
 
     //address of the contract of the underlying digital asset such as WBTC or WETH
@@ -104,8 +104,8 @@ contract mLegData {
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint strikeAssetSubUnits;
     //previously recorded balances of this contract
-    uint public satReserves;
-    uint public scReserves;
+    uint internalUnderlyingAssetReserves;
+    uint internalStrikeAssetReserves;
 
     address delegateAddress;
 

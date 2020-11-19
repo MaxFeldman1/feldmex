@@ -84,7 +84,7 @@ contract MultiCallExchange is IMultiCallExchange {
     //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
     uint underlyingAssetSubUnits;
     //previously recorded balances of this contract
-    uint satReserves;
+    uint underlyingAssetReserves;
     //address of the contract that stores all fee information and collects all fees
     address feeOracleAddress;
     
@@ -109,8 +109,8 @@ contract MultiCallExchange is IMultiCallExchange {
     */
     function depositFunds(address _to) public override returns(bool success){
         uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
-        uint sats = balance - satReserves;
-        satReserves = balance;
+        uint sats = balance - underlyingAssetReserves;
+        underlyingAssetReserves = balance;
         underlyingAssetDeposits[_to] += sats;
         success = true;
     }
@@ -127,7 +127,7 @@ contract MultiCallExchange is IMultiCallExchange {
         IERC20 ua = IERC20(underlyingAssetAddress);
         underlyingAssetDeposits[msg.sender] = 0;
         success = ua.transfer(msg.sender, val);
-        satReserves -= val;
+        underlyingAssetReserves -= val;
     }
     
     /*
@@ -677,7 +677,7 @@ contract MultiCallExchange is IMultiCallExchange {
             transferAmount = optionsContract.transferAmountDebtor();
             underlyingAssetDeposits[addr] += uint( pos.maxUnderlyingAssetDebtor - transferAmount);
         }
-        satReserves = uint(int(satReserves)-transferAmount);
+        underlyingAssetReserves = uint(int(underlyingAssetReserves)-transferAmount);
     }
 
 }

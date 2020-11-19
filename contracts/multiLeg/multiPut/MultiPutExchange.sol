@@ -84,7 +84,7 @@ contract MultiPutExchange is IMultiPutExchange {
     //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
     uint strikeAssetSubUnits;
     //previously recorded balances of this contract
-    uint scReserves;
+    uint strikeAssetReserves;
     //address of the contract that stores all fee information and collects all fees
     address feeOracleAddress;
     
@@ -109,8 +109,8 @@ contract MultiPutExchange is IMultiPutExchange {
     */
     function depositFunds(address _to) public override returns(bool success){
         uint balance = IERC20(strikeAssetAddress).balanceOf(address(this));
-        uint sc = balance - scReserves;
-        scReserves = balance;
+        uint sc = balance - strikeAssetReserves;
+        strikeAssetReserves = balance;
         strikeAssetDeposits[_to] += sc;
         success = true;
     }
@@ -125,7 +125,7 @@ contract MultiPutExchange is IMultiPutExchange {
         IERC20 sa = IERC20(strikeAssetAddress);
         strikeAssetDeposits[msg.sender] = 0;
         success = sa.transfer(msg.sender, val);
-        scReserves -= val;
+        strikeAssetReserves -= val;
     }
     
     /*
@@ -675,7 +675,7 @@ contract MultiPutExchange is IMultiPutExchange {
             transferAmount = optionsContract.transferAmountDebtor();
             strikeAssetDeposits[addr] += uint(pos.maxStrikeAssetDebtor - transferAmount);
         }
-        scReserves = uint(int(scReserves)-transferAmount);
+        strikeAssetReserves = uint(int(strikeAssetReserves)-transferAmount);
     }
 
 

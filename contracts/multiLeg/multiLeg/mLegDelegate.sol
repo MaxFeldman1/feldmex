@@ -18,54 +18,54 @@ contract mLegDelegate is mLegData {
 
     function cancelOrderInternal(bytes32 _name) public {
     	//bytes32 _name = name;
-        linkedNode memory node = linkedNodes[_name];
-        Offer memory offer = offers[node.hash];
+        linkedNode memory node = internalLinkedNodes[_name];
+        Offer memory offer = internalOffers[node.hash];
         //uint8 index = (offer.buy? 0 : 1) + (offer.call? 0 : 2);
         //if this node is somewhere in the middle of the list
         if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
+            internalLinkedNodes[node.next].previous = node.previous;
+            internalLinkedNodes[node.previous].next = node.next;
         }
         //this is the only offer for the maturity and legsHash
         else if (node.next == 0 && node.previous == 0){
-            delete listHeads[offers[node.hash].maturity][offers[node.hash].legsHash][offer.index];
+            delete internalListHeads[internalOffers[node.hash].maturity][internalOffers[node.hash].legsHash][offer.index];
         }
         //last node
         else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
+            internalLinkedNodes[node.previous].next = 0;
         }
         //head node
         else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offers[node.hash].maturity][offers[node.hash].legsHash][offer.index] = node.next;
+            internalLinkedNodes[node.next].previous = 0;
+            internalListHeads[internalOffers[node.hash].maturity][internalOffers[node.hash].legsHash][offer.index] = node.next;
         }
         emit offerCalceled(_name);
-        delete linkedNodes[_name];
-        delete offers[node.hash];
-        position memory pos = positions[offer.legsHash];
+        delete internalLinkedNodes[_name];
+        delete internalOffers[node.hash];
+        position memory pos = internalPositions[offer.legsHash];
         if (offer.index == 0){
             uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetHolder + offer.price)) / underlyingAssetSubUnits;
             if (int(req) < 0) req = 0;
-            underlyingAssetDeposits[offer.offerer] += req;
-            strikeAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetHolder) / strikeAssetSubUnits;
+            internalUnderlyingAssetDeposits[offer.offerer] += req;
+            internalStrikeAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetHolder) / strikeAssetSubUnits;
         }
         else if (offer.index == 1){
             uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetDebtor - offer.price)) / underlyingAssetSubUnits;
             if (int(req) < 0) req = 0;
-            underlyingAssetDeposits[offer.offerer] += req;
-            strikeAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetDebtor) / strikeAssetSubUnits;
+            internalUnderlyingAssetDeposits[offer.offerer] += req;
+            internalStrikeAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxStrikeAssetDebtor) / strikeAssetSubUnits;
         }
         else if (offer.index == 2){
-            underlyingAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetHolder) / underlyingAssetSubUnits;
+            internalUnderlyingAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetHolder) / underlyingAssetSubUnits;
             uint req = uint(int(offer.amount) * (pos.maxStrikeAssetHolder + offer.price)) / strikeAssetSubUnits;
             if (int(req) < 0) req = 0;
-            strikeAssetDeposits[offer.offerer] += req;
+            internalStrikeAssetDeposits[offer.offerer] += req;
         }
         else {
-            underlyingAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetDebtor) / underlyingAssetSubUnits;
+            internalUnderlyingAssetDeposits[offer.offerer] += offer.amount * uint(pos.maxUnderlyingAssetDebtor) / underlyingAssetSubUnits;
             uint req = uint(int(offer.amount) * (pos.maxStrikeAssetDebtor - offer.price)) / strikeAssetSubUnits;
             if (int(req) < 0) req = 0;
-            strikeAssetDeposits[offer.offerer] += req;
+            internalStrikeAssetDeposits[offer.offerer] += req;
         }
 
     }
@@ -78,8 +78,8 @@ contract mLegDelegate is mLegData {
     function takeBuyOffer() public {
     	address _seller = taker;	//gas savings
     	bytes32 _name = name;	//gas savings
-        linkedNode memory node = linkedNodes[_name];
-        Offer memory offer = offers[node.hash];
+        linkedNode memory node = internalLinkedNodes[_name];
+        Offer memory offer = internalOffers[node.hash];
         require(offer.index%2 == 0);
 
         //now we make the trade happen
@@ -99,26 +99,26 @@ contract mLegDelegate is mLegData {
         }
         //repair linked list
         if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
+            internalLinkedNodes[node.next].previous = node.previous;
+            internalLinkedNodes[node.previous].next = node.next;
         }
         //this is the only offer for the maturity and legsHash
         else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.legsHash][offer.index];
+            delete internalListHeads[offer.maturity][offer.legsHash][offer.index];
         }
         //last node
         else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
+            internalLinkedNodes[node.previous].next = 0;
         }
         //head node
         else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
+            internalLinkedNodes[node.next].previous = 0;
+            internalListHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
         }
         emit offerAccepted(_name, offer.amount);
         //clean storage
-        delete linkedNodes[_name];
-        delete offers[node.hash];
+        delete internalLinkedNodes[_name];
+        delete internalOffers[node.hash];
     }
 
     /*
@@ -129,8 +129,8 @@ contract mLegDelegate is mLegData {
     function takeSellOffer() public {
     	address _buyer = taker;	//gas savings
     	bytes32 _name = name;	//gas savings
-        linkedNode memory node = linkedNodes[_name];
-        Offer memory offer = offers[node.hash];
+        linkedNode memory node = internalLinkedNodes[_name];
+        Offer memory offer = internalOffers[node.hash];
         require(offer.index%2==1);
 
         //now we make the trade happen
@@ -150,26 +150,26 @@ contract mLegDelegate is mLegData {
         }
         //repair linked list
         if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
+            internalLinkedNodes[node.next].previous = node.previous;
+            internalLinkedNodes[node.previous].next = node.next;
         }
         //this is the only offer for the maturity and legsHash
         else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.legsHash][offer.index];
+            delete internalListHeads[offer.maturity][offer.legsHash][offer.index];
         }
         //last node
         else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
+            internalLinkedNodes[node.previous].next = 0;
         }
         //head node
         else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
+            internalLinkedNodes[node.next].previous = 0;
+            internalListHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
         }
         emit offerAccepted(_name, offer.amount);
         //clean storage
-        delete linkedNodes[_name];
-        delete offers[node.hash];
+        delete internalLinkedNodes[_name];
+        delete internalOffers[node.hash];
     }
 
     /*
@@ -186,7 +186,7 @@ contract mLegDelegate is mLegData {
         @param address _ debtor: the address selling the position
         @param address _holder: the address buying the position
         @param uint _maturity: the maturity of the position to mint
-        @param bytes32 _legsHash: the identifier to find the position in positions[]
+        @param bytes32 _legsHash: the identifier to find the position in internalPositions[]
         @param uint _amount: the amount of times to mint the position
         @param int _price: the premium paid by the holder to the debtor
         @param uint8 _index: the index of the offer for which this function is called
@@ -202,7 +202,7 @@ contract mLegDelegate is mLegData {
         IOptionsHandler optionsContract = IOptionsHandler(_optionsAddress);
         optionsContract.setParams(_debtor, _holder, _maturity);
         optionsContract.setTrustedAddressMultiLegExchange(2);
-        position memory pos = positions[_legsHash];
+        position memory pos = internalPositions[_legsHash];
         //load call position
         optionsContract.clearPositions();
         for (uint i = 0; i < pos.callAmounts.length; i++)
@@ -313,12 +313,12 @@ contract mLegDelegate is mLegData {
         if (!success) return false;
         /*
             We have minted the put position but we still have data from the call position stored in transferAmountDebtor and transferAmountHolder
-            handle distribution of funds in underlyingAssetDeposits mapping
+            handle distribution of funds in internalUnderlyingAssetDeposits mapping
         */
         address addr = _index%2 == 0 ? _holder : _debtor;
-        satReserves = uint(int(satReserves)-optionsTransfer);
-        if (int(underlyingAssetDeposits[addr]) < -transferAmount) return false;
-        underlyingAssetDeposits[addr] = uint(int(underlyingAssetDeposits[addr]) + transferAmount);
+        internalUnderlyingAssetReserves = uint(int(internalUnderlyingAssetReserves)-optionsTransfer);
+        if (int(internalUnderlyingAssetDeposits[addr]) < -transferAmount) return false;
+        internalUnderlyingAssetDeposits[addr] = uint(int(internalUnderlyingAssetDeposits[addr]) + transferAmount);
 
         optionsTransfer;
         if (_index%2==0){
@@ -328,9 +328,9 @@ contract mLegDelegate is mLegData {
             optionsTransfer = optionsContract.transferAmountDebtor();
             transferAmount = pos.maxStrikeAssetDebtor - optionsTransfer;
         }
-        scReserves = uint(int(scReserves)-optionsTransfer);
-        if (int(strikeAssetDeposits[addr]) < -transferAmount) return false;
-        strikeAssetDeposits[addr] = uint(int(strikeAssetDeposits[addr]) + transferAmount);
+        internalStrikeAssetReserves = uint(int(internalStrikeAssetReserves)-optionsTransfer);
+        if (int(internalStrikeAssetDeposits[addr]) < -transferAmount) return false;
+        internalStrikeAssetDeposits[addr] = uint(int(internalStrikeAssetDeposits[addr]) + transferAmount);
     }
 
 

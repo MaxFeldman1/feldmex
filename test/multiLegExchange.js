@@ -96,20 +96,6 @@ contract('multi leg exchange', function(accounts){
 		assert.equal(rec.logs[0].event, "legsHashCreated", "correct event emmited");
 		legsHash = rec.logs[0].args.legsHash;
 		position = await multiLegExchangeInstance.positions(legsHash);
-		positionInfo = await multiLegExchangeInstance.positionInfo(legsHash);
-		// convert position and positionInfo member vars to number
-		var keys = Object.getOwnPropertyNames(position);
-		for (var i = 0; i < keys.length; i++) {
-			var key = keys[i];
-			position[key] = position[key].toNumber();
-		}
-		keys = Object.getOwnPropertyNames(positionInfo);
-		for (var i = 0; i < keys.length; i++){
-			var key = keys[i];
-			for (var j = 0; j < positionInfo[key].length; j++)
-				positionInfo[key][j] = positionInfo[key][j].toNumber();
-			position[key] = positionInfo[key];
-		}
 		//check value of arrays
 		assert.equal(position.callStrikes+'', callStrikes+'', "correct call strikes in position info");
 		assert.equal(position.callAmounts+'', callAmounts+'', "correct call amounts in position info")
@@ -212,8 +198,8 @@ contract('multi leg exchange', function(accounts){
 		assert.equal((await asset1.balanceOf(multiLegExchangeInstance.address)).toString(), "0", "correct asset1 balance of contract");
 		assert.equal((await asset2.balanceOf(multiLegExchangeInstance.address)).toString(), "0", "correct asset2 balance of contract");
 
-		assert.equal((await multiLegExchangeInstance.satReserves()).toString(), "0", "correct sat reserves");
-		assert.equal((await multiLegExchangeInstance.scReserves()).toString(), "0", "correct sc reserves");		
+		assert.equal((await multiLegExchangeInstance.underlyingAssetReserves()).toString(), "0", "correct sat reserves");
+		assert.equal((await multiLegExchangeInstance.strikeAssetReserves()).toString(), "0", "correct sc reserves");		
 	});
 
 	it('posts orders with correct collateral requirements index 1', async () => {
