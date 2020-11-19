@@ -6,7 +6,7 @@ import "../../feeOracle.sol";
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract
 */
-contract multiCallExchange {
+contract MultiCallExchange {
     //denominated in Underlying Token underlyingAssetSubUnits
     mapping(address => uint) public underlyingAssetDeposits;
 

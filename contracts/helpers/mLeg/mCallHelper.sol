@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 
-import "../../multiLeg/multiCall/multiCallExchange.sol";
+import "../../multiLeg/multiCall/MultiCallExchange.sol";
 
 contract mCallHelper {
 	address public addr;
@@ -11,6 +11,6 @@ contract mCallHelper {
 	}
 
 	function deploy(address _underlyingAssetAddress, address _optionsAddress) public {
-		addr = address(new multiCallExchange(_underlyingAssetAddress, _optionsAddress, feeOracleAddress));
+		addr = address(new MultiCallExchange(_underlyingAssetAddress, _optionsAddress, feeOracleAddress));
 	}
 }

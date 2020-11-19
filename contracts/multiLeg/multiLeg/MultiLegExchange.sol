@@ -1,97 +1,27 @@
 pragma solidity >=0.6.0;
 import "../../interfaces/IERC20.sol";
 import "../../interfaces/IOptionsHandler.sol";
-import "../../feeOracle.sol";
+import "./mLegData.sol";
 
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract
 */
-contract multiPutExchange {
-    //denominated in the legsHash asset strikeAssetSubUnits
-    mapping(address => uint) public strikeAssetDeposits;
-
-    //stores price and hash of (maturity, stike, price)
-    struct linkedNode{
-        //offers[hash] => offer
-        bytes32 hash;
-        //linkedNodes[this.name] => this
-        bytes32 name;
-        bytes32 next;
-        bytes32 previous;
-    }
-
-    struct Offer{
-        address offerer;
-        uint maturity;
-        bytes32 legsHash;
-        int price;
-        uint amount;
-        /*
-            long put => index: 0
-            short put => index: 1
-        */
-        uint8 index;
-    }
-    
-    event offerPosted(
-        bytes32 name,
-        uint maturity,
-        bytes32 legsHash,
-        int price,
-        uint amount,
-        uint8 index
-    );
-
-    event offerCalceled(
-        bytes32 name
-    );
-
-    event offerAccepted(
-        bytes32 name,
-        uint amount
-    );
-
-    event legsHashCreated(
-        bytes32 legsHash
-    );
-
-    /*
-        listHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
-        the linked lists are ordered by price with the most enticing offers at the top near the head
-    */
-    //maturity => legsHash => headNode.name [buy, sell]
-    mapping(uint => mapping(bytes32 => bytes32[2])) public listHeads;
-    
-    //holds all nodes node.name is the identifier for the location in this mapping
-    mapping (bytes32 => linkedNode) public linkedNodes;
-
-    /*
-        Note all linkedNodes correspond to a buyOffer
-        The offers[linkedNodes[name].hash] links to a buyOffer
-    */
-    
-    //holds all offers
-    mapping(bytes32 => Offer) public offers;
-
-    struct position {
-        int[] putAmounts;
-        uint[] putStrikes;
-        int maxStrikeAssetDebtor;
-        int maxStrikeAssetHolder;
-    }
-    //hash of position information => position
-    mapping(bytes32 => position) public positions;
+contract MultiLegExchange is mLegData {
 
     /*
         @Description: returns arrays callAmounts and callStrikes of a given position
 
         @param bytes32 _legsHash: the hash leading to the positions
 
+        @return int[] memory callAmounts: position.callAmounts
+        @return uint[] memory callStrikes: position.callStrikes
         @return int[] memory putAmounts: position.putAmounts
         @return uint[] memory putStrikes: position.putStrikes
     */
-    function positionInfo(bytes32 _legsHash) public view returns(int[] memory putAmounts, uint[] memory putStrikes){
+    function positionInfo(bytes32 _legsHash) public view returns(int[] memory callAmounts, uint[] memory callStrikes, int[] memory putAmounts, uint[] memory putStrikes){
         position memory pos = positions[_legsHash];
+        callAmounts = pos.callAmounts;
+        callStrikes = pos.callStrikes;
         putAmounts = pos.putAmounts;
         putStrikes = pos.putStrikes;
     }
@@ -99,85 +29,116 @@ contract multiPutExchange {
     /*
         @Description: add new position to enable trading on said position
 
+        @param uint[] memory _callStrikes: the strikes of the call positions
+        @param int[] memory _callAmounts: the amount of the call positons at the various strikes in _callStrikes
         @param uint[] memory _putStrikes: the strikes of the put positions
         @param int[] memory _putAmounts: the amount of the put positons at the various strikes in _putStrikes
     */
-    function addLegHash(uint[] memory _putStrikes, int[] memory _putAmounts) public {
+    function addLegHash(uint[] memory _callStrikes, int[] memory _callAmounts, uint[] memory _putStrikes, int[] memory _putAmounts) public {
         //make sure that this is a multi leg order
-        require(_putAmounts.length > 1);
-        require(_putAmounts.length==_putStrikes.length);
-        int _strikeAssetSubUnits = int(strikeAssetSubUnits);  //gas savings
-        bytes32 hash = keccak256(abi.encodePacked(_putStrikes, _putAmounts));
+        require(_callAmounts.length > 0 && _putAmounts.length > 0);
+        require(_callAmounts.length==_callStrikes.length&&_putAmounts.length==_putStrikes.length);
+        bytes32 hash = keccak256(abi.encodePacked(_callStrikes, _callAmounts, _putStrikes, _putAmounts));
         IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
         uint prevStrike;
+        int _subUnits = int(underlyingAssetSubUnits);  //gas savings
         //load position
+        optionsContract.clearPositions();
+        for (uint i = 0; i < _callAmounts.length; i++){
+            require(prevStrike < _callStrikes[i] && _callAmounts[i] != 0);
+            prevStrike = _callStrikes[i];
+            optionsContract.addPosition(_callStrikes[i], _subUnits*_callAmounts[i], true);
+        }
+        (uint maxUnderlyingAssetDebtor, uint maxUnderlyingAssetHolder) = optionsContract.transferAmount(true);
+        require(int(maxUnderlyingAssetHolder) > -1);
+        require(int(maxUnderlyingAssetDebtor) > -1);
+        prevStrike = 0;
+        _subUnits = int(strikeAssetSubUnits);    //gas savings
         optionsContract.clearPositions();
         for (uint i = 0; i < _putAmounts.length; i++){
             require(prevStrike < _putStrikes[i] && _putAmounts[i] != 0);
             prevStrike = _putStrikes[i];
-            optionsContract.addPosition(_putStrikes[i], _strikeAssetSubUnits*_putAmounts[i], false);
+            optionsContract.addPosition(_putStrikes[i], _subUnits*_putAmounts[i], false);
         }
         (uint maxStrikeAssetDebtor, uint maxStrikeAssetHolder) = optionsContract.transferAmount(false);
         require(int(maxStrikeAssetHolder) > -1);
         require(int(maxStrikeAssetDebtor) > -1);
-        position memory pos = position(_putAmounts, _putStrikes, int(maxStrikeAssetDebtor), int(maxStrikeAssetHolder));
+        position memory pos = position(
+            _callAmounts,
+            _callStrikes,
+            _putAmounts,
+            _putStrikes,
+            int(maxUnderlyingAssetDebtor),
+            int(maxUnderlyingAssetHolder),
+            int(maxStrikeAssetDebtor),
+            int(maxStrikeAssetHolder)
+        );
         positions[hash] = pos;
         emit legsHashCreated(hash);
     }
-    
-    //address of a digital asset that represents a unit of account such as DAI
-    address strikeAssetAddress;
-    //address of the smart contract that handles the creation of calls and puts and thier subsequent redemption
-    address optionsAddress;
-    //incrementing identifier for each order that garunties unique hashes for all identifiers
-    uint totalOrders;
-    //number of the smallest unit in one full unit of the unit of account such as pennies in a dollar
-    uint strikeAssetSubUnits;
-    //previously recorded balances of this contract
-    uint scReserves;
-    //address of the contract that stores all fee information and collects all fees
-    address feeOracleAddress;
-    
-    /*  
+        
+    /*
         @Description: setup
     */
-    constructor (address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) public {
+    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _delegateAddress, address _feeOracleAddress) public {
+        underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
+        delegateAddress = _delegateAddress;
         feeOracleAddress = _feeOracleAddress;
+        IERC20 ua = IERC20(underlyingAssetAddress);
+        underlyingAssetSubUnits = 10 ** uint(ua.decimals());
+        ua.approve(optionsAddress, 2**255);
         IERC20 sa = IERC20(strikeAssetAddress);
         strikeAssetSubUnits = 10 ** uint(sa.decimals());
         sa.approve(optionsAddress, 2**255);
     }
     
     /*
-        @Description: deposit funds in this contract, funds tracked by the strikeAssetDeposits mapping
+        @Description: deposit funds in this contract, funds tracked by the underlyingAssetDeposits and strikeAssetDeposits mappings
 
         @param uint _to: the address to which to credit deposited funds
 
         @return bool success: if an error occurs returns false if no error return true
     */
     function depositFunds(address _to) public returns(bool success){
-        uint balance = IERC20(strikeAssetAddress).balanceOf(address(this));
+        uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
+        uint sats = balance - satReserves;
+        satReserves = balance;
+        balance = IERC20(strikeAssetAddress).balanceOf(address(this));
         uint sc = balance - scReserves;
         scReserves = balance;
+        underlyingAssetDeposits[_to] += sats;
         strikeAssetDeposits[_to] += sc;
         success = true;
     }
 
     /*
-        @Description: send back all funds tracked in strikeAssetDeposits mapping of the caller to the callers address
+        @Description: send back all funds tracked in the underlyingAssetDeposits and strikeAssetDeposits mappings of the caller to the callers address
+
+        @param bool _token: if true withdraw the tokens recorded in underlyingAssetDeposits if false withdraw the legsHash asset stored in strikeAssetDeposits
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function withdrawAllFunds() public returns(bool success){
-        uint val = strikeAssetDeposits[msg.sender];
-        IERC20 sa = IERC20(strikeAssetAddress);
-        strikeAssetDeposits[msg.sender] = 0;
-        success = sa.transfer(msg.sender, val);
-        scReserves -= val;
+    function withdrawAllFunds(bool _token) public returns(bool success){
+        if (_token){
+            uint val = underlyingAssetDeposits[msg.sender];
+            IERC20 ua = IERC20(underlyingAssetAddress);
+            underlyingAssetDeposits[msg.sender] = 0;
+            success = ua.transfer(msg.sender, val);
+            satReserves -= val;
+        }
+        else {
+            uint val = strikeAssetDeposits[msg.sender];
+            IERC20 sa = IERC20(strikeAssetAddress);
+            strikeAssetDeposits[msg.sender] = 0;
+            success = sa.transfer(msg.sender, val);
+            scReserves -= val;
+        }
+        assert(success);
+
     }
-    
+
     /*
         @Description: creates two hashes to be keys in the linkedNodes and the offers mapping
 
@@ -204,6 +165,9 @@ contract multiPutExchange {
     function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
         position memory pos = positions[_legsHash];
         IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
+        for (uint i = 0; i < pos.callStrikes.length; i++){
+            if (!optionsContract.contains(msg.sender, _maturity, pos.callStrikes[i])) return false;
+        }
         for (uint i = 0; i < pos.putStrikes.length; i++){
             if (!optionsContract.contains(msg.sender, _maturity, pos.putStrikes[i])) return false;
         }
@@ -215,12 +179,49 @@ contract multiPutExchange {
         @Description: pay fee to feldmex token address
     */
     function payFee() internal {
-        feeOracle fo = feeOracle(feeOracleAddress);
-        if (fo.isFeeImmune(optionsAddress, msg.sender)) return;
-        uint fee = fo.multiLegExchangeFlatEtherFee();
-        require(msg.value >= fee);
-        msg.sender.transfer(msg.value-fee);
-        payable(fo.feldmexTokenAddress()).transfer(fee);
+        (bool success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("payFee()"));
+        require(success);
+    }
+
+
+    /*
+        @Description: lock up collateral necessary to post an order in the order book
+            also any call with a non registered legs hash will be reverted
+
+        @position pos: the multi leg position which collateral is being posted for
+        @int _price: the premium which is to be paid per position
+        @uint _amount: the amount of the position for which collateral is being posted
+        @uint8 _index: index of the order being posted
+    */
+    function lockCollateral(bytes32 _legsHash, int _price, uint _amount, uint8 _index) internal {
+        // debtors are paid premium by holders
+        if (_index%2 == 1) _price *= -1;
+
+        position memory pos = positions[_legsHash];
+
+        //lock collateral for calls
+        uint req = _amount * uint(
+            (_index%2 == 0 ? pos.maxUnderlyingAssetHolder : pos.maxUnderlyingAssetDebtor)
+            + (_index < 2 ? _price : 0)
+            );
+        if (int(req) > 0) {
+            uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
+            req = req/_underlyingAssetSubUnits + (req%_underlyingAssetSubUnits == 0 ? 0 : 1);
+            require(underlyingAssetDeposits[msg.sender] >= req);
+            underlyingAssetDeposits[msg.sender] -= req;
+        }
+
+        //lock collateral for puts
+        req = _amount * uint(
+            (_index%2 == 0 ? pos.maxStrikeAssetHolder : pos.maxStrikeAssetDebtor)
+            + (_index < 2 ? 0 : _price)
+            );
+        if (int(req) > 0) {
+            uint _strikeAssetSubUnits = strikeAssetSubUnits;    //gas savings
+            req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
+            require(strikeAssetDeposits[msg.sender] >= req);
+            strikeAssetDeposits[msg.sender] -= req;
+        }
     }
 
     /*
@@ -231,14 +232,10 @@ contract multiPutExchange {
         @param bytes32 _legsHash: the settlement price of the the underlying asset at the maturity
         @param uint _price: the amount paid or received for the call or put
         @param uint _amount: the amount of calls or puts that this offer is for
-        @param uint8 _index: the linked list in which this order is to be placed
+        @param uint8 _index: the index of the order to be placed
     */
     function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public payable {
         require(_maturity != 0 && _legsHash != 0 && _amount != 0);
-
-        position memory pos = positions[_legsHash];
-
-        require(pos.putAmounts.length > 0);
 
         if (listHeads[_maturity][_legsHash][_index] != 0) {
             insertOrder(_maturity, _legsHash, _price, _amount, _index, listHeads[_maturity][_legsHash][_index]);
@@ -246,27 +243,10 @@ contract multiPutExchange {
         }
         //only continue execution here if listHead[_maturity][_legsHash][index] == 0
 
-        require(_price < pos.maxStrikeAssetDebtor && _price > -pos.maxStrikeAssetHolder);
         require(containsStrikes(_maturity, _legsHash));
 
-        if (_index == 0){
-            uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + _price));
-            if (int(req) > 0) {
-                uint _strikeAssetSubUnits = strikeAssetSubUnits;
-                req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
-                require(strikeAssetDeposits[msg.sender] >= req);
-                strikeAssetDeposits[msg.sender] -= req;
-            }
-        }
-        else {
-            uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - _price));
-            if (int(req) > 0) {
-                uint _strikeAssetSubUnits = strikeAssetSubUnits;
-                req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
-                require(strikeAssetDeposits[msg.sender] >= req);
-                strikeAssetDeposits[msg.sender] -= req;
-            }
-        }
+        // any call with a non registered legs hash will be reverted
+        lockCollateral(_legsHash, _price, _amount, _index);
 
         Offer memory offer = Offer(msg.sender, _maturity, _legsHash, _price, _amount, _index);
         //get hashes
@@ -288,7 +268,7 @@ contract multiPutExchange {
         @param bytes32 _legsHash: the settlement price of the the underlying asset at the maturity
         @param uint _price: the amount paid or received for the call or put
         @param uint _amount: the amount of calls or puts that this offer is for
-        @param uint8 _index: the linked list in which this order is to be placed
+        @param uint8 _index: the index of the order to be placed
         @param bytes32 _name: the name identifier of the order from which to search for the location to insert this order
     */
     function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) public payable {
@@ -298,42 +278,21 @@ contract multiPutExchange {
 
         require(containsStrikes(_maturity, _legsHash));
 
-        position memory pos = positions[_legsHash];
-
-        require(pos.putAmounts.length > 0);
-
-        require(_price < pos.maxStrikeAssetDebtor && _price > -pos.maxStrikeAssetHolder);
-
-        if (_index == 0){
-            uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + _price));
-            if (int(req) > 0) {
-                uint _strikeAssetSubUnits = strikeAssetSubUnits;
-                req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
-                require(strikeAssetDeposits[msg.sender] >= req);
-                strikeAssetDeposits[msg.sender] -= req;
-            }
-        }
-        else {
-            uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - _price));
-            if (int(req) > 0) {
-                uint _strikeAssetSubUnits = strikeAssetSubUnits;
-                req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);
-                require(strikeAssetDeposits[msg.sender] >= req);
-                strikeAssetDeposits[msg.sender] -= req;
-            }
-        }
+        // any call with a non registered legs hash will be reverted
+        lockCollateral(_legsHash, _price, _amount, _index);
 
         Offer memory offer = Offer(msg.sender, _maturity, _legsHash, _price, _amount, _index);
         //get hashes
         (bytes32 hash, bytes32 name) = hasher(offer);
         //if we need to traverse down the list further away from the list head
         linkedNode memory currentNode = linkedNodes[_name];
-        if ((_index==0 &&  offers[currentNode.hash].price >= _price) || (_index==1  && offers[currentNode.hash].price <= _price)){
+        bool _buy = _index%2==0;
+        if ((_buy &&  offers[currentNode.hash].price >= _price) || (!_buy  && offers[currentNode.hash].price <= _price)){
             linkedNode memory previousNode;
             while (currentNode.name != 0){
                 previousNode = currentNode;
                 currentNode = linkedNodes[currentNode.next];
-                if ((_index==0 && offers[currentNode.hash].price < _price) || (_index==1 && offers[currentNode.hash].price > _price)){
+                if ((_buy && offers[currentNode.hash].price < _price) || (!_buy && offers[currentNode.hash].price > _price)){
                     break;
                 }
             }
@@ -363,7 +322,7 @@ contract multiPutExchange {
             while (currentNode.name != 0){
                 nextNode = currentNode;
                 currentNode = linkedNodes[currentNode.previous];
-                if ((_index==0 && offers[currentNode.hash].price >= _price) || (_index==1 && offers[currentNode.hash].price <= _price)){
+                if ((_buy && offers[currentNode.hash].price >= _price) || (!_buy && offers[currentNode.hash].price <= _price)){
                     break;
                 }
             }
@@ -393,42 +352,8 @@ contract multiPutExchange {
         @param bytes32: the identifier of the node which stores the order to cancel, offerToCancel == offers[linkedNodes[_name].hash]
     */
     function cancelOrderInternal(bytes32 _name) internal {
-        linkedNode memory node = linkedNodes[_name];
-        require(msg.sender == offers[node.hash].offerer);
-        Offer memory offer = offers[node.hash];
-        //if this node is somewhere in the middle of the list
-        if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
-        }
-        //this is the only offer for the maturity and legsHash
-        else if (node.next == 0 && node.previous == 0){
-            delete listHeads[offers[node.hash].maturity][offers[node.hash].legsHash][offer.index];
-        }
-        //last node
-        else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
-        }
-        //head node
-        else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offers[node.hash].maturity][offers[node.hash].legsHash][offer.index] = node.next;
-        }
-        emit offerCalceled(_name);
-        delete linkedNodes[_name];
-        delete offers[node.hash];
-        position memory pos = positions[offer.legsHash];
-        if (offer.index == 0){
-            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetHolder + offer.price));
-            if (int(req) > 0)
-                strikeAssetDeposits[offer.offerer] += req/strikeAssetSubUnits;
-        }
-        else {
-            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetDebtor - offer.price));
-            if (int(req) > 0)
-                strikeAssetDeposits[offer.offerer] += req/strikeAssetSubUnits;
-        }
-
+        (bool success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("cancelOrderInternal(bytes32)",_name));
+        assert(success);
     }
     
 
@@ -450,47 +375,11 @@ contract multiPutExchange {
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function takeBuyOffer(address _seller, bytes32 _name) internal returns(bool success){
-        linkedNode memory node = linkedNodes[_name];
-        Offer memory offer = offers[node.hash];
-        require(offer.index == 0);
-
-        //now we make the trade happen
-        //mint the option and distribute unused collateral
-        if (_seller == offer.offerer){
-            /*
-                state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                therefore we do not need to call options.mintCall/Put
-            */
-            cancelOrderInternal(_name);
-            return true;
-        }
-        else {
-            success = mintPosition(_seller, offer.offerer, offer.maturity, offer.legsHash, offer.amount, offer.price, offer.index);
-            if (!success) return false;
-        }
-        //repair linked list
-        if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
-        }
-        //this is the only offer for the maturity and legsHash
-        else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.legsHash][offer.index];
-        }
-        //last node
-        else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
-        }
-        //head node
-        else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
-        }
-        emit offerAccepted(_name, offer.amount);
-        //clean storage
-        delete linkedNodes[_name];
-        delete offers[node.hash];
+    function takeBuyOffer(address _seller, bytes32 _name) public returns(bool success){
+        taker = _seller;
+        name = _name;
+        (success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("takeBuyOffer()"));
+        assert(success);
     }
 
     /*
@@ -501,47 +390,11 @@ contract multiPutExchange {
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function takeSellOffer(address _buyer, bytes32 _name) internal returns(bool success){
-        linkedNode memory node = linkedNodes[_name];
-        Offer memory offer = offers[node.hash];
-        require(offer.index==1);
-
-        //now we make the trade happen
-        //mint the option and distribute unused collateral
-        if (offer.offerer == _buyer){
-            /*
-                state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                therefore we do not need to call options.assignPosition
-            */
-            cancelOrderInternal(_name);
-            return true;
-        }
-        else {
-            success = mintPosition(offer.offerer, _buyer, offer.maturity, offer.legsHash, offer.amount, offer.price, offer.index);
-            if (!success) return false;
-        }
-        //repair linked list
-        if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
-        }
-        //this is the only offer for the maturity and legsHash
-        else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.legsHash][offer.index];
-        }
-        //last node
-        else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
-        }
-        //head node
-        else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
-        }
-        emit offerAccepted(_name, offer.amount);
-        //clean storage
-        delete linkedNodes[_name];
-        delete offers[node.hash];
+    function takeSellOffer(address _buyer, bytes32 _name) public returns(bool success){
+        taker = _buyer;
+        name = _name;
+        (success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("takeSellOffer()"));
+        assert(success);
     }
 
     /*
@@ -553,14 +406,16 @@ contract multiPutExchange {
         @param uint _limitPrice: lowest price to sell at
         @param uint _amount: the amount of calls or puts that this order is for
         @param uint8 _maxInterations: the maximum amount of calls to mintPosition
+        @param bool _payInUnderlying: if true premium is paid in underlying asset if false premium is paid in strike asset
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations) public returns(uint unfilled){
+    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) public returns(uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
-
-        linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][0]];
+        //ensure all strikes are contained
+        uint8 index = (_payInUnderlying? 0: 2);
+        linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][index]];
         Offer memory offer = offers[node.hash];
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
@@ -572,9 +427,17 @@ contract multiPutExchange {
                         therefore we do not need to call mintPosition
                     */
                     position memory pos = positions[offer.legsHash];
-                    uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + offer.price));
-                    if (int(req) > 0)
-                        strikeAssetDeposits[msg.sender] += req/strikeAssetSubUnits;
+                    if (offer.index == 0){
+                        uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + offer.price));
+                        if (int(req) > 0)
+                            underlyingAssetDeposits[msg.sender] += req / underlyingAssetSubUnits;
+                        strikeAssetDeposits[msg.sender] += _amount * uint(pos.maxStrikeAssetHolder) / strikeAssetSubUnits;
+                    } else {
+                        underlyingAssetDeposits[msg.sender] += _amount * uint(pos.maxUnderlyingAssetHolder) / underlyingAssetSubUnits;
+                        uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + offer.price));
+                        if (int(req) > 0)
+                            strikeAssetDeposits[msg.sender] += req / strikeAssetSubUnits;
+                    }
                 }
                 else {
                     bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
@@ -588,7 +451,7 @@ contract multiPutExchange {
             if (!takeBuyOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
             //find the next offer
-            node = linkedNodes[listHeads[_maturity][_legsHash][0]];
+            node = linkedNodes[listHeads[_maturity][_legsHash][index]];
             offer = offers[node.hash];
             _maxIterations--;
         }
@@ -604,14 +467,16 @@ contract multiPutExchange {
         @param uint _limitPrice: highest price to buy at
         @param uint _amount: the amount of calls or puts that this order is for
         @param uint8 _maxInterations: the maximum amount of calls to mintPosition
+        @param bool _payInUnderlying: if true premium is paid in underlying asset if false premium is paid in strike asset
 
         @return uint unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations) public returns (uint unfilled){
+    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) public returns (uint unfilled){
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
-
-        linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][1]];
+        //ensure all strikes are contained
+        uint8 index = (_payInUnderlying ? 1 : 3);
+        linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][index]];
         Offer memory offer = offers[node.hash];
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
@@ -623,9 +488,17 @@ contract multiPutExchange {
                         therefore we do not need to call mintPosition
                     */
                     position memory pos = positions[offer.legsHash];
-                    uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - offer.price));
-                    if (int(req) > 0)
-                        strikeAssetDeposits[msg.sender] += req/strikeAssetSubUnits;
+                    if (offer.index == 1){
+                        uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
+                        if (int(req) > 0)
+                            underlyingAssetDeposits[msg.sender] += req / underlyingAssetSubUnits;
+                        strikeAssetDeposits[msg.sender] += _amount * uint(pos.maxStrikeAssetDebtor) / strikeAssetSubUnits;
+                    } else {
+                        underlyingAssetDeposits[msg.sender] += _amount * uint(pos.maxUnderlyingAssetDebtor) / underlyingAssetSubUnits;
+                        uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - offer.price));
+                        if (int(req) > 0)
+                        strikeAssetDeposits[msg.sender] += req / strikeAssetSubUnits;
+                    }
                 }
                 else {
                     bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
@@ -638,7 +511,7 @@ contract multiPutExchange {
             if (!takeSellOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
             //find the next offer
-            node = linkedNodes[listHeads[_maturity][_legsHash][1]];
+            node = linkedNodes[listHeads[_maturity][_legsHash][index]];
             offer = offers[node.hash];
             _maxIterations--;
         }
@@ -657,75 +530,14 @@ contract multiPutExchange {
         @param uint8 _index: the index of the offer for which this function is called
     */
     function mintPosition(address _debtor, address _holder, uint _maturity, bytes32 _legsHash, uint _amount, int _price, uint8 _index) internal returns(bool success){
-        /*
-            debtor pays is true if debtor is making the market order and thus debtor must provide the necessary collateral
-                whereas the holder has already provided the necessary collateral
-                this means that the debtor recieves the price premium
-        */
-
-        address _optionsAddress = optionsAddress; //gas savings
-        IOptionsHandler optionsContract = IOptionsHandler(_optionsAddress);
-        position memory pos = positions[_legsHash];
-        optionsContract.setParams(_debtor, _holder, _maturity);
-        //load put position into register
-        optionsContract.clearPositions();
-        for (uint i = 0; i < pos.putAmounts.length; i++)
-            optionsContract.addPosition(pos.putStrikes[i], int(_amount)*pos.putAmounts[i], false);
-        optionsContract.setTrustedAddressMultiLegExchange(1);
-
-        uint _strikeAssetSubUnits = strikeAssetSubUnits;    //gas savings
-
-        int premium;
-        {
-            uint totalReq;
-            uint holderReq;
-
-            {
-                //accounting for holder and debtor must be done seperately as that is how it is done in the options handler
-                uint temp = _amount * uint(pos.maxStrikeAssetHolder);
-                holderReq = temp/_strikeAssetSubUnits + (temp%_strikeAssetSubUnits == 0 ? 0 : 1);
-                totalReq = holderReq;
-
-                temp = _amount * uint(pos.maxStrikeAssetDebtor);
-                totalReq += temp/_strikeAssetSubUnits + (temp%_strikeAssetSubUnits == 0 ? 0 : 1);
-            }
-
-
-            /*
-                pos refers to the state of pos after the reassignment of its members
-
-                pos.maxStrikeAssetHolder = holderReq + premium
-                
-                premium = pos.maxStrikeAssetHolder - holderReq
-            */
-
-            if (_index == 0) {
-                pos.maxStrikeAssetHolder = int(_amount) * (pos.maxStrikeAssetHolder + _price) / int(_strikeAssetSubUnits);
-                pos.maxStrikeAssetDebtor = int(totalReq) - pos.maxStrikeAssetHolder;
-            } else {
-                pos.maxStrikeAssetDebtor = int(_amount) * (pos.maxStrikeAssetDebtor - _price) / int(_strikeAssetSubUnits);
-                pos.maxStrikeAssetHolder = int(totalReq) - pos.maxStrikeAssetDebtor;
-            }
-            premium = pos.maxStrikeAssetHolder - int(holderReq);
-        }
-        optionsContract.setLimits(pos.maxStrikeAssetDebtor, pos.maxStrikeAssetHolder);
-
-        optionsContract.setPaymentParams(_index==0, premium);
-
-        (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
-        if (!success) return false;
-
-        int transferAmount;
-        if (_index==0){
-            address addr = _holder; //prevent stack too deep
-            transferAmount = optionsContract.transferAmountHolder();
-            strikeAssetDeposits[addr] += uint(pos.maxStrikeAssetHolder - transferAmount);
-        } else {
-            address addr = _debtor; //prevent stack too deep
-            transferAmount = optionsContract.transferAmountDebtor();
-            strikeAssetDeposits[addr] += uint(pos.maxStrikeAssetDebtor - transferAmount);
-        }
-        scReserves = uint(int(scReserves)-transferAmount);
+        debtor = _debtor;
+        holder = _holder;
+        maturity = _maturity;
+        legsHash = _legsHash;
+        amount = _amount;
+        price = _price;
+        index = _index;
+        (success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("mintPosition()"));
     }
 
 

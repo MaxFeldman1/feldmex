@@ -1,6 +1,6 @@
 pragma solidity >=0.6.0;
 
-import "../../multiLeg/multiPut/multiPutExchange.sol";
+import "../../multiLeg/multiPut/MultiPutExchange.sol";
 
 contract mPutHelper {
 	address public addr;
@@ -11,6 +11,6 @@ contract mPutHelper {
 	}
 
 	function deploy(address _strikeAssetAddress, address _optionsAddress) public {
-		addr = address(new multiPutExchange(_strikeAssetAddress, _optionsAddress, feeOracleAddress));
+		addr = address(new MultiPutExchange(_strikeAssetAddress, _optionsAddress, feeOracleAddress));
 	}
 }
