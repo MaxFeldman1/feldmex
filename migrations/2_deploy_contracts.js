@@ -16,6 +16,7 @@ const mLegDelegate = artifacts.require("mLegDelegate");
 const mOrganizer = artifacts.require("mOrganizer");
 const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const feeOracle = artifacts.require("feeOracle");
+const stakingRewards = artifacts.require("StakingRewards");
 const feldmexToken = artifacts.require("FeldmexToken");
 
 module.exports = async function(deployer) {
@@ -24,6 +25,7 @@ module.exports = async function(deployer) {
   feldmexERC20HelperInstance = await deployer.deploy(feldmexERC20Helper);
   feldmexERC20HelperAddress = feldmexERC20HelperInstance.address;
   feldmexTokenInstance = await deployer.deploy(feldmexToken);
+  stakingRewardsInstance = await deployer.deploy(stakingRewards, feldmexTokenInstance.address, /*60 days*/60*24*60*60, /*7 days*/7*24*60*60);
   feeOracleInstance = await deployer.deploy(feeOracle, feldmexTokenInstance.address);
   feeOracleAddress = feeOracleInstance.address;
   mCallHelperInstance = await deployer.deploy(mCallHelper, feeOracleAddress);

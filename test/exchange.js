@@ -11,6 +11,7 @@ const mLegHelper = artifacts.require("mLegHelper");
 const mLegDelegate = artifacts.require("mLegDelegate");
 const feeOracle = artifacts.require("feeOracle");
 const feldmexToken = artifacts.require("FeldmexToken");
+const StakingRewards = artifacts.require("StakingRewards");
 
 const BN = web3.utils.BN;
 const defaultBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -47,7 +48,8 @@ contract('exchange', async function(accounts) {
 		strikeAssetInstance = await token.new(0);
 		oracleInstance = await oracle.new(tokenInstance.address, strikeAssetInstance.address);
 		feldmexTokenInstance = await feldmexToken.new();
-		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
+		stakingRewardsInstance = await StakingRewards.new(feldmexTokenInstance.address, "1000000", "100000");
+		feeOracleInstance = await feeOracle.new(stakingRewardsInstance.address);
 		mCallHelperInstance = await mCallHelper.new(feeOracleInstance.address);
 		mPutHelperInstance = await mPutHelper.new(feeOracleInstance.address);
 		mLegDelegateInstance = await mLegDelegate.new();
