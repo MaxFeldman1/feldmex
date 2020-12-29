@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 
 /*
     This contract allows for inheriting contracts to all have the same variable at the same slots 

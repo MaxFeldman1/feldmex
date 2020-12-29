@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../interfaces/IERC20.sol";
 import "../interfaces/IOptionsHandler.sol";
 import "./ERC20FeldmexOption.sol";
@@ -31,7 +31,7 @@ contract detachedOption is IERC20 {
 	constructor(
 		address _optionsHandlerAddress, address _underlyingAssetAddress, address _strikeAssetAddress,
 		uint _maturity, uint _strike, uint8 _decimals, bool _call
-	) public {
+	) {
 		IOptionsHandler(_optionsHandlerAddress).addStrike(_maturity, _strike, 0);
 		baseERC20FeldmexOptionAddress = msg.sender;
 		underlyingAssetAddress = _underlyingAssetAddress;

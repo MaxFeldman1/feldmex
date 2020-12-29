@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../interfaces/IERC20.sol";
 
 contract FeldmexToken is IERC20 {
@@ -9,22 +9,10 @@ contract FeldmexToken is IERC20 {
 
     string public symbol = "FELD";
 
-    event Transfer(
-        address indexed _from,
-        address indexed _to,
-        uint256 _value
-    );
-
-    event Approval(
-        address indexed _owner,
-        address indexed _spender,
-        uint256 _value
-    );
-
     mapping(address => uint256) public override balanceOf;
     mapping(address => mapping(address => uint256)) public override allowance;
 
-    constructor () public {
+    constructor () {
     	uint _initialSupply = 1e24;
         balanceOf[msg.sender] = _initialSupply;
         totalSupply = _initialSupply;

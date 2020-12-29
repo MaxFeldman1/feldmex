@@ -1,11 +1,12 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../interfaces/IOptionsHandler.sol";
+import "../interfaces/IERC20NoEvents.sol";
 import "../interfaces/IERC20.sol";
 import "../interfaces/ITimeSeriesOracle.sol";
 import "../interfaces/Ownable.sol";
 import "../interfaces/yieldEnabled.sol";
 
-contract doubleAssetYieldEnabledToken is IERC20, Ownable, yieldEnabled {
+contract doubleAssetYieldEnabledToken is IERC20NoEvents, Ownable, yieldEnabled {
 	
 	//smart contract of the asset in the numerator of oracle price
 	IERC20 public Asset1Contract;
@@ -48,7 +49,7 @@ contract doubleAssetYieldEnabledToken is IERC20, Ownable, yieldEnabled {
 		@param address _asset1Address: the address of the ERC0 contract of asset1
 		@param address _asset2Address: the address of the ERC20 contract of asset2
 	*/
-	constructor (address _asset1Address, address _asset2Address) public {
+	constructor (address _asset1Address, address _asset2Address) {
 		Asset1Contract = IERC20(_asset1Address);
 		Asset2Contract = IERC20(_asset2Address);
 		balanceOf[owner] = totalSupply;
@@ -135,27 +136,6 @@ contract doubleAssetYieldEnabledToken is IERC20, Ownable, yieldEnabled {
     //token owner => spender => yield owner => amount approved
     mapping(address => mapping(address => mapping(address => uint))) public override specificAllowance;
     mapping(address => bool) public override autoClaimYieldDisabled;
-    /*
-		@Description: Emitted when there is movement of _value in yieldDistribution from
-			yieldDistribution[_tokenOwner][_yieldOwner] to
-			yieldDistribution[_tokenOwner][_tokenOwner]
-    */
-    event ClaimYield(
-    	address indexed _tokenOwner,
-    	address indexed _yieldOwner,
-    	uint256 _value
-    );
-
-    /*
-		@Description: Emitted when there is movement of _value in yieldDistribution from
-			yieldDistirbution[_tokenOwner][_tokenOwner] to
-			yieldDistribution[_tokenOwner][_yieldOwner]
-    */
-    event SendYield(
-    	address indexed _tokenOwner,
-    	address indexed _yieldOwner,
-    	uint256 _value
-    );
 
     /*
 		@Description: repatriate _value amount of yield from _yieldOwner to token owner

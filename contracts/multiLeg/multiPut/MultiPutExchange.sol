@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../../interfaces/IERC20.sol";
 import "../../interfaces/IOptionsHandler.sol";
 import "../../interfaces/IMultiPutExchange.sol";
@@ -91,7 +91,7 @@ contract MultiPutExchange is IMultiPutExchange {
     /*  
         @Description: setup
     */
-    constructor (address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) public {
+    constructor (address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) {
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
         feeOracleAddress = _feeOracleAddress;
@@ -139,7 +139,7 @@ contract MultiPutExchange is IMultiPutExchange {
     function hasher(Offer memory _offer) internal returns(bytes32 _hash, bytes32 _name){
         _hash =  keccak256(abi.encodePacked(_offer.maturity, _offer.legsHash, _offer.price, _offer.offerer, _offer.index, totalOrders));
         totalOrders++;
-        _name = keccak256(abi.encodePacked(_hash, now, totalOrders));
+        _name = keccak256(abi.encodePacked(_hash, totalOrders));
     }
 
 
@@ -169,7 +169,7 @@ contract MultiPutExchange is IMultiPutExchange {
         if (fo.isFeeImmune(optionsAddress, msg.sender)) return;
         uint fee = fo.multiLegExchangeFlatEtherFee();
         require(msg.value >= fee);
-        msg.sender.transfer(msg.value-fee);
+        payable(msg.sender).transfer(msg.value-fee);
         payable(fo.feldmexTokenAddress()).transfer(fee);
     }
 

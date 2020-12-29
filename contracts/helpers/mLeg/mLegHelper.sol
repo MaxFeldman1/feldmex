@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 
 import "../../multiLeg/multiLeg/MultiLegExchange.sol";
 
@@ -7,7 +7,7 @@ contract mLegHelper {
 
 	address delegateAddress;
 	address feeOracleAddress;
-	constructor (address _delegateAddress, address _feeOracleAddress) public {
+	constructor (address _delegateAddress, address _feeOracleAddress) {
 		delegateAddress = _delegateAddress;
 		feeOracleAddress = _feeOracleAddress;
 	}

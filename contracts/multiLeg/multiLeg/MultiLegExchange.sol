@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../../interfaces/IERC20.sol";
 import "../../interfaces/IOptionsHandler.sol";
 import "../../interfaces/IMultiLegExchange.sol";
@@ -104,7 +104,7 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
     /*
         @Description: setup
     */
-    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _delegateAddress, address _feeOracleAddress) public {
+    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _delegateAddress, address _feeOracleAddress) {
         underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
@@ -174,7 +174,7 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
     function hasher(Offer memory _offer) internal returns(bytes32 _hash, bytes32 _name){
         _hash =  keccak256(abi.encodePacked(_offer.maturity, _offer.legsHash, _offer.price, _offer.offerer, _offer.index, totalOrders));
         totalOrders++;
-        _name = keccak256(abi.encodePacked(_hash, now, totalOrders));
+        _name = keccak256(abi.encodePacked(_hash, totalOrders));
     }
 
 
@@ -224,10 +224,10 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
         position memory pos = internalPositions[_legsHash];
 
         //lock collateral for calls
-        uint req = _amount * uint(
+        uint req = uint(int(_amount) * (
             (_index%2 == 0 ? pos.maxUnderlyingAssetHolder : pos.maxUnderlyingAssetDebtor)
             + (_index < 2 ? _price : 0)
-            );
+            ));
         if (int(req) > 0) {
             uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
             req = req/_underlyingAssetSubUnits + (req%_underlyingAssetSubUnits == 0 ? 0 : 1);
@@ -236,10 +236,10 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
         }
 
         //lock collateral for puts
-        req = _amount * uint(
+        req = uint(int(_amount) * (
             (_index%2 == 0 ? pos.maxStrikeAssetHolder : pos.maxStrikeAssetDebtor)
             + (_index < 2 ? 0 : _price)
-            );
+            ));
         if (int(req) > 0) {
             uint _strikeAssetSubUnits = strikeAssetSubUnits;    //gas savings
             req = req/_strikeAssetSubUnits + (req%_strikeAssetSubUnits == 0 ? 0 : 1);

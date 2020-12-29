@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "./mLegData.sol";
 import "../../interfaces/IOptionsHandler.sol";
 import "../../feeOracle.sol";
@@ -11,7 +11,7 @@ contract mLegDelegate is mLegData {
         if (fo.isFeeImmune(optionsAddress, msg.sender)) return;
         uint fee = fo.multiLegExchangeFlatEtherFee();
         require(msg.value >= fee);
-        msg.sender.transfer(msg.value-fee);
+        payable(msg.sender).transfer(msg.value-fee);
         payable(fo.feldmexTokenAddress()).transfer(fee);
     }
 
@@ -320,7 +320,6 @@ contract mLegDelegate is mLegData {
         if (int(internalUnderlyingAssetDeposits[addr]) < -transferAmount) return false;
         internalUnderlyingAssetDeposits[addr] = uint(int(internalUnderlyingAssetDeposits[addr]) + transferAmount);
 
-        optionsTransfer;
         if (_index%2==0){
             optionsTransfer = optionsContract.transferAmountHolder();
             transferAmount = pos.maxStrikeAssetHolder - optionsTransfer;

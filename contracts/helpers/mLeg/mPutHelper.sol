@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 
 import "../../multiLeg/multiPut/MultiPutExchange.sol";
 
@@ -6,7 +6,7 @@ contract mPutHelper {
 	address public addr;
 
 	address feeOracleAddress;
-	constructor(address _feeOracleAddress) public {
+	constructor(address _feeOracleAddress) {
 		feeOracleAddress = _feeOracleAddress;
 	}
 

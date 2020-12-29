@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../interfaces/ITimeSeriesOracle.sol";
 import "../oracle.sol";
 import "../interfaces/IERC20.sol";
@@ -17,7 +17,7 @@ contract OptionsHandler is FeldmexOptionsData, Ownable, IOptionsHandler {
     constructor (address _oracleAddress, address _underlyingAssetAddress,
         address _strikeAssetAddress, address _feldmexERC20HelperAddress,
         address _mOrganizerAddress, address _assignOptionsDelegateAddress,
-        address _feeOracleAddress) public {
+        address _feeOracleAddress) {
         
         oracleAddress = _oracleAddress;
         internalUnderlyingAssetAddress = _underlyingAssetAddress;
@@ -73,15 +73,22 @@ contract OptionsHandler is FeldmexOptionsData, Ownable, IOptionsHandler {
         uint callValue = 0;
         uint putValue = 0;
         //calls & puts
-        for (uint i = strikes[msg.sender][_maturity].length-1; i != uint(-1); i--){
-            uint strike = strikes[msg.sender][_maturity][i];
-            int callAmount = callAmounts[msg.sender][_maturity][strike];
-            int putAmount = putAmounts[msg.sender][_maturity][strike];
-            delete callAmounts[msg.sender][_maturity][strike];
-            delete putAmounts[msg.sender][_maturity][strike];
-            callValue += valueOfCall(callAmount, strike, spot);
-            putValue += valueOfPut(putAmount, strike, spot);
-            delete containedStrikes[msg.sender][_maturity][strike];
+        {
+            uint i;
+            unchecked {
+                i = strikes[msg.sender][_maturity].length-1;
+            }
+            while (i != uint(int(-1))) {
+                uint strike = strikes[msg.sender][_maturity][i];
+                int callAmount = callAmounts[msg.sender][_maturity][strike];
+                int putAmount = putAmounts[msg.sender][_maturity][strike];
+                delete callAmounts[msg.sender][_maturity][strike];
+                delete putAmounts[msg.sender][_maturity][strike];
+                callValue += valueOfCall(callAmount, strike, spot);
+                putValue += valueOfPut(putAmount, strike, spot);
+                delete containedStrikes[msg.sender][_maturity][strike];
+                unchecked { i--; }
+            }
         }
         //valueOfCall is inflated by _price parameter and valueOfCall thus only divide out spot from callValue not putValue
         //prevent div by 0, also there are no calls at a strike of 0 so this does not affect payout
@@ -234,8 +241,10 @@ contract OptionsHandler is FeldmexOptionsData, Ownable, IOptionsHandler {
         if (_index > 0) require(_strike > strikes[msg.sender][_maturity][_index-1]);
         if (_index < size) require(_strike < strikes[msg.sender][_maturity][_index]);
         strikes[msg.sender][_maturity].push(_strike);
-        for (uint i = size-1; i >= _index && i != uint(-1); i--)
-            strikes[msg.sender][_maturity][i+1] = strikes[msg.sender][_maturity][i];
+        unchecked {
+            for (uint i = size-1; i >= _index && i != uint(int(-1)); i--)
+                strikes[msg.sender][_maturity][i+1] = strikes[msg.sender][_maturity][i];
+        }
         strikes[msg.sender][_maturity][_index] = _strike;
         containedStrikes[msg.sender][_maturity][_strike] = true;
     }

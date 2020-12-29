@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../optionsHandler/OptionsHandler.sol";
 import "../interfaces/Ownable.sol";
 
@@ -10,7 +10,7 @@ contract oHelper {
 	address mOrganizerAddress;
 	address assignOptionsDelegateAddress;
 	address feeOracleAddress;
-	constructor (address _feldmexERC20HelperAddress, address _mOrganizerAddress, address _assignOptionsDelegateAddress, address _feeOracleAddress) public {
+	constructor (address _feldmexERC20HelperAddress, address _mOrganizerAddress, address _assignOptionsDelegateAddress, address _feeOracleAddress) {
 		feldmexERC20HelperAddress = _feldmexERC20HelperAddress;
 		mOrganizerAddress = _mOrganizerAddress;
 		assignOptionsDelegateAddress = _assignOptionsDelegateAddress;

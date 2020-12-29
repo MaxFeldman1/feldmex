@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../singleOptionExchange/SingleLegExchange.sol";
 
 /*
@@ -11,7 +11,7 @@ contract eHelper {
 
 	address feeOracleAddress;
 
-	constructor (address _feeOracleAddress) public {
+	constructor (address _feeOracleAddress) {
 		feeOracleAddress = _feeOracleAddress;
 	}
 

@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "./container.sol";
 import "../helpers/cHelper.sol";
 import "../interfaces/Ownable.sol";
@@ -9,7 +9,7 @@ contract containerDeveloper is Ownable {
 	address public eHelperAddress;
 	address public orcHelperAddress;
 
-	constructor (address _cHelperAddress, address _oHelperAddress, address _eHelperAddress, address _orcHelperAddress) public {
+	constructor (address _cHelperAddress, address _oHelperAddress, address _eHelperAddress, address _orcHelperAddress) {
 		cHelperAddress = _cHelperAddress;
 		oHelperAddress = _oHelperAddress;
 		eHelperAddress = _eHelperAddress;

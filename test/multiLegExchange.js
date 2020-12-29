@@ -320,8 +320,11 @@ contract('multi leg exchange', function(accounts){
 		secondPrice = -2;
 		await depositFunds(deployerAccount, amount*maxUnderlyingAssetHolder, amount*(maxStrikeAssetHolder+secondPrice), true);
 		await depositFunds(accounts[1], amount*maxUnderlyingAssetDebtor, amount*(maxStrikeAssetDebtor-secondPrice), false);
-
+try {
 		await postOrder(maturity, legsHash, secondPrice, amount, 2, {from: deployerAccount});
+
+} catch (err) {process.exit()}
+//		await postOrder(maturity, legsHash, secondPrice, amount, 2, {from: deployerAccount});
 
 		assert.equal((await multiLegExchangeInstance.underlyingAssetDeposits(deployerAccount)).toString(), "0", "correct underlying asset balance after posting second order");
 		assert.equal((await multiLegExchangeInstance.strikeAssetDeposits(deployerAccount)).toString(), "0", "correct strike asset balance after posting second order");

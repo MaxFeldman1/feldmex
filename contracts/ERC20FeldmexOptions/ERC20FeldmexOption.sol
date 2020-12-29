@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../interfaces/IERC20.sol";
 import "../interfaces/IOptionsHandler.sol";
 import "./detachedOption.sol";
@@ -33,7 +33,7 @@ contract ERC20FeldmexOption is IERC20 {
 		@param uint _strike: the strike of the option delegated to this specific contract
 		@param bool _call: true if this contract is supposed to handle calls false if puts
 	*/
-	constructor(address _optionsHandlerAddress, uint _maturity, uint _strike, bool _call) public {
+	constructor(address _optionsHandlerAddress, uint _maturity, uint _strike, bool _call) {
 		maturity = _maturity;
 		strike = _strike;
 		call = _call;
@@ -53,7 +53,7 @@ contract ERC20FeldmexOption is IERC20 {
 	/*
 		@Description: all long and short positions cancel out for a total supply of 0
 	*/
-	function totalSupply() public view override returns (uint supply){
+	function totalSupply() public pure override returns (uint supply){
 		supply = 0;
 	}
 

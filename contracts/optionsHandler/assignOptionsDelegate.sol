@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../interfaces/IERC20.sol";
 import "../ERC20FeldmexOptions/FeldmexERC20Helper.sol";
 import "./FeldmexOptionsData.sol";
@@ -86,15 +86,20 @@ contract assignOptionsDelegate is FeldmexOptionsData {
         int delta = 0;
         int value = 0;
         uint prevStrike;
-        uint lastIndex = strikes[_addr][_maturity].length-1;
-        for(uint i = lastIndex; i != uint(-1); i--) {
+        uint lastIndex;
+        unchecked {
+            lastIndex = strikes[_addr][_maturity].length-1;
+        }
+
+        for(uint i = lastIndex; i != uint(int(-1)); ) {
             uint strike = strikes[_addr][_maturity][i];
             int amt = putAmounts[_addr][_maturity][strike];
-            value += delta * int(prevStrike-strike);
+            value += delta * (int(prevStrike)-int(strike));
             delta += amt;
             prevStrike = strike;
             if (value < 0 && uint(-value) > minCollateral) minCollateral = uint(-value);
             if (amt < 0) liabilities+=uint(-amt)*strike;
+            unchecked { i--; }
         }
         //value at 0
         value += delta * int(prevStrike);

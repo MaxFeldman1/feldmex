@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../interfaces/IERC20.sol";
 import "../interfaces/IOptionsHandler.sol";
 import "../interfaces/ISingleLegExchange.sol";
@@ -53,7 +53,7 @@ contract SingleLegExchange is ISingleLegExchange {
     /*  
         @Description: set up
     */
-    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) public {
+    constructor (address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress, address _feeOracleAddress) {
         underlyingAssetAddress = _underlyingAssetAddress;
         optionsAddress = _optionsAddress;
         strikeAssetAddress = _strikeAssetAddress;
@@ -121,7 +121,7 @@ contract SingleLegExchange is ISingleLegExchange {
     function hasher(Offer memory _offer) internal returns(bytes32 _hash, bytes32 _name){
         _hash =  keccak256(abi.encodePacked(_offer.maturity, _offer.strike, _offer.price, _offer.offerer, _offer.index, totalOrders));
         totalOrders++;
-        _name = keccak256(abi.encodePacked(_hash, now, totalOrders));
+        _name = keccak256(abi.encodePacked(_hash, totalOrders));
     }
 
 
@@ -133,7 +133,7 @@ contract SingleLegExchange is ISingleLegExchange {
         if (fo.isFeeImmune(optionsAddress, msg.sender)) return;
         uint fee = fo.exchangeFlatEtherFee();
         require(msg.value >= fee);
-        msg.sender.transfer(msg.value-fee);
+        payable(msg.sender).transfer(msg.value-fee);
         payable(fo.feldmexTokenAddress()).transfer(fee);
     }
 
@@ -614,7 +614,7 @@ contract SingleLegExchange is ISingleLegExchange {
         optionsContract.setParams(_debtor,_holder,_maturity);
         optionsContract.setPaymentParams(_debtorPays, int(_price) );
         optionsContract.setTrustedAddressMainExchange();
-        optionsContract.setLimits(int( _amount - _price), int(_price) );
+        optionsContract.setLimits(int( _amount) - int(_price), int(_price) );
 
         (success,) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
         if (!success) return (false, 0);
@@ -627,7 +627,7 @@ contract SingleLegExchange is ISingleLegExchange {
         }
         else {
             transferAmt = optionsContract.transferAmountDebtor();
-            underlyingAssetDeposits[_debtor] += _amount - _price - uint(transferAmt);
+            underlyingAssetDeposits[_debtor] += uint(int(_amount) - int(_price) - transferAmt);
             /*
                 We do not need to worry about holder here because that was all handled in the options handler contract
             */
@@ -701,7 +701,7 @@ contract SingleLegExchange is ISingleLegExchange {
         }
         else {
             transferAmt = optionsContract.transferAmountDebtor();
-            strikeAssetDeposits[_d] += debtorReq - uint(transferAmt);
+            strikeAssetDeposits[_d] += uint(int(debtorReq) - transferAmt);
             /*
                 We do not need to worry about holder here because that was all handled in the options handler contract
             */

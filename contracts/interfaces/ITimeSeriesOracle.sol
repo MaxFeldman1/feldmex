@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 
 interface ITimeSeriesOracle {
 	function latestSpot() external view returns (uint spot);

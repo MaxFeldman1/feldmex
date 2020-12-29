@@ -1,16 +1,6 @@
 pragma solidity >=0.4.21 <0.9.0;
 
-interface IERC20 {
-    event Transfer(
-        address indexed _from,
-        address indexed _to,
-        uint256 _value
-    );
-    event Approval(
-        address indexed _owner,
-        address indexed _spender,
-        uint256 _value
-    );
+interface IERC20NoEvents {
     function totalSupply() external view returns (uint supply);
     function balanceOf(address _owner) external view returns (uint balance);
     function transfer(address _to, uint _value) external returns (bool success);

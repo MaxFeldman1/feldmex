@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../interfaces/Ownable.sol";
 import "../interfaces/IERC20.sol";
 
@@ -43,11 +43,10 @@ contract StakingRewards is Ownable {
 	);
 
 	constructor(
-			address _stakeAsset,
-			uint _stakeDuration,
-			uint _breakPeriod
-		) public {
-
+		address _stakeAsset,
+		uint _stakeDuration,
+		uint _breakPeriod
+	) {
 		stakeAsset = IERC20(_stakeAsset);
 		stakeDuration = _stakeDuration;
 		breakPeriod = _breakPeriod;

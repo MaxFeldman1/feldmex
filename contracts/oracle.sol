@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "./interfaces/IERC20.sol";
 import "./interfaces/ITimeSeriesOracle.sol";
 
@@ -28,7 +28,7 @@ contract oracle is ITimeSeriesOracle {
 
     address public override strikeAssetAddress;
 
-    constructor(address _underlyingAssetAddress, address _strikeAssetAddress) public {
+    constructor(address _underlyingAssetAddress, address _strikeAssetAddress) {
         underlyingAssetAddress = _underlyingAssetAddress;
         strikeAssetAddress = _strikeAssetAddress;
         underlyingAssetSubUnits = 10 ** uint(IERC20(_underlyingAssetAddress).decimals());
@@ -45,7 +45,7 @@ contract oracle is ITimeSeriesOracle {
         heightToSpot[block.number] = _spot;
     }
     
-    function tsToIndex(uint _time) public view override returns (uint) {
+    function tsToIndex(uint _time) public view override returns (uint index) {
         uint size = heights.length;
         if (_time >= timestamps[heights[size-1]]) return size-1;
         if (_time < timestamps[heights[0]] || size < 3) return 0;
@@ -78,7 +78,7 @@ contract oracle is ITimeSeriesOracle {
 
     }
 
-    function heightToIndex(uint _height) public view override returns (uint) {
+    function heightToIndex(uint _height) public view override returns (uint result) {
         uint size = heights.length;
         if (_height >= heights[size-1]) return size-1;
         if (_height <= heights[0] || size == 3) return 0;

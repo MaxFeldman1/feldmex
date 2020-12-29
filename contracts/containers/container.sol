@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "../oracle.sol";
 import "../interfaces/IOptionsHandler.sol";
 import "../interfaces/ISingleLegExchange.sol";
@@ -27,7 +27,7 @@ contract container is doubleAssetYieldEnabledToken {
 	/*
 		@Description: Assigns inital values and credits the owner of this contract with all coins
 	*/
-	constructor (address _asset1Address, address _asset2Address, address _oHelperAddress, address _eHelperAddress, address _orcHelperAddress) public doubleAssetYieldEnabledToken(_asset1Address, _asset2Address) {
+	constructor (address _asset1Address, address _asset2Address, address _oHelperAddress, address _eHelperAddress, address _orcHelperAddress) doubleAssetYieldEnabledToken(_asset1Address, _asset2Address) {
 		address _oracleAddress = orcHelper(_orcHelperAddress).oracleAddresses(_asset1Address, _asset2Address);
 		if (_oracleAddress == address(0)) {
 			(bool success, ) = _orcHelperAddress.call(abi.encodeWithSignature("deploy(address,address)", _asset1Address, _asset2Address));

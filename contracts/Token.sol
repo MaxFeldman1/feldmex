@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 
 contract Token {
     uint8 public decimals = 6;
@@ -21,7 +21,7 @@ contract Token {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    constructor (uint256 _initialSupply) public {
+    constructor (uint256 _initialSupply) {
         if (_initialSupply == 0)
             _initialSupply = 21000000;
         balanceOf[msg.sender] = _initialSupply * satUnits;

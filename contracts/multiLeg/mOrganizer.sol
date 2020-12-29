@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 
 import "../interfaces/IOptionsHandler.sol";
 import "../helpers/mLeg/mCallHelper.sol";
@@ -13,7 +13,7 @@ contract mOrganizer {
 	address public mCallHelperAddress;
 	address public mPutHelperAddress;
 	address public mLegHelperAddress;
-	constructor (address _mCallHelperAddress, address _mPutHelperAddress, address _mLegHelperAddress) public {
+	constructor (address _mCallHelperAddress, address _mPutHelperAddress, address _mLegHelperAddress) {
 		mCallHelperAddress = _mCallHelperAddress;
 		mPutHelperAddress = _mPutHelperAddress;
 		mLegHelperAddress = _mLegHelperAddress;

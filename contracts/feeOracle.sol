@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0;
+pragma solidity >=0.8.0;
 import "./interfaces/Ownable.sol";
 
 contract feeOracle is Ownable {
@@ -21,7 +21,7 @@ contract feeOracle is Ownable {
     /*
         Description: setup
     */
-    constructor (address _feldmexTokenAddress) public {
+    constructor (address _feldmexTokenAddress) {
         feldmexTokenAddress = _feldmexTokenAddress;
     }
 
