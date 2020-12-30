@@ -24,7 +24,7 @@ interface IMultiLegExchange {
     function strikeAssetReserves() external view returns (uint);
     function addLegHash(uint[] calldata _callStrikes, int[] calldata _callAmounts, uint[] calldata _putStrikes, int[] calldata _putAmounts) external;
     function depositFunds(address _to) external returns (bool success);
-    function withdrawAllFunds(bool _token) external returns (bool success);
+    function withdrawAllFunds(bool _token) external;
     function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) external payable;
     function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) external payable;
     function cancelOrder(bytes32 _name) external;

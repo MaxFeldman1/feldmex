@@ -12,6 +12,7 @@ const mLegDelegate = artifacts.require("mLegDelegate");
 const feeOracle = artifacts.require("feeOracle");
 const feldmexToken = artifacts.require("FeldmexToken");
 const StakingRewards = artifacts.require("StakingRewards");
+const singleLegDelegate = artifacts.require("SingleLegDelegate");
 
 const BN = web3.utils.BN;
 const defaultBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -56,10 +57,12 @@ contract('exchange', async function(accounts) {
 		mLegHelperInstance = await mLegHelper.new(mLegDelegateInstance.address, feeOracleInstance.address);
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);
 		assignOptionsDelegateInstance = await assignOptionsDelegate.new();
+		singleLegDelegateInstance = await singleLegDelegate.new();
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		optionsInstance = await options.new(oracleInstance.address, tokenInstance.address, strikeAssetInstance.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
-		exchangeInstance = await exchange.new(tokenInstance.address, strikeAssetInstance.address, optionsInstance.address, feeOracleInstance.address);
+		exchangeInstance = await exchange.new(tokenInstance.address, strikeAssetInstance.address,
+			optionsInstance.address, feeOracleInstance.address, singleLegDelegateInstance.address);
 		await optionsInstance.setExchangeAddress(exchangeInstance.address);
 
 		underlyingAssetSubUnitsBN = (new BN("10")).pow(await tokenInstance.decimals());

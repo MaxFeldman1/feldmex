@@ -120,11 +120,11 @@ contract MultiPutExchange is IMultiPutExchange {
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function withdrawAllFunds() public override returns(bool success){
+    function withdrawAllFunds() public override {
         uint val = strikeAssetDeposits[msg.sender];
         IERC20 sa = IERC20(strikeAssetAddress);
         strikeAssetDeposits[msg.sender] = 0;
-        success = sa.transfer(msg.sender, val);
+        sa.transfer(msg.sender, val);
         strikeAssetReserves -= val;
     }
     

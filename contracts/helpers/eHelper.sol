@@ -10,14 +10,16 @@ contract eHelper {
 	mapping(address => address[2]) public exchangeAddress;
 
 	address feeOracleAddress;
+	address delegateAddress;
 
-	constructor (address _feeOracleAddress) {
+	constructor (address _feeOracleAddress, address _delegateAddress) {
 		feeOracleAddress = _feeOracleAddress;
+		delegateAddress = _delegateAddress;
 	}
 
 	function deploy(address _underlyingAssetAddress, address _strikeAssetAddress, address _optionsAddress) public {
 		uint8 index = exchangeAddress[msg.sender][0] == address(0) ? 0 : 1;
-		exchangeAddress[msg.sender][index] = address(new SingleLegExchange(_underlyingAssetAddress, _strikeAssetAddress, _optionsAddress, feeOracleAddress));
+		exchangeAddress[msg.sender][index] = address(new SingleLegExchange(_underlyingAssetAddress, _strikeAssetAddress, _optionsAddress, feeOracleAddress, delegateAddress));
 	}
 
 }

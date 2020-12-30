@@ -1,10 +1,76 @@
 pragma solidity >=0.8.0;
 import "./mLegData.sol";
-import "../../interfaces/IOptionsHandler.sol";
 import "../../feeOracle.sol";
+import "../../interfaces/IERC20.sol";
+import "../../interfaces/IOptionsHandler.sol";
 
 contract mLegDelegate is mLegData {
 
+
+    function addLegHash(
+        uint[] memory _callStrikes,
+        int[] memory _callAmounts,
+        uint[] memory _putStrikes,
+        int[] memory _putAmounts
+        ) external {
+        //make sure that this is a multi leg order
+        require(_callAmounts.length > 0 && _putAmounts.length > 0);
+        require(_callAmounts.length==_callStrikes.length&&_putAmounts.length==_putStrikes.length);
+        bytes32 hash = keccak256(abi.encodePacked(_callStrikes, _callAmounts, _putStrikes, _putAmounts));
+        IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
+        uint prevStrike;
+        int _subUnits = int(underlyingAssetSubUnits);  //gas savings
+        //load position
+        optionsContract.clearPositions();
+        for (uint i = 0; i < _callAmounts.length; i++){
+            require(prevStrike < _callStrikes[i] && _callAmounts[i] != 0);
+            prevStrike = _callStrikes[i];
+            optionsContract.addPosition(_callStrikes[i], _subUnits*_callAmounts[i], true);
+        }
+        (uint maxUnderlyingAssetDebtor, uint maxUnderlyingAssetHolder) = optionsContract.transferAmount(true);
+        require(int(maxUnderlyingAssetHolder) > -1);
+        require(int(maxUnderlyingAssetDebtor) > -1);
+        prevStrike = 0;
+        _subUnits = int(strikeAssetSubUnits);    //gas savings
+        optionsContract.clearPositions();
+        for (uint i = 0; i < _putAmounts.length; i++){
+            require(prevStrike < _putStrikes[i] && _putAmounts[i] != 0);
+            prevStrike = _putStrikes[i];
+            optionsContract.addPosition(_putStrikes[i], _subUnits*_putAmounts[i], false);
+        }
+        (uint maxStrikeAssetDebtor, uint maxStrikeAssetHolder) = optionsContract.transferAmount(false);
+        require(int(maxStrikeAssetHolder) > -1);
+        require(int(maxStrikeAssetDebtor) > -1);
+        position memory pos = position(
+            _callAmounts,
+            _callStrikes,
+            _putAmounts,
+            _putStrikes,
+            int(maxUnderlyingAssetDebtor),
+            int(maxUnderlyingAssetHolder),
+            int(maxStrikeAssetDebtor),
+            int(maxStrikeAssetHolder)
+        );
+        internalPositions[hash] = pos;
+        emit legsHashCreated(hash);
+    }
+
+    function withdrawAllFunds(bool _token) public {
+        if (_token){
+            uint val = internalUnderlyingAssetDeposits[msg.sender];
+            IERC20 ua = IERC20(underlyingAssetAddress);
+            internalUnderlyingAssetDeposits[msg.sender] = 0;
+            ua.transfer(msg.sender, val);
+            internalUnderlyingAssetReserves -= val;
+        }
+        else {
+            uint val = internalStrikeAssetDeposits[msg.sender];
+            IERC20 sa = IERC20(strikeAssetAddress);
+            internalStrikeAssetDeposits[msg.sender] = 0;
+            sa.transfer(msg.sender, val);
+            internalStrikeAssetReserves -= val;
+        }
+    }
 
     function payFee() public payable {
         feeOracle fo = feeOracle(feeOracleAddress);

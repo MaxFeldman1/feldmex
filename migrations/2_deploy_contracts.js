@@ -1,8 +1,6 @@
 const oracle = artifacts.require("oracle");
 const token = artifacts.require("Token");
 const assignOptionsDelegate = artifacts.require("assignOptionsDelegate");
-const options = artifacts.require("options");
-const exchange = artifacts.require("exchange");
 const container = artifacts.require("container");
 const containerDeveloper = artifacts.require("containerDeveloper");
 const oHelper = artifacts.require("oHelper");
@@ -18,6 +16,7 @@ const feldmexERC20Helper = artifacts.require("FeldmexERC20Helper");
 const feeOracle = artifacts.require("feeOracle");
 const stakingRewards = artifacts.require("StakingRewards");
 const feldmexToken = artifacts.require("FeldmexToken");
+const singleLegDelegate = artifacts.require("SingleLegDelegate");
 
 module.exports = async function(deployer) {
   underlyingAssetAddress  = await deployer.deploy(token, 0);
@@ -38,7 +37,8 @@ module.exports = async function(deployer) {
   assignOptionsDelegateAddress = assignOptionsDelegateInstance.address;
   oHelperInstance = await deployer.deploy(oHelper, feldmexERC20HelperAddress, mOrganizerAddress, assignOptionsDelegateAddress, feeOracleAddress);
   oHelperAddress = oHelperInstance.address;
-  eHelperInstance = await deployer.deploy(eHelper, feeOracleAddress);
+  singleLegDelegateInstance = await deployer.deploy(singleLegDelegate);
+  eHelperInstance = await deployer.deploy(eHelper, feeOracleAddress, singleLegDelegateInstance.address);
   eHelperAddress = eHelperInstance.address;
   cHelperInstance = await deployer.deploy(cHelper);
   cHelperAddress = cHelperInstance.address;

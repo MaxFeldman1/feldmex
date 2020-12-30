@@ -63,7 +63,7 @@ interface IMultiCallExchange {
     function positionInfo(bytes32 _legsHash) external view returns (int[] memory callAmounts, uint[] memory callStrikes);
     function addLegHash(uint[] calldata _callStrikes, int[] calldata _callAmounts) external;
     function depositFunds(address _to) external returns (bool success);
-    function withdrawAllFunds() external returns (bool success);
+    function withdrawAllFunds() external;
     function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) external payable;
     function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) external payable;
     function cancelOrder(bytes32 _name) external;

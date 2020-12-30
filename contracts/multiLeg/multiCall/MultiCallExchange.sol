@@ -122,11 +122,11 @@ contract MultiCallExchange is IMultiCallExchange {
 
         @return bool success: if an error occurs returns false if no error return true
     */
-    function withdrawAllFunds() public override returns(bool success){
+    function withdrawAllFunds() public override {
         uint val = underlyingAssetDeposits[msg.sender];
         IERC20 ua = IERC20(underlyingAssetAddress);
         underlyingAssetDeposits[msg.sender] = 0;
-        success = ua.transfer(msg.sender, val);
+        ua.transfer(msg.sender, val);
         underlyingAssetReserves -= val;
     }
     
