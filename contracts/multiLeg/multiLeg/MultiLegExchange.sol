@@ -318,16 +318,6 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
         payFee();
     }
 
-    /*
-        @Description: removes the order with name identifier _name, prevents said order from being filled or taken
-
-        @param bytes32: the identifier of the node which stores the order to cancel, offerToCancel == internalOffers[internalLinkedNodes[_name].hash]
-    */
-    function cancelOrderInternal(bytes32 _name) internal {
-        (bool success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("cancelOrderInternal(bytes32)",_name));
-        assert(success);
-    }
-    
 
     /*
         @Description: cancel order of specific identifier
@@ -336,7 +326,8 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
     */
     function cancelOrder(bytes32 _name) public override {
         require(msg.sender == internalOffers[internalLinkedNodes[_name].hash].offerer);
-        cancelOrderInternal(_name);
+        (bool success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("cancelOrderInternal(bytes32)",_name));
+        assert(success);
     }
 
     /*

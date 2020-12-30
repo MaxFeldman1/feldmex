@@ -1,6 +1,6 @@
 var token = artifacts.require("Token");
 
-contract('UnderlyingAsset', function(accounts) {
+contract('Token', function(accounts) {
 	var btcs = 21000000;
 
 	it('before each', async() => {
