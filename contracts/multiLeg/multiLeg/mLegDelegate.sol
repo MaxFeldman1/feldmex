@@ -7,6 +7,18 @@ import "../../interfaces/IOptionsHandler.sol";
 contract mLegDelegate is mLegData {
 
 
+    function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
+        position memory pos = internalPositions[_legsHash];
+        IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
+        for (uint i = 0; i < pos.callStrikes.length; i++){
+            if (!optionsContract.contains(msg.sender, _maturity, pos.callStrikes[i])) return false;
+        }
+        for (uint i = 0; i < pos.putStrikes.length; i++){
+            if (!optionsContract.contains(msg.sender, _maturity, pos.putStrikes[i])) return false;
+        }
+        contains = true;
+    }
+
     function addLegHash(
         uint[] memory _callStrikes,
         int[] memory _callAmounts,
@@ -139,11 +151,12 @@ contract mLegDelegate is mLegData {
     /*
         @Description: handles logistics of the seller accepting a buy order with identifier _name
 
+        @param address _seller: the seller that is taking the buy offer
+        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == internalOffers[internalLinkedNodes[_name].hash]
+
         @return bool success: if an error occurs returns false if no error return true
     */
-    function takeBuyOffer() public {
-    	address _seller = taker;	//gas savings
-    	bytes32 _name = name;	//gas savings
+    function takeBuyOffer(address _seller, bytes32 _name) public returns (bool success) {
         linkedNode memory node = internalLinkedNodes[_name];
         Offer memory offer = internalOffers[node.hash];
         require(offer.index%2 == 0);
@@ -157,11 +170,11 @@ contract mLegDelegate is mLegData {
             */
             //name = _name;
             cancelOrderInternal(_name);
-            return;
+            return true;
         }
         else {
-            bool success = mintPositionInternal(_seller, offer.offerer, offer.maturity, offer.legsHash, offer.amount, offer.price, offer.index);
-            assert(success);
+            success = mintPosition(_seller, offer.offerer, offer.maturity, offer.legsHash, offer.amount, offer.price, offer.index);
+            require(success);
         }
         //repair linked list
         if (node.next != 0 && node.previous != 0){
@@ -190,11 +203,12 @@ contract mLegDelegate is mLegData {
     /*
         @Description: handles logistics of the buyer accepting a sell order with the identifier _name
 
+        @param address _buyer: the buyer that is taking the sell offer
+        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == internalOffers[internalLinkedNodes[_name].hash]
+
         @return bool success: if an error occurs returns false if no error return true
     */
-    function takeSellOffer() public {
-    	address _buyer = taker;	//gas savings
-    	bytes32 _name = name;	//gas savings
+    function takeSellOffer(address _buyer, bytes32 _name) public returns (bool success) {
         linkedNode memory node = internalLinkedNodes[_name];
         Offer memory offer = internalOffers[node.hash];
         require(offer.index%2==1);
@@ -208,11 +222,11 @@ contract mLegDelegate is mLegData {
             */
             //name = _name;
             cancelOrderInternal(_name);
-            return;
+            return true;
         }
         else {
-            bool success = mintPositionInternal(offer.offerer, _buyer, offer.maturity, offer.legsHash, offer.amount, offer.price, offer.index);
-            assert(success);
+            success = mintPosition(offer.offerer, _buyer, offer.maturity, offer.legsHash, offer.amount, offer.price, offer.index);
+            require(success);
         }
         //repair linked list
         if (node.next != 0 && node.previous != 0){
@@ -238,13 +252,116 @@ contract mLegDelegate is mLegData {
         delete internalOffers[node.hash];
     }
 
-    /*
-        @Description: method by which proxy contract may delegatecall this delegate contract to mint position using globals as params
-    */
-    function mintPosition() public {
-    	bool success = mintPositionInternal(debtor,holder,maturity,legsHash,amount,price,index);
-    	assert(success);
+
+    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) external {
+        require(_legsHash != 0);
+        require(containsStrikes(_maturity, _legsHash));
+        //ensure all strikes are contained
+        uint8 index = (_payInUnderlying? 0: 2);
+        linkedNode memory node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][index]];
+        Offer memory offer = internalOffers[node.hash];
+        require(node.name != 0);
+        //in each iteration we call options.mintCall/Put once
+        while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice && _maxIterations != 0){
+            if (offer.amount > _amount){
+                if (msg.sender == offer.offerer) {
+                    /*
+                        state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
+                        therefore we do not need to call mintPosition
+                    */
+                    position memory pos = internalPositions[offer.legsHash];
+                    if (offer.index == 0){
+                        uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + offer.price));
+                        if (int(req) > 0)
+                            internalUnderlyingAssetDeposits[msg.sender] += req / underlyingAssetSubUnits;
+                        internalStrikeAssetDeposits[msg.sender] += _amount * uint(pos.maxStrikeAssetHolder) / strikeAssetSubUnits;
+                    } else {
+                        internalUnderlyingAssetDeposits[msg.sender] += _amount * uint(pos.maxUnderlyingAssetHolder) / underlyingAssetSubUnits;
+                        uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + offer.price));
+                        if (int(req) > 0)
+                            internalStrikeAssetDeposits[msg.sender] += req / strikeAssetSubUnits;
+                    }
+                }
+                else {
+                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
+                    if (!success) {
+                        unfilled = _amount;
+                        return;
+                    }
+                }
+                internalOffers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                unfilled = 0;
+                return;
+            }
+            if (!takeBuyOffer(msg.sender, node.name)) {
+                unfilled = _amount;
+                return;
+            }
+            _amount-=offer.amount;
+            //find the next offer
+            node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][index]];
+            offer = internalOffers[node.hash];
+            _maxIterations--;
+        }
+        unfilled = _amount;
     }
+
+
+    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) external {
+        require(_legsHash != 0);
+        require(containsStrikes(_maturity, _legsHash));
+        //ensure all strikes are contained
+        uint8 index = (_payInUnderlying ? 1 : 3);
+        linkedNode memory node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][index]];
+        Offer memory offer = internalOffers[node.hash];
+        require(node.name != 0);
+        //in each iteration we call options.mintCall/Put once
+        while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice && _maxIterations != 0){
+            if (offer.amount > _amount){
+                if (offer.offerer == msg.sender){
+                    /*
+                        state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
+                        therefore we do not need to call mintPosition
+                    */
+                    position memory pos = internalPositions[offer.legsHash];
+                    if (offer.index == 1){
+                        uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
+                        if (int(req) > 0)
+                            internalUnderlyingAssetDeposits[msg.sender] += req / underlyingAssetSubUnits;
+                        internalStrikeAssetDeposits[msg.sender] += _amount * uint(pos.maxStrikeAssetDebtor) / strikeAssetSubUnits;
+                    } else {
+                        internalUnderlyingAssetDeposits[msg.sender] += _amount * uint(pos.maxUnderlyingAssetDebtor) / underlyingAssetSubUnits;
+                        uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - offer.price));
+                        if (int(req) > 0)
+                        internalStrikeAssetDeposits[msg.sender] += req / strikeAssetSubUnits;
+                    }
+                }
+                else {
+                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
+                    if (!success) {
+                        unfilled = _amount;
+                        return;
+                    }
+                }
+                internalOffers[node.hash].amount -= _amount;
+                emit offerAccepted(node.name, _amount);
+                unfilled = 0;
+                return;
+            }
+            if (!takeSellOffer(msg.sender, node.name)) {
+                unfilled = _amount;
+                return;
+            }
+            _amount-=offer.amount;
+            //find the next offer
+            node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][index]];
+            offer = internalOffers[node.hash];
+            _maxIterations--;
+        }
+        unfilled = _amount;
+    }
+
 
     /*
         @Description: mint a specific position between two users
@@ -257,7 +374,7 @@ contract mLegDelegate is mLegData {
         @param int _price: the premium paid by the holder to the debtor
         @param uint8 _index: the index of the offer for which this function is called
     */
-    function mintPositionInternal(address _debtor, address _holder, uint _maturity, bytes32 _legsHash, uint _amount, int _price, uint8 _index) internal returns(bool success){
+    function mintPosition(address _debtor, address _holder, uint _maturity, bytes32 _legsHash, uint _amount, int _price, uint8 _index) internal returns(bool success){
         /*
             debtor pays is true if debtor is making the market order and thus debtor must provide the necessary collateral
                 whereas the holder has already provided the necessary collateral

@@ -331,36 +331,6 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
     }
 
     /*
-        @Description: handles logistics of the seller accepting a buy order with identifier _name
-
-        @param address _seller: the seller that is taking the buy offer
-        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == internalOffers[internalLinkedNodes[_name].hash]
-
-        @return bool success: if an error occurs returns false if no error return true
-    */
-    function takeBuyOffer(address _seller, bytes32 _name) internal returns (bool success){
-        taker = _seller;
-        name = _name;
-        (success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("takeBuyOffer()"));
-        assert(success);
-    }
-
-    /*
-        @Description: handles logistics of the buyer accepting a sell order with the identifier _name
-
-        @param address _buyer: the buyer that is taking the sell offer
-        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == internalOffers[internalLinkedNodes[_name].hash]
-
-        @return bool success: if an error occurs returns false if no error return true
-    */
-    function takeSellOffer(address _buyer, bytes32 _name) internal returns (bool success){
-        taker = _buyer;
-        name = _name;
-        (success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("takeSellOffer()"));
-        assert(success);
-    }
-
-    /*
         @Description: Caller of the function takes the best buy internalOffers of either calls or puts, when offer is taken the contract in options.sol is called to mint the calls or puts
             After an offer is taken it is removed so that it may not be taken again
 
@@ -371,54 +341,12 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
         @param uint8 _maxInterations: the maximum amount of calls to mintPosition
         @param bool _payInUnderlying: if true premium is paid in underlying asset if false premium is paid in strike asset
 
-        @return uint unfilled: total amount of options requested in _amount parameter that were not minted
+        @return uint _unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) public override returns (uint unfilled){
-        require(_legsHash != 0);
-        require(containsStrikes(_maturity, _legsHash));
-        //ensure all strikes are contained
-        uint8 index = (_payInUnderlying? 0: 2);
-        linkedNode memory node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][index]];
-        Offer memory offer = internalOffers[node.hash];
-        require(node.name != 0);
-        //in each iteration we call options.mintCall/Put once
-        while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice && _maxIterations != 0){
-            if (offer.amount > _amount){
-                if (msg.sender == offer.offerer) {
-                    /*
-                        state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                        therefore we do not need to call mintPosition
-                    */
-                    position memory pos = internalPositions[offer.legsHash];
-                    if (offer.index == 0){
-                        uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + offer.price));
-                        if (int(req) > 0)
-                            internalUnderlyingAssetDeposits[msg.sender] += req / underlyingAssetSubUnits;
-                        internalStrikeAssetDeposits[msg.sender] += _amount * uint(pos.maxStrikeAssetHolder) / strikeAssetSubUnits;
-                    } else {
-                        internalUnderlyingAssetDeposits[msg.sender] += _amount * uint(pos.maxUnderlyingAssetHolder) / underlyingAssetSubUnits;
-                        uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + offer.price));
-                        if (int(req) > 0)
-                            internalStrikeAssetDeposits[msg.sender] += req / strikeAssetSubUnits;
-                    }
-                }
-                else {
-                    bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
-                    if (!success) return _amount;
-
-                }
-                internalOffers[node.hash].amount -= _amount;
-                emit offerAccepted(node.name, _amount);
-                return 0;
-            }
-            if (!takeBuyOffer(msg.sender, node.name)) return _amount;
-            _amount-=offer.amount;
-            //find the next offer
-            node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][index]];
-            offer = internalOffers[node.hash];
-            _maxIterations--;
-        }
-        unfilled = _amount;
+    function marketSell(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) public override returns (uint _unfilled) {
+        (bool success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("marketSell(uint256,bytes32,int256,uint256,uint8,bool)",_maturity,_legsHash,_limitPrice,_amount,_maxIterations,_payInUnderlying));
+        require(success);
+        _unfilled = unfilled;
     }
 
     /*
@@ -432,75 +360,12 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
         @param uint8 _maxInterations: the maximum amount of calls to mintPosition
         @param bool _payInUnderlying: if true premium is paid in underlying asset if false premium is paid in strike asset
 
-        @return uint unfilled: total amount of options requested in _amount parameter that were not minted
+        @return uint _unfilled: total amount of options requested in _amount parameter that were not minted
     */
-    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) public override returns (uint unfilled){
-        require(_legsHash != 0);
-        require(containsStrikes(_maturity, _legsHash));
-        //ensure all strikes are contained
-        uint8 index = (_payInUnderlying ? 1 : 3);
-        linkedNode memory node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][index]];
-        Offer memory offer = internalOffers[node.hash];
-        require(node.name != 0);
-        //in each iteration we call options.mintCall/Put once
-        while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice && _maxIterations != 0){
-            if (offer.amount > _amount){
-                if (offer.offerer == msg.sender){
-                    /*
-                        state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                        therefore we do not need to call mintPosition
-                    */
-                    position memory pos = internalPositions[offer.legsHash];
-                    if (offer.index == 1){
-                        uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
-                        if (int(req) > 0)
-                            internalUnderlyingAssetDeposits[msg.sender] += req / underlyingAssetSubUnits;
-                        internalStrikeAssetDeposits[msg.sender] += _amount * uint(pos.maxStrikeAssetDebtor) / strikeAssetSubUnits;
-                    } else {
-                        internalUnderlyingAssetDeposits[msg.sender] += _amount * uint(pos.maxUnderlyingAssetDebtor) / underlyingAssetSubUnits;
-                        uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - offer.price));
-                        if (int(req) > 0)
-                        internalStrikeAssetDeposits[msg.sender] += req / strikeAssetSubUnits;
-                    }
-                }
-                else {
-                    bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
-                    if (!success) return _amount;
-                }
-                internalOffers[node.hash].amount -= _amount;
-                emit offerAccepted(node.name, _amount);
-                return 0;
-            }
-            if (!takeSellOffer(msg.sender, node.name)) return _amount;
-            _amount-=offer.amount;
-            //find the next offer
-            node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][index]];
-            offer = internalOffers[node.hash];
-            _maxIterations--;
-        }
-        unfilled = _amount;
-    }
-
-    /*
-        @Description: mint a specific position between two users
-
-        @param address _ debtor: the address selling the position
-        @param address _holder: the address buying the position
-        @param uint _maturity: the maturity of the position to mint
-        @param bytes32 _legsHash: the identifier to find the position in internalPositions[]
-        @param uint _amount: the amount of times to mint the position
-        @param int _price: the premium paid by the holder to the debtor
-        @param uint8 _index: the index of the offer for which this function is called
-    */
-    function mintPosition(address _debtor, address _holder, uint _maturity, bytes32 _legsHash, uint _amount, int _price, uint8 _index) internal returns(bool success){
-        debtor = _debtor;
-        holder = _holder;
-        maturity = _maturity;
-        legsHash = _legsHash;
-        amount = _amount;
-        price = _price;
-        index = _index;
-        (success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("mintPosition()"));
+    function marketBuy(uint _maturity, bytes32 _legsHash, int _limitPrice, uint _amount, uint8 _maxIterations, bool _payInUnderlying) public override returns (uint _unfilled) {
+        (bool success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("marketBuy(uint256,bytes32,int256,uint256,uint8,bool)",_maturity,_legsHash,_limitPrice,_amount,_maxIterations,_payInUnderlying));
+        require(success);
+        _unfilled = unfilled;
     }
 
     //---------------------------------view functions------------------------------------------------

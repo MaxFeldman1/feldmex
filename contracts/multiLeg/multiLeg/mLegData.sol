@@ -110,16 +110,7 @@ contract mLegData {
     address delegateAddress;
 
 
-    address taker;
-    bytes32 name;
-
-    address debtor;
-    address holder;
-    uint maturity;
-    bytes32 legsHash;
-    uint amount;
-    int price;
-    uint8 index;
+    uint unfilled;
 
     address feeOracleAddress;
 }
