@@ -1,6 +1,7 @@
 const oracle = artifacts.require("oracle");
 const token = artifacts.require("Token");
 const options = artifacts.require("OptionsHandler");
+const multiCallDelegate = artifacts.require("MultiCallDelegate");
 const multiCallExchange = artifacts.require("MultiCallExchange");
 const mCallHelper = artifacts.require("mCallHelper");
 const mOrganizer = artifacts.require("mOrganizer");
@@ -32,7 +33,8 @@ contract('multi call exchange', function(accounts){
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		feldmexTokenInstance = await feldmexToken.new();
 		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
-		mCallHelperInstance = await mCallHelper.new(feeOracleInstance.address);
+		multiCallDelegateInstance = await multiCallDelegate.new();
+		mCallHelperInstance = await mCallHelper.new(feeOracleInstance.address, multiCallDelegateInstance.address);
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, /*this param does not matter so we will just add the default address*/accounts[0], accounts[0]);
 		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);

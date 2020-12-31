@@ -326,7 +326,7 @@ contract MultiLegExchange is mLegData, IMultiLegExchange {
     */
     function cancelOrder(bytes32 _name) public override {
         require(msg.sender == internalOffers[internalLinkedNodes[_name].hash].offerer);
-        (bool success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("cancelOrderInternal(bytes32)",_name));
+        (bool success, ) = delegateAddress.delegatecall(abi.encodeWithSignature("cancelOrder(bytes32)",_name));
         assert(success);
     }
 

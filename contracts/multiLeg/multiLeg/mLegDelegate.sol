@@ -94,7 +94,7 @@ contract mLegDelegate is mLegData {
     }
 
 
-    function cancelOrderInternal(bytes32 _name) public {
+    function cancelOrderInternal(bytes32 _name) internal {
     	//bytes32 _name = name;
         linkedNode memory node = internalLinkedNodes[_name];
         Offer memory offer = internalOffers[node.hash];
@@ -147,7 +147,16 @@ contract mLegDelegate is mLegData {
         }
 
     }
-    
+
+
+    function cancelOrder(bytes32 _name) external {
+        /*
+            ensure sender is order maker in proxy contract
+        */
+        cancelOrderInternal(_name);
+    }
+
+
     /*
         @Description: handles logistics of the seller accepting a buy order with identifier _name
 

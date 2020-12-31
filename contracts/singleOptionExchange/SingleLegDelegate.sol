@@ -155,56 +155,7 @@ contract SingleLegDelegate is SingleLegData {
         delete _offers[node.hash];
     }
 
-/*    function takeSellOffer(address _buyer, bytes32 _name) public {
-        linkedNode memory node = _linkedNodes[_name];
-        Offer memory offer = _offers[node.hash];
-        require(offer.index%2==1);
 
-        //now we make the trade happen
-        //mint the option and distribute unused collateral
-        if (offer.offerer == _buyer){
-            /*
-                state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
-                therefore we do not need to call options.mintCall/Put
-            *//*
-            if (offer.index < 2) {
-                uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
-                _underlyingAssetDeposits[_buyer] += (offer.amount * (_underlyingAssetSubUnits - offer.price)) / _underlyingAssetSubUnits;
-            }
-            else _strikeAssetDeposits[_buyer] += (offer.amount * (offer.strike - offer.price))/strikeAssetSubUnits;
-        }
-        else if (offer.index < 2){
-            (bool success, ) = mintCall(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.price, false);
-            require(success);
-        }
-        else {
-            (bool success, ) = mintPut(offer.offerer, _buyer, offer.maturity, offer.strike, offer.amount, offer.price, false);
-            require(success);
-        }
-        //repair linked list
-        if (node.next != 0 && node.previous != 0){
-            _linkedNodes[node.next].previous = node.previous;
-            _linkedNodes[node.previous].next = node.next;
-        }
-        //this is the only offer for the maturity and strike
-        else if (node.next == 0 && node.next == 0){
-            delete _listHeads[offer.maturity][offer.strike][offer.index];
-        }
-        //last node
-        else if (node.next == 0){
-            _linkedNodes[node.previous].next = 0;
-        }
-        //head node
-        else{
-            _linkedNodes[node.next].previous = 0;
-            _listHeads[offer.maturity][offer.strike][offer.index] = node.next;
-        }
-        emit offerAccepted(_name, offer.amount);
-        //clean storage
-        delete _linkedNodes[_name];
-        delete _offers[node.hash];
-    }
-    */
 
     function marketSell(uint _maturity, uint _strike, uint _limitPrice, uint _amount, uint8 _maxIterations, bool _call) external {
         require(_strike != 0);
