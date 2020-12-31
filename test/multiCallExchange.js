@@ -77,20 +77,6 @@ contract('multi call exchange', function(accounts){
 		assert.equal(rec.logs[0].event, "legsHashCreated", "correct event emmited");
 		legsHash = rec.logs[0].args.legsHash;
 		position = await multiCallExchangeInstance.positions(legsHash);
-		positionInfo = await multiCallExchangeInstance.positionInfo(legsHash);
-		// convert position and positionInfo member vars to number
-		var keys = Object.getOwnPropertyNames(position);
-		for (var i = 0; i < keys.length; i++) {
-			var key = keys[i];
-			position[key] = position[key].toNumber();
-		}
-		keys = Object.getOwnPropertyNames(positionInfo);
-		for (var i = 0; i < keys.length; i++){
-			var key = keys[i];
-			for (var j = 0; j < positionInfo[key].length; j++)
-				positionInfo[key][j] = positionInfo[key][j].toNumber();
-			position[key] = positionInfo[key];
-		}
 		//check value of arrays
 		assert.equal(position.callStrikes+'', callStrikes+'', "correct call strikes in position info");
 		assert.equal(position.callAmounts+'', callAmounts+'', "correct call amounts in position info")

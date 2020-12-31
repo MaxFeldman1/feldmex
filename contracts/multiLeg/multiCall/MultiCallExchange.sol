@@ -3,53 +3,16 @@ import "../../interfaces/IERC20.sol";
 import "../../interfaces/IOptionsHandler.sol";
 import "../../interfaces/IMultiCallExchange.sol";
 import "../../feeOracle.sol";
+import "./MultiCallData.sol";
 
 /*
     Due to contract size limitations we cannot add error strings in require statements in this contract
 */
-contract MultiCallExchange is IMultiCallExchange {
-    //denominated in Underlying Token underlyingAssetSubUnits
-    mapping(address => uint) public override underlyingAssetDeposits;
-
-    /*
-        listHeads are the heads of 4 linked lists that hold buy and sells of calls and puts
-        the linked lists are ordered by price with the most enticing offers at the top near the head
-    */
-    //maturity => legsHash => headNode.name [buy, sell]
-    mapping(uint => mapping(bytes32 => bytes32[2])) public override listHeads;
-    
-    //holds all nodes node.name is the identifier for the location in this mapping
-    mapping (bytes32 => linkedNode) public override linkedNodes;
-
-    /*
-        Note all linkedNodes correspond to a buyOffer
-        The offers[linkedNodes[name].hash] links to a buyOffer
-    */
-    
-    //holds all offers
-    mapping(bytes32 => Offer) public override offers;
-
-    //hash of position information => position
-    mapping(bytes32 => position) public override positions;
-
-    /*
-        @Description: returns arrays callAmounts and callStrikes of a given position
-
-        @param bytes32 _legsHash: the hash leading to the positions
-
-        @return int[] memory callAmounts: position.callAmounts
-        @return uint[] memory callStrikes: position.callStrikes
-    */
-    function positionInfo(bytes32 _legsHash) public override view returns(int[] memory callAmounts, uint[] memory callStrikes){
-        position memory pos = positions[_legsHash];
-        callAmounts = pos.callAmounts;
-        callStrikes = pos.callStrikes;
-    }
-
+contract MultiCallExchange is IMultiCallExchange, MultiCallData {
     /*
         @Description: add new position to enable trading on said position
 
-        @param uint[] memory _callStrikes: the strikes of the call positions
+        @param uint[] memory _callStrikes: the strikes of the call internalPositions
         @param int[] memory _callAmounts: the amount of the call positons at the various strikes in _callStrikes
     */
     function addLegHash(uint[] memory _callStrikes, int[] memory _callAmounts) public override {
@@ -71,22 +34,9 @@ contract MultiCallExchange is IMultiCallExchange {
         require(int(maxUnderlyingAssetDebtor) > -1);
         require(int(maxUnderlyingAssetHolder) > -1);
         position memory pos = position(_callAmounts, _callStrikes, int(maxUnderlyingAssetDebtor), int(maxUnderlyingAssetHolder));
-        positions[hash] = pos;
+        internalPositions[hash] = pos;
         emit legsHashCreated(hash);
     }
-    
-    //address of the contract of the underlying digital asset such as WBTC or WETH
-    address underlyingAssetAddress;
-    //address of the smart contract that handles the creation of calls and puts and thier subsequent redemption
-    address optionsAddress;
-    //incrementing identifier for each order that garunties unique hashes for all identifiers
-    uint totalOrders;
-    //number of the smallest unit in one full unit of the underlying asset such as satoshis in a bitcoin
-    uint underlyingAssetSubUnits;
-    //previously recorded balances of this contract
-    uint underlyingAssetReserves;
-    //address of the contract that stores all fee information and collects all fees
-    address feeOracleAddress;
     
     /*  
         @Description: setup
@@ -101,7 +51,7 @@ contract MultiCallExchange is IMultiCallExchange {
     }
     
     /*
-        @Description: deposit funds in this contract, funds tracked by the underlyingAssetDeposits and claimedStable mappings
+        @Description: deposit funds in this contract, funds tracked by the internalUnderlyingAssetDeposits and claimedStable mappings
 
         @param uint _to: the address to which to credit deposited funds
 
@@ -111,32 +61,32 @@ contract MultiCallExchange is IMultiCallExchange {
         uint balance = IERC20(underlyingAssetAddress).balanceOf(address(this));
         uint sats = balance - underlyingAssetReserves;
         underlyingAssetReserves = balance;
-        underlyingAssetDeposits[_to] += sats;
+        internalUnderlyingAssetDeposits[_to] += sats;
         success = true;
     }
 
     /*
-        @Description: send back all funds tracked in the underlyingAssetDeposits and claimedStable mappings of the caller to the callers address
+        @Description: send back all funds tracked in the internalUnderlyingAssetDeposits and claimedStable mappings of the caller to the callers address
 
-        @param bool _token: if true withdraw the tokens recorded in underlyingAssetDeposits if false withdraw the legsHash asset stored in claimedStable
+        @param bool _token: if true withdraw the tokens recorded in internalUnderlyingAssetDeposits if false withdraw the legsHash asset stored in claimedStable
 
         @return bool success: if an error occurs returns false if no error return true
     */
     function withdrawAllFunds() public override {
-        uint val = underlyingAssetDeposits[msg.sender];
+        uint val = internalUnderlyingAssetDeposits[msg.sender];
         IERC20 ua = IERC20(underlyingAssetAddress);
-        underlyingAssetDeposits[msg.sender] = 0;
+        internalUnderlyingAssetDeposits[msg.sender] = 0;
         ua.transfer(msg.sender, val);
         underlyingAssetReserves -= val;
     }
     
     /*
-        @Description: creates two hashes to be keys in the linkedNodes and the offers mapping
+        @Description: creates two hashes to be keys in the internalLinkedNodes and the internalOffers mapping
 
         @param Offer _offer: the offer for which to make the identifiers
 
-        @return bytes32 _hash: key in offers mapping
-        @return bytes32 _name: key in linkedNodes mapping
+        @return bytes32 _hash: key in internalOffers mapping
+        @return bytes32 _name: key in internalLinkedNodes mapping
     */
     function hasher(Offer memory _offer) internal returns(bytes32 _hash, bytes32 _name){
         _hash =  keccak256(abi.encodePacked(_offer.maturity, _offer.legsHash, _offer.price, _offer.offerer, _offer.index, totalOrders));
@@ -154,7 +104,7 @@ contract MultiCallExchange is IMultiCallExchange {
         @return bool contains: true if all strikes from legsHash are contained otherwise false
     */
     function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
-        position memory pos = positions[_legsHash];
+        position memory pos = internalPositions[_legsHash];
         IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
         for (uint i = 0; i < pos.callStrikes.length; i++){
             if (!optionsContract.contains(msg.sender, _maturity, pos.callStrikes[i])) return false;
@@ -188,12 +138,12 @@ contract MultiCallExchange is IMultiCallExchange {
     function postOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index) public override payable {
         require(_maturity != 0 && _legsHash != 0 && _amount != 0);
 
-        position memory pos = positions[_legsHash];
+        position memory pos = internalPositions[_legsHash];
 
         require(pos.callAmounts.length > 0);
 
-        if (listHeads[_maturity][_legsHash][_index] != 0) {
-            insertOrder(_maturity, _legsHash, _price, _amount, _index, listHeads[_maturity][_legsHash][_index]);
+        if (internalListHeads[_maturity][_legsHash][_index] != 0) {
+            insertOrder(_maturity, _legsHash, _price, _amount, _index, internalListHeads[_maturity][_legsHash][_index]);
             return;
         }
         //only continue execution here if listHead[_maturity][_legsHash][index] == 0
@@ -206,8 +156,8 @@ contract MultiCallExchange is IMultiCallExchange {
             if (int(req) > 0) {
                 uint _underlyingAssetSubUnits = underlyingAssetSubUnits;
                 req = req/_underlyingAssetSubUnits + (req%underlyingAssetSubUnits == 0 ? 0 : 1);
-                require(underlyingAssetDeposits[msg.sender] >= req);
-                underlyingAssetDeposits[msg.sender] -= req;
+                require(internalUnderlyingAssetDeposits[msg.sender] >= req);
+                internalUnderlyingAssetDeposits[msg.sender] -= req;
             }
         }
         else {
@@ -215,8 +165,8 @@ contract MultiCallExchange is IMultiCallExchange {
             if (int(req) > 0) {
                 uint _underlyingAssetSubUnits = underlyingAssetSubUnits;
                 req = req/_underlyingAssetSubUnits + (req%underlyingAssetSubUnits == 0 ? 0 : 1);
-                require(underlyingAssetDeposits[msg.sender] >= req);
-                underlyingAssetDeposits[msg.sender] -= req;
+                require(internalUnderlyingAssetDeposits[msg.sender] >= req);
+                internalUnderlyingAssetDeposits[msg.sender] -= req;
             }
         }
 
@@ -224,11 +174,11 @@ contract MultiCallExchange is IMultiCallExchange {
         //get hashes
         (bytes32 hash, bytes32 name) = hasher(offer);
         //place order in the mappings
-        offers[hash] = offer;
-        linkedNodes[name] = linkedNode(hash, name, 0, 0);
-        listHeads[_maturity][_legsHash][_index] = name;
+        internalOffers[hash] = offer;
+        internalLinkedNodes[name] = linkedNode(hash, name, 0, 0);
+        internalListHeads[_maturity][_legsHash][_index] = name;
         payFee();
-        emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
+        emit offerPosted(name, internalOffers[hash].maturity, internalOffers[hash].legsHash, internalOffers[hash].price, internalOffers[hash].amount, _index);
     }
 
     //allows for users to post Orders with a smaller gas usage by giving another order as refrence to find their orders position from
@@ -245,12 +195,12 @@ contract MultiCallExchange is IMultiCallExchange {
     */
     function insertOrder(uint _maturity, bytes32 _legsHash, int _price, uint _amount, uint8 _index, bytes32 _name) public override payable {
         //make sure the offer and node corresponding to the name is in the correct list
-        require(offers[linkedNodes[_name].hash].maturity == _maturity && offers[linkedNodes[_name].hash].legsHash == _legsHash && _maturity != 0 &&  _legsHash != 0);
-        require(offers[linkedNodes[_name].hash].index == _index);
+        require(internalOffers[internalLinkedNodes[_name].hash].maturity == _maturity && internalOffers[internalLinkedNodes[_name].hash].legsHash == _legsHash && _maturity != 0 &&  _legsHash != 0);
+        require(internalOffers[internalLinkedNodes[_name].hash].index == _index);
 
         require(containsStrikes(_maturity, _legsHash));
 
-        position memory pos = positions[_legsHash];
+        position memory pos = internalPositions[_legsHash];
 
         require(pos.callAmounts.length > 0);
 
@@ -261,8 +211,8 @@ contract MultiCallExchange is IMultiCallExchange {
             if (int(req) > 0) {
                 uint _underlyingAssetSubUnits = underlyingAssetSubUnits;
                 req = req/_underlyingAssetSubUnits + (req%underlyingAssetSubUnits == 0 ? 0 : 1);
-                require(underlyingAssetDeposits[msg.sender] >= req);
-                underlyingAssetDeposits[msg.sender] -= req;
+                require(internalUnderlyingAssetDeposits[msg.sender] >= req);
+                internalUnderlyingAssetDeposits[msg.sender] -= req;
             }
         }
         else {
@@ -270,8 +220,8 @@ contract MultiCallExchange is IMultiCallExchange {
             if (int(req) > 0) {
                 uint _underlyingAssetSubUnits = underlyingAssetSubUnits;
                 req = req/_underlyingAssetSubUnits + (req%underlyingAssetSubUnits == 0 ? 0 : 1);
-                require(underlyingAssetDeposits[msg.sender] >= req);
-                underlyingAssetDeposits[msg.sender] -= req;
+                require(internalUnderlyingAssetDeposits[msg.sender] >= req);
+                internalUnderlyingAssetDeposits[msg.sender] -= req;
             }
         }
 
@@ -279,61 +229,61 @@ contract MultiCallExchange is IMultiCallExchange {
         //get hashes
         (bytes32 hash, bytes32 name) = hasher(offer);
         //if we need to traverse down the list further away from the list head
-        linkedNode memory currentNode = linkedNodes[_name];
-        if ((_index==0 &&  offers[currentNode.hash].price >= _price) || (_index==1  && offers[currentNode.hash].price <= _price)){
+        linkedNode memory currentNode = internalLinkedNodes[_name];
+        if ((_index==0 &&  internalOffers[currentNode.hash].price >= _price) || (_index==1  && internalOffers[currentNode.hash].price <= _price)){
             linkedNode memory previousNode;
             while (currentNode.name != 0){
                 previousNode = currentNode;
-                currentNode = linkedNodes[currentNode.next];
-                if ((_index==0 && offers[currentNode.hash].price < _price) || (_index==1 && offers[currentNode.hash].price > _price)){
+                currentNode = internalLinkedNodes[currentNode.next];
+                if ((_index==0 && internalOffers[currentNode.hash].price < _price) || (_index==1 && internalOffers[currentNode.hash].price > _price)){
                     break;
                 }
             }
-            offers[hash] = offer;
+            internalOffers[hash] = offer;
             //if this is the last node
             if (currentNode.name == 0){
-                linkedNodes[name] = linkedNode(hash, name, 0, previousNode.name);
-                linkedNodes[currentNode.name].previous = name;
-                linkedNodes[previousNode.name].next = name;
-                emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
+                internalLinkedNodes[name] = linkedNode(hash, name, 0, previousNode.name);
+                internalLinkedNodes[currentNode.name].previous = name;
+                internalLinkedNodes[previousNode.name].next = name;
+                emit offerPosted(name, internalOffers[hash].maturity, internalOffers[hash].legsHash, internalOffers[hash].price, internalOffers[hash].amount, _index);
             }
             //it falls somewhere in the middle of the chain
             else{
-                linkedNodes[name] = linkedNode(hash, name, currentNode.name, previousNode.name);
-                linkedNodes[currentNode.name].previous = name;
-                linkedNodes[previousNode.name].next = name;
-                emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
+                internalLinkedNodes[name] = linkedNode(hash, name, currentNode.name, previousNode.name);
+                internalLinkedNodes[currentNode.name].previous = name;
+                internalLinkedNodes[previousNode.name].next = name;
+                emit offerPosted(name, internalOffers[hash].maturity, internalOffers[hash].legsHash, internalOffers[hash].price, internalOffers[hash].amount, _index);
             }
 
         }
         //here we traverse up towards the list head
         else {
-            /*  node node should == linkedNodes[currentNode.next]
+            /*  node node should == internalLinkedNodes[currentNode.next]
                 do not be confused by the fact that is lags behind in the loop and == the value of currentNode in the previous iteration
             */
             linkedNode memory nextNode;
             while (currentNode.name != 0){
                 nextNode = currentNode;
-                currentNode = linkedNodes[currentNode.previous];
-                if ((_index==0 && offers[currentNode.hash].price >= _price) || (_index==1 && offers[currentNode.hash].price <= _price)){
+                currentNode = internalLinkedNodes[currentNode.previous];
+                if ((_index==0 && internalOffers[currentNode.hash].price >= _price) || (_index==1 && internalOffers[currentNode.hash].price <= _price)){
                     break;
                 }
             }
-            offers[hash] = offer;
+            internalOffers[hash] = offer;
             //if this is the list head
             if (currentNode.name == 0){
                 //nextNode is the head befoe execution of this local scope
-                linkedNodes[name] = linkedNode(hash, name, nextNode.name, 0);
-                linkedNodes[nextNode.name].previous = name;
-                listHeads[_maturity][_legsHash][_index] = name;
-                emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
+                internalLinkedNodes[name] = linkedNode(hash, name, nextNode.name, 0);
+                internalLinkedNodes[nextNode.name].previous = name;
+                internalListHeads[_maturity][_legsHash][_index] = name;
+                emit offerPosted(name, internalOffers[hash].maturity, internalOffers[hash].legsHash, internalOffers[hash].price, internalOffers[hash].amount, _index);
             }
             //falls somewhere in the middle of the list
             else {
-                linkedNodes[name] = linkedNode(hash, name, nextNode.name, currentNode.name);
-                linkedNodes[nextNode.name].previous = name;
-                linkedNodes[currentNode.name].next = name;
-                emit offerPosted(name, offers[hash].maturity, offers[hash].legsHash, offers[hash].price, offers[hash].amount, _index);
+                internalLinkedNodes[name] = linkedNode(hash, name, nextNode.name, currentNode.name);
+                internalLinkedNodes[nextNode.name].previous = name;
+                internalLinkedNodes[currentNode.name].next = name;
+                emit offerPosted(name, internalOffers[hash].maturity, internalOffers[hash].legsHash, internalOffers[hash].price, internalOffers[hash].amount, _index);
             }
         }
         payFee();
@@ -342,44 +292,44 @@ contract MultiCallExchange is IMultiCallExchange {
     /*
         @Description: removes the order with name identifier _name, prevents said order from being filled or taken
 
-        @param bytes32: the identifier of the node which stores the order to cancel, offerToCancel == offers[linkedNodes[_name].hash]
+        @param bytes32: the identifier of the node which stores the order to cancel, offerToCancel == internalOffers[internalLinkedNodes[_name].hash]
     */
     function cancelOrderInternal(bytes32 _name) internal {
-        linkedNode memory node = linkedNodes[_name];
-        require(msg.sender == offers[node.hash].offerer);
-        Offer memory offer = offers[node.hash];
+        linkedNode memory node = internalLinkedNodes[_name];
+        require(msg.sender == internalOffers[node.hash].offerer);
+        Offer memory offer = internalOffers[node.hash];
         //uint8 index = (offer.buy? 0 : 1) + (offer.call? 0 : 2);
         //if this node is somewhere in the middle of the list
         if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
+            internalLinkedNodes[node.next].previous = node.previous;
+            internalLinkedNodes[node.previous].next = node.next;
         }
         //this is the only offer for the maturity and legsHash
         else if (node.next == 0 && node.previous == 0){
-            delete listHeads[offers[node.hash].maturity][offers[node.hash].legsHash][offer.index];
+            delete internalListHeads[internalOffers[node.hash].maturity][internalOffers[node.hash].legsHash][offer.index];
         }
         //last node
         else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
+            internalLinkedNodes[node.previous].next = 0;
         }
         //head node
         else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offers[node.hash].maturity][offers[node.hash].legsHash][offer.index] = node.next;
+            internalLinkedNodes[node.next].previous = 0;
+            internalListHeads[internalOffers[node.hash].maturity][internalOffers[node.hash].legsHash][offer.index] = node.next;
         }
         emit offerCalceled(_name);
-        delete linkedNodes[_name];
-        delete offers[node.hash];
-        position memory pos = positions[offer.legsHash];
+        delete internalLinkedNodes[_name];
+        delete internalOffers[node.hash];
+        position memory pos = internalPositions[offer.legsHash];
         if (offer.index == 0){
             uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetHolder + offer.price));
             if (int(req) > 0)
-                underlyingAssetDeposits[offer.offerer] += req/underlyingAssetSubUnits;
+                internalUnderlyingAssetDeposits[offer.offerer] += req/underlyingAssetSubUnits;
         }
         else {
             uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
             if (int(req) > 0)
-                underlyingAssetDeposits[offer.offerer] += req/underlyingAssetSubUnits;
+                internalUnderlyingAssetDeposits[offer.offerer] += req/underlyingAssetSubUnits;
         }
 
     }
@@ -388,10 +338,10 @@ contract MultiCallExchange is IMultiCallExchange {
     /*
         @Description: cancel order of specific identifier
 
-        @param bytes32 _name: the hash to find the offer's linked node in linkedNodes[]
+        @param bytes32 _name: the hash to find the offer's linked node in internalLinkedNodes[]
     */
     function cancelOrder(bytes32 _name) public override {
-        require(msg.sender == offers[linkedNodes[_name].hash].offerer);
+        require(msg.sender == internalOffers[internalLinkedNodes[_name].hash].offerer);
         cancelOrderInternal(_name);
     }
 
@@ -399,13 +349,13 @@ contract MultiCallExchange is IMultiCallExchange {
         @Description: handles logistics of the seller accepting a buy order with identifier _name
 
         @param address _seller: the seller that is taking the buy offer
-        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == offers[linkedNodes[_name].hash]
+        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == internalOffers[internalLinkedNodes[_name].hash]
 
         @return bool success: if an error occurs returns false if no error return true
     */
     function takeBuyOffer(address _seller, bytes32 _name) internal returns(bool success){
-        linkedNode memory node = linkedNodes[_name];
-        Offer memory offer = offers[node.hash];
+        linkedNode memory node = internalLinkedNodes[_name];
+        Offer memory offer = internalOffers[node.hash];
         require(offer.index%2 == 0);
 
         //now we make the trade happen
@@ -424,39 +374,39 @@ contract MultiCallExchange is IMultiCallExchange {
         }
         //repair linked list
         if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
+            internalLinkedNodes[node.next].previous = node.previous;
+            internalLinkedNodes[node.previous].next = node.next;
         }
         //this is the only offer for the maturity and legsHash
         else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.legsHash][offer.index];
+            delete internalListHeads[offer.maturity][offer.legsHash][offer.index];
         }
         //last node
         else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
+            internalLinkedNodes[node.previous].next = 0;
         }
         //head node
         else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
+            internalLinkedNodes[node.next].previous = 0;
+            internalListHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
         }
         emit offerAccepted(_name, offer.amount);
         //clean storage
-        delete linkedNodes[_name];
-        delete offers[node.hash];
+        delete internalLinkedNodes[_name];
+        delete internalOffers[node.hash];
     }
 
     /*
         @Description: handles logistics of the buyer accepting a sell order with the identifier _name
 
         @param address _buyer: the buyer that is taking the sell offer
-        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == offers[linkedNodes[_name].hash]
+        @param bytes32 _name: the identifier of the node which stores the offer to take, offerToTake == internalOffers[internalLinkedNodes[_name].hash]
 
         @return bool success: if an error occurs returns false if no error return true
     */
     function takeSellOffer(address _buyer, bytes32 _name) internal returns(bool success){
-        linkedNode memory node = linkedNodes[_name];
-        Offer memory offer = offers[node.hash];
+        linkedNode memory node = internalLinkedNodes[_name];
+        Offer memory offer = internalOffers[node.hash];
         require(offer.index%2==1);
 
         //now we make the trade happen
@@ -475,30 +425,30 @@ contract MultiCallExchange is IMultiCallExchange {
         }
         //repair linked list
         if (node.next != 0 && node.previous != 0){
-            linkedNodes[node.next].previous = node.previous;
-            linkedNodes[node.previous].next = node.next;
+            internalLinkedNodes[node.next].previous = node.previous;
+            internalLinkedNodes[node.previous].next = node.next;
         }
         //this is the only offer for the maturity and legsHash
         else if (node.next == 0 && node.next == 0){
-            delete listHeads[offer.maturity][offer.legsHash][offer.index];
+            delete internalListHeads[offer.maturity][offer.legsHash][offer.index];
         }
         //last node
         else if (node.next == 0){
-            linkedNodes[node.previous].next = 0;
+            internalLinkedNodes[node.previous].next = 0;
         }
         //head node
         else{
-            linkedNodes[node.next].previous = 0;
-            listHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
+            internalLinkedNodes[node.next].previous = 0;
+            internalListHeads[offer.maturity][offer.legsHash][offer.index] = node.next;
         }
         emit offerAccepted(_name, offer.amount);
         //clean storage
-        delete linkedNodes[_name];
-        delete offers[node.hash];
+        delete internalLinkedNodes[_name];
+        delete internalOffers[node.hash];
     }
 
     /*
-        @Description: Caller of the function takes the best buy offers of either calls or puts, when offer is taken the contract in options.sol is called to mint the calls or puts
+        @Description: Caller of the function takes the best buy internalOffers of either calls or puts, when offer is taken the contract in options.sol is called to mint the calls or puts
             After an offer is taken it is removed so that it may not be taken again
 
         @param unit _maturity: the timstamp at which the call or put is settled
@@ -513,8 +463,8 @@ contract MultiCallExchange is IMultiCallExchange {
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
 
-        linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][0]];
-        Offer memory offer = offers[node.hash];
+        linkedNode memory node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][0]];
+        Offer memory offer = internalOffers[node.hash];
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price >= _limitPrice && _maxIterations != 0){
@@ -524,31 +474,31 @@ contract MultiCallExchange is IMultiCallExchange {
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                         therefore we do not need to call mintPosition
                     */
-                    position memory pos = positions[offer.legsHash];
+                    position memory pos = internalPositions[offer.legsHash];
                     uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + offer.price));
                     if (int(req) > 0)
-                        underlyingAssetDeposits[msg.sender] += req/underlyingAssetSubUnits;
+                        internalUnderlyingAssetDeposits[msg.sender] += req/underlyingAssetSubUnits;
                 }
                 else {
                     bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) return _amount;
                 }
-                offers[node.hash].amount -= _amount;
+                internalOffers[node.hash].amount -= _amount;
                 emit offerAccepted(node.name, _amount);
                 return 0;
             }
             if (!takeBuyOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
             //find the next offer
-            node = linkedNodes[listHeads[_maturity][_legsHash][0]];
-            offer = offers[node.hash];
+            node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][0]];
+            offer = internalOffers[node.hash];
             _maxIterations--;
         }
         unfilled = _amount;
     }
 
     /*
-        @Description: Caller of the function takes the best sell offers of either calls or puts, when offer is taken the contract in options.sol is called to mint the calls or puts
+        @Description: Caller of the function takes the best sell internalOffers of either calls or puts, when offer is taken the contract in options.sol is called to mint the calls or puts
             After an offer is taken it is removed so that it may not be taken again
 
         @param unit _maturity: the timstamp at which the call or put is settled
@@ -563,8 +513,8 @@ contract MultiCallExchange is IMultiCallExchange {
         require(_legsHash != 0);
         require(containsStrikes(_maturity, _legsHash));
 
-        linkedNode memory node = linkedNodes[listHeads[_maturity][_legsHash][1]];
-        Offer memory offer = offers[node.hash];
+        linkedNode memory node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][1]];
+        Offer memory offer = internalOffers[node.hash];
         require(node.name != 0);
         //in each iteration we call options.mintCall/Put once
         while (_amount > 0 && node.name != 0 && offer.price <= _limitPrice && _maxIterations != 0){
@@ -574,24 +524,24 @@ contract MultiCallExchange is IMultiCallExchange {
                         state is not changed in options smart contract when values of _debtor and _holder arguments are the same in mintCall
                         therefore we do not need to call mintPosition
                     */
-                    position memory pos = positions[offer.legsHash];
+                    position memory pos = internalPositions[offer.legsHash];
                     uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
                     if (int(req) > 0)
-                        underlyingAssetDeposits[msg.sender] += req/underlyingAssetSubUnits;
+                        internalUnderlyingAssetDeposits[msg.sender] += req/underlyingAssetSubUnits;
                 }
                 else {
                     bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) return _amount;
                 }
-                offers[node.hash].amount -= _amount;
+                internalOffers[node.hash].amount -= _amount;
                 emit offerAccepted(node.name, _amount);
                 return 0;
             }
             if (!takeSellOffer(msg.sender, node.name)) return _amount;
             _amount-=offer.amount;
             //find the next offer
-            node = linkedNodes[listHeads[_maturity][_legsHash][1]];
-            offer = offers[node.hash];
+            node = internalLinkedNodes[internalListHeads[_maturity][_legsHash][1]];
+            offer = internalOffers[node.hash];
             _maxIterations--;
         }
         unfilled = _amount;
@@ -603,7 +553,7 @@ contract MultiCallExchange is IMultiCallExchange {
         @param address _ debtor: the address selling the position
         @param address _holder: the address buying the position
         @param uint _maturity: the maturity of the position to mint
-        @param bytes32 _legsHash: the identifier to find the position in positions[]
+        @param bytes32 _legsHash: the identifier to find the position in internalPositions[]
         @param uint _amount: the amount of times to mint the position
         @param int _price: the premium paid by the holder to the debtor
         @param uint8 _index: the index of the offer for which this function is called
@@ -617,7 +567,7 @@ contract MultiCallExchange is IMultiCallExchange {
 
         address _optionsAddress = optionsAddress; //gas savings
         IOptionsHandler optionsContract = IOptionsHandler(_optionsAddress);
-        position memory pos = positions[_legsHash];
+        position memory pos = internalPositions[_legsHash];
         optionsContract.setParams(_debtor, _holder, _maturity);
         //load call position into register
         optionsContract.clearPositions();
@@ -671,13 +621,58 @@ contract MultiCallExchange is IMultiCallExchange {
         if (_index==0){
             address addr = _holder; //prevent stack too deep
             transferAmount = optionsContract.transferAmountHolder();
-            underlyingAssetDeposits[addr] += uint( pos.maxUnderlyingAssetHolder - transferAmount);
+            internalUnderlyingAssetDeposits[addr] += uint( pos.maxUnderlyingAssetHolder - transferAmount);
         } else {
             address addr = _debtor; //prevent stack too deep
             transferAmount = optionsContract.transferAmountDebtor();
-            underlyingAssetDeposits[addr] += uint( pos.maxUnderlyingAssetDebtor - transferAmount);
+            internalUnderlyingAssetDeposits[addr] += uint( pos.maxUnderlyingAssetDebtor - transferAmount);
         }
         underlyingAssetReserves = uint(int(underlyingAssetReserves)-transferAmount);
     }
 
+    //--------------------------------------------------------v-i-e-w-s---------------------------------
+
+
+    function underlyingAssetDeposits(address _owner) external view override returns (uint) { return internalUnderlyingAssetDeposits[_owner]; }
+    function listHeads(uint _maturity, bytes32 _legsHash, uint8 _index) public override view returns (bytes32) {return internalListHeads[_maturity][_legsHash][_index];}
+    function linkedNodes(bytes32 _name) public override view returns (bytes32 hash, bytes32 name, bytes32 next, bytes32 previous) {
+        linkedNode memory node = internalLinkedNodes[_name];
+        hash = node.hash;
+        name = node.name;
+        next = node.next;
+        previous = node.previous;
+    }
+    function offers(bytes32 _hash) public override view returns (address offerer, uint maturity, bytes32 legsHash, int price, uint amount, uint8 index) {
+        Offer memory offer = internalOffers[_hash];
+        offerer = offer.offerer;
+        maturity = offer.maturity;
+        legsHash = offer.legsHash;
+        price = offer.price;
+        amount = offer.amount;
+        index = offer.index;
+    }
+
+    /*
+        @Description: returns arrays callAmounts and callStrikes of a given position
+
+        @param bytes32 _legsHash: the hash leading to the internalPositions
+
+        @return int[] memory callAmounts: position.callAmounts
+        @return uint[] memory callStrikes: position.callStrikes
+        @return int maxUnderlyingAssetDebtor: position.maxUnderlyingAssetDebtor
+        @return int maxUnderlyingAssteHolder: position.maxUnderlyingAssetHolder
+    */
+    function positions(bytes32 _legsHash) public override view returns (
+            int[] memory callAmounts,
+            uint[] memory callStrikes,
+            int maxUnderlyingAssetDebtor,
+            int maxUnderlyingAssetHolder
+        ){
+        
+        position memory pos = internalPositions[_legsHash];
+        callAmounts = pos.callAmounts;
+        callStrikes = pos.callStrikes;
+        maxUnderlyingAssetDebtor = pos.maxUnderlyingAssetDebtor;
+        maxUnderlyingAssetHolder = pos.maxUnderlyingAssetHolder;
+    }
 }
