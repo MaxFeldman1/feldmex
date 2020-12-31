@@ -85,4 +85,6 @@ contract MultiPutData {
     uint strikeAssetReserves;
     //address of the contract that stores all fee information and collects all fees
     address feeOracleAddress;
+    address delegateAddress;
+    uint unfilled;
 }

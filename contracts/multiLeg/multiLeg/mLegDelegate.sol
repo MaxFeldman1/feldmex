@@ -150,9 +150,6 @@ contract mLegDelegate is mLegData {
 
 
     function cancelOrder(bytes32 _name) external {
-        /*
-            ensure sender is order maker in proxy contract
-        */
         cancelOrderInternal(_name);
     }
 

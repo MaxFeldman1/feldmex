@@ -1,8 +1,24 @@
 pragma solidity >=0.8.0;
 import "../../interfaces/IOptionsHandler.sol";
-import "./MultiCallData.sol";
+import "./MultiPutData.sol";
 
-contract MultiCallDelegate is MultiCallData {
+contract MultiPutDelegate is MultiPutData {
+    /*
+        @Description: checks if all strikes from _legsHash are contained by msg.sender in the options exchange
+
+        @param uint _maturity: the maturity of the maturity strike combination in question
+        @param bytes32 _legsHash: key in position mappings that leads to the position in question
+
+        @return bool contains: true if all strikes from legsHash are contained otherwise false
+    */
+    function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
+        position memory pos = internalPositions[_legsHash];
+        IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
+        for (uint i = 0; i < pos.putStrikes.length; i++){
+            if (!optionsContract.contains(msg.sender, _maturity, pos.putStrikes[i])) return false;
+        }
+        contains = true;
+    }
 
     /*
         @Description: removes the order with name identifier _name, prevents said order from being filled or taken
@@ -13,7 +29,6 @@ contract MultiCallDelegate is MultiCallData {
         linkedNode memory node = internalLinkedNodes[_name];
         require(msg.sender == internalOffers[node.hash].offerer);
         Offer memory offer = internalOffers[node.hash];
-        //uint8 index = (offer.buy? 0 : 1) + (offer.call? 0 : 2);
         //if this node is somewhere in the middle of the list
         if (node.next != 0 && node.previous != 0){
             internalLinkedNodes[node.next].previous = node.previous;
@@ -37,38 +52,20 @@ contract MultiCallDelegate is MultiCallData {
         delete internalOffers[node.hash];
         position memory pos = internalPositions[offer.legsHash];
         if (offer.index == 0){
-            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetHolder + offer.price));
+            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetHolder + offer.price));
             if (int(req) > 0)
-                internalUnderlyingAssetDeposits[offer.offerer] += req/underlyingAssetSubUnits;
+                internalStrikeAssetDeposits[offer.offerer] += req/strikeAssetSubUnits;
         }
         else {
-            uint req = uint(int(offer.amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
+            uint req = uint(int(offer.amount) * (pos.maxStrikeAssetDebtor - offer.price));
             if (int(req) > 0)
-                internalUnderlyingAssetDeposits[offer.offerer] += req/underlyingAssetSubUnits;
+                internalStrikeAssetDeposits[offer.offerer] += req/strikeAssetSubUnits;
         }
 
     }
 
     function cancelOrder(bytes32 _name) external {
     	cancelOrderInternal(_name);
-    }
-
-
-    /*
-        @Description: checks if all strikes from _legsHash are contained by msg.sender in the options exchange
-
-        @param uint _maturity: the maturity of the maturity strike combination in question
-        @param bytes32 _legsHash: key in position mappings that leads to the position in question
-
-        @return bool contains: true if all strikes from legsHash are contained otherwise false
-    */
-    function containsStrikes(uint _maturity, bytes32 _legsHash) internal view returns (bool contains) {
-        position memory pos = internalPositions[_legsHash];
-        IOptionsHandler optionsContract = IOptionsHandler(optionsAddress);
-        for (uint i = 0; i < pos.callStrikes.length; i++){
-            if (!optionsContract.contains(msg.sender, _maturity, pos.callStrikes[i])) return false;
-        }
-        contains = true;
     }
 
     /*
@@ -82,7 +79,7 @@ contract MultiCallDelegate is MultiCallData {
     function takeBuyOffer(address _seller, bytes32 _name) internal returns(bool success){
         linkedNode memory node = internalLinkedNodes[_name];
         Offer memory offer = internalOffers[node.hash];
-        require(offer.index%2 == 0);
+        require(offer.index == 0);
 
         //now we make the trade happen
         //mint the option and distribute unused collateral
@@ -133,7 +130,7 @@ contract MultiCallDelegate is MultiCallData {
     function takeSellOffer(address _buyer, bytes32 _name) internal returns(bool success){
         linkedNode memory node = internalLinkedNodes[_name];
         Offer memory offer = internalOffers[node.hash];
-        require(offer.index%2==1);
+        require(offer.index==1);
 
         //now we make the trade happen
         //mint the option and distribute unused collateral
@@ -190,25 +187,25 @@ contract MultiCallDelegate is MultiCallData {
                         therefore we do not need to call mintPosition
                     */
                     position memory pos = internalPositions[offer.legsHash];
-                    uint req = uint(int(_amount) * (pos.maxUnderlyingAssetHolder + offer.price));
+                    uint req = uint(int(_amount) * (pos.maxStrikeAssetHolder + offer.price));
                     if (int(req) > 0)
-                        internalUnderlyingAssetDeposits[msg.sender] += req/underlyingAssetSubUnits;
+                        internalStrikeAssetDeposits[msg.sender] += req/strikeAssetSubUnits;
                 }
                 else {
                     bool success = mintPosition(msg.sender, offer.offerer, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) {
-                    	unfilled = _amount;
-                    	return;
-                	}
+                        unfilled = _amount;
+                        return;
+                    }
                 }
                 internalOffers[node.hash].amount -= _amount;
                 emit offerAccepted(node.name, _amount);
-                unfilled = 0;
+                unfilled = _amount;
                 return;
             }
             if (!takeBuyOffer(msg.sender, node.name)) {
-            	unfilled = _amount;
-            	return;
+                unfilled = _amount;
+                return;
             }
             _amount-=offer.amount;
             //find the next offer
@@ -236,15 +233,15 @@ contract MultiCallDelegate is MultiCallData {
                         therefore we do not need to call mintPosition
                     */
                     position memory pos = internalPositions[offer.legsHash];
-                    uint req = uint(int(_amount) * (pos.maxUnderlyingAssetDebtor - offer.price));
+                    uint req = uint(int(_amount) * (pos.maxStrikeAssetDebtor - offer.price));
                     if (int(req) > 0)
-                        internalUnderlyingAssetDeposits[msg.sender] += req/underlyingAssetSubUnits;
+                        internalStrikeAssetDeposits[msg.sender] += req/strikeAssetSubUnits;
                 }
                 else {
                     bool success = mintPosition(offer.offerer, msg.sender, offer.maturity, offer.legsHash, _amount, offer.price, offer.index);
                     if (!success) {
-                    	unfilled = _amount;
-                    	return;
+                        unfilled = _amount;
+                        return;
                     }
                 }
                 internalOffers[node.hash].amount -= _amount;
@@ -253,8 +250,8 @@ contract MultiCallDelegate is MultiCallData {
                 return;
             }
             if (!takeSellOffer(msg.sender, node.name)) {
-            	unfilled = _amount;
-            	return;
+                unfilled = _amount;
+                return;
             }
             _amount-=offer.amount;
             //find the next offer
@@ -266,8 +263,7 @@ contract MultiCallDelegate is MultiCallData {
     }
 
 
-
-	/*
+    /*
         @Description: mint a specific position between two users
 
         @param address _ debtor: the address selling the position
@@ -289,13 +285,13 @@ contract MultiCallDelegate is MultiCallData {
         IOptionsHandler optionsContract = IOptionsHandler(_optionsAddress);
         position memory pos = internalPositions[_legsHash];
         optionsContract.setParams(_debtor, _holder, _maturity);
-        //load call position into register
+        //load put position into register
         optionsContract.clearPositions();
-        for (uint i = 0; i < pos.callAmounts.length; i++)
-            optionsContract.addPosition(pos.callStrikes[i], int(_amount)*pos.callAmounts[i], true);
-        optionsContract.setTrustedAddressMultiLegExchange(0);
+        for (uint i = 0; i < pos.putAmounts.length; i++)
+            optionsContract.addPosition(pos.putStrikes[i], int(_amount)*pos.putAmounts[i], false);
+        optionsContract.setTrustedAddressMultiLegExchange(1);
 
-        uint _underlyingAssetSubUnits = underlyingAssetSubUnits;  //gas savings
+        uint _strikeAssetSubUnits = strikeAssetSubUnits;    //gas savings
 
         int premium;
         {
@@ -304,49 +300,51 @@ contract MultiCallDelegate is MultiCallData {
 
             {
                 //accounting for holder and debtor must be done seperately as that is how it is done in the options handler
-                uint temp = _amount * uint(pos.maxUnderlyingAssetHolder);
-                holderReq = temp/_underlyingAssetSubUnits + (temp%_underlyingAssetSubUnits == 0 ? 0 : 1);
+                uint temp = _amount * uint(pos.maxStrikeAssetHolder);
+                holderReq = temp/_strikeAssetSubUnits + (temp%_strikeAssetSubUnits == 0 ? 0 : 1);
                 totalReq = holderReq;
 
-                temp = _amount * uint(pos.maxUnderlyingAssetDebtor);
-                totalReq += temp/_underlyingAssetSubUnits + (temp%_underlyingAssetSubUnits == 0 ? 0 : 1);            
+                temp = _amount * uint(pos.maxStrikeAssetDebtor);
+                totalReq += temp/_strikeAssetSubUnits + (temp%_strikeAssetSubUnits == 0 ? 0 : 1);
             }
 
 
             /*
                 pos refers to the state of pos after the reassignment of its members
 
-                pos.maxUnderlyingAssetHolder = holderReq + premium
+                pos.maxStrikeAssetHolder = holderReq + premium
                 
-                premium = pos.maxUnderlyingAssetHolder - holderReq
+                premium = pos.maxStrikeAssetHolder - holderReq
             */
 
             if (_index == 0) {
-                pos.maxUnderlyingAssetHolder = int(_amount) * (pos.maxUnderlyingAssetHolder + _price) / int(_underlyingAssetSubUnits);
-                pos.maxUnderlyingAssetDebtor = int(totalReq) - pos.maxUnderlyingAssetHolder;
+                pos.maxStrikeAssetHolder = int(_amount) * (pos.maxStrikeAssetHolder + _price) / int(_strikeAssetSubUnits);
+                pos.maxStrikeAssetDebtor = int(totalReq) - pos.maxStrikeAssetHolder;
             } else {
-                pos.maxUnderlyingAssetDebtor = int(_amount) * (pos.maxUnderlyingAssetDebtor - _price) / int(_underlyingAssetSubUnits);
-                pos.maxUnderlyingAssetHolder = int(totalReq) - pos.maxUnderlyingAssetDebtor;
+                pos.maxStrikeAssetDebtor = int(_amount) * (pos.maxStrikeAssetDebtor - _price) / int(_strikeAssetSubUnits);
+                pos.maxStrikeAssetHolder = int(totalReq) - pos.maxStrikeAssetDebtor;
             }
-            premium = pos.maxUnderlyingAssetHolder - int(holderReq);
+            premium = pos.maxStrikeAssetHolder - int(holderReq);
         }
+        optionsContract.setLimits(pos.maxStrikeAssetDebtor, pos.maxStrikeAssetHolder);
 
-        optionsContract.setLimits(pos.maxUnderlyingAssetDebtor, pos.maxUnderlyingAssetHolder);
         optionsContract.setPaymentParams(_index==0, premium);
 
-        (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignCallPosition()"));
+        (success, ) = _optionsAddress.call(abi.encodeWithSignature("assignPutPosition()"));
         if (!success) return false;
 
         int transferAmount;
         if (_index==0){
             address addr = _holder; //prevent stack too deep
             transferAmount = optionsContract.transferAmountHolder();
-            internalUnderlyingAssetDeposits[addr] += uint( pos.maxUnderlyingAssetHolder - transferAmount);
+            internalStrikeAssetDeposits[addr] += uint(pos.maxStrikeAssetHolder - transferAmount);
         } else {
             address addr = _debtor; //prevent stack too deep
             transferAmount = optionsContract.transferAmountDebtor();
-            internalUnderlyingAssetDeposits[addr] += uint( pos.maxUnderlyingAssetDebtor - transferAmount);
+            internalStrikeAssetDeposits[addr] += uint(pos.maxStrikeAssetDebtor - transferAmount);
         }
-        underlyingAssetReserves = uint(int(underlyingAssetReserves)-transferAmount);
+        strikeAssetReserves = uint(int(strikeAssetReserves)-transferAmount);
     }
+
+
 }

@@ -18,6 +18,8 @@ const mLegDelegate = artifacts.require("mLegDelegate");
 const feeOracle = artifacts.require("feeOracle");
 const feldmexToken = artifacts.require("FeldmexToken");
 const singleLegDelegate = artifacts.require("SingleLegDelegate");
+const multiCallDelegate = artifacts.require("MultiCallDelegate");
+const multiPutDelegate = artifacts.require("MultiPutDelegate");
 
 const nullAddress = "0x0000000000000000000000000000000000000000";
 
@@ -29,8 +31,10 @@ contract('containerDeveloper', async function(accounts){
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		feldmexTokenInstance = await feldmexToken.new();
 		feeOracleInstance = await feeOracle.new(feldmexToken.address);
-		mCallHelperInstance = await mCallHelper.new(feeOracleInstance.address);
-		mPutHelperInstance = await mPutHelper.new(feeOracleInstance.address);
+		multiCallDelegateInstance = await multiCallDelegate.new();
+		multiPutDelegateInstance = await multiPutDelegate.new();
+		mCallHelperInstance = await mCallHelper.new(feeOracleInstance.address, multiCallDelegateInstance.address);
+		mPutHelperInstance = await mPutHelper.new(feeOracleInstance.address, multiPutDelegateInstance.address);
 		mLegDelegateInstance = await mLegDelegate.new();
 		mLegHelperInstance = await mLegHelper.new(mLegDelegate.address, feeOracle.address);
 		mOrganizerInstance = await mOrganizer.new(mCallHelperInstance.address, mPutHelperInstance.address, mLegHelperInstance.address);

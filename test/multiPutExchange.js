@@ -1,6 +1,7 @@
 const oracle = artifacts.require("oracle");
 const token = artifacts.require("Token");
 const options = artifacts.require("OptionsHandler");
+const multiPutDelegate = artifacts.require("MultiPutDelegate");
 const multiPutExchange = artifacts.require("MultiPutExchange");
 const mPutHelper = artifacts.require("mPutHelper");
 const mOrganizer = artifacts.require("mOrganizer");
@@ -32,7 +33,8 @@ contract('multi put exchange', function(accounts){
 		feldmexERC20HelperInstance = await feldmexERC20Helper.new();
 		feldmexTokenInstance = await feldmexToken.new();
 		feeOracleInstance = await feeOracle.new(feldmexTokenInstance.address);
-		mPutHelperInstance = await mPutHelper.new(feeOracleInstance.address);
+		multiPutDelegateInstance =  await multiPutDelegate.new();
+		mPutHelperInstance = await mPutHelper.new(feeOracleInstance.address, multiPutDelegateInstance.address);
 		mOrganizerInstance = await mOrganizer.new(/*this param does not matter so we will just add the default address*/accounts[0], mPutHelperInstance.address, accounts[0]);
 		optionsInstance = await options.new(oracleInstance.address, asset1.address, asset2.address,
 			feldmexERC20HelperInstance.address, mOrganizerInstance.address, assignOptionsDelegateInstance.address, feeOracleInstance.address);
